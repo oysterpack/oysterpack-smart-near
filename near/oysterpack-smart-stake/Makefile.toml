@@ -1,0 +1,45 @@
+env_files = ["./neardev/dev-account.env"]
+
+[env]
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+PACKAGE = "oysterpack_smart_stake"
+
+[tasks.format]
+install_crate = "rustfmt"
+command = "cargo"
+args = ["fmt", "--", "--emit=files"]
+
+[tasks.build]
+command = "cargo"
+args = ["build", "--target", "wasm32-unknown-unknown", "--release"]
+
+[tasks.doc]
+command = "cargo"
+args = ["doc", "--no-deps"]
+
+[tasks.wasm-opt]
+command = "wasm-opt"
+args = ["../target/wasm32-unknown-unknown/release/${PACKAGE}.wasm", "-Oz", "-o", "../target/wasm32-unknown-unknown/release/${PACKAGE}.wasm"]
+dependencies = ["build"]
+
+[tasks.wasm-ls]
+script_runner = "@duckscript"
+script = '''
+ls -la ../target/wasm32-unknown-unknown/release/${PACKAGE}.wasm
+'''
+
+[tasks.near-dev-deploy]
+command = "near"
+args = ["dev-deploy", "../target/wasm32-unknown-unknown/release/${PACKAGE}.wasm"]
+dependencies = ["wasm-opt"]
+
+[tasks.near-state]
+command = "near"
+args = ["state", "${CONTRACT_NAME}"]
+dependencies = ["wasm-opt"]
+
+[tasks.near-deploy-init]
+script_runner = "@duckscript"
+script = '''
+export NEAR_ENV=testnet
+'''

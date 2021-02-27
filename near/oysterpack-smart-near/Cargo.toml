@@ -1,0 +1,13 @@
+[package]
+name = "oysterpack-smart-near"
+version = "0.1.0"
+authors = ["OysterPack Inc <oysterpack.inc@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = "3.0.0-pre.2"
+uint = { version = "0.9.0", default-features = false }
+crypto_box = "0.5.0"

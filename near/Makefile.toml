@@ -1,0 +1,9 @@
+env_files = ["./testnet.env"]
+
+[env]
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+
+[tasks.near-login]
+workspace = false
+command = "near"
+args = ["login", "--network_id", "${NEAR_ENV}", "--account_id", "${NEAR_MASTER_ACCOUNT}", "--useLedgerKey"]

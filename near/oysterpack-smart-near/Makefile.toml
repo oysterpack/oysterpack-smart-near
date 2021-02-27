@@ -1,0 +1,7 @@
+[env]
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+PACKAGE = "oysterpack_smart_near"
+
+[tasks.doc]
+command = "cargo"
+args = ["doc", "--no-deps"]
