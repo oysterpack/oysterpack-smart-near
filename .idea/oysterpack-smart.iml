@@ -2,6 +2,8 @@
 <module type="CPP_MODULE" version="4">
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/near/oysterpack-smart-account-registry/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/near/oysterpack-smart-near-test/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/near/oysterpack-smart-near/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/near/oysterpack-smart-stake/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/near/target" />

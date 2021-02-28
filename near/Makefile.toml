@@ -3,7 +3,16 @@ env_files = ["./testnet.env"]
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
 
+[tasks.doc]
+command = "cargo"
+args = ["doc", "--no-deps"]
+
 [tasks.near-login]
 workspace = false
 command = "near"
 args = ["login", "--network_id", "${NEAR_ENV}", "--account_id", "${NEAR_MASTER_ACCOUNT}", "--useLedgerKey"]
+
+[tasks.new-lib]
+workspace = false
+command = "cargo"
+args = ["new", "--lib", "oysterpack-smart-${@}"]
