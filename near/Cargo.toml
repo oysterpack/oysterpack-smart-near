@@ -5,6 +5,12 @@ members = ["oysterpack-smart-*"]
 codegen-units = 1
 opt-level = "z"
 lto = true
-debug = false
+debug = 0
 panic = "abort"
+overflow-checks = true
+
+[profile.release.package."*"]
+codegen-units = 1
+opt-level = "z"
+debug = 0
 overflow-checks = true

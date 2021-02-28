@@ -3,11 +3,12 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
     serde_json,
     test_utils::{get_created_receipts, VMContextBuilder},
-    MockedBlockchain, PromiseResult, VMContext,
+    PromiseResult, VMContext,
 };
 use near_vm_logic::mocks::mock_external::Action;
 use oysterpack_smart_near::YOCTO;
 
+pub use near_sdk::{testing_env, MockedBlockchain};
 pub use near_vm_logic;
 
 pub const DEFAULT_CONTRACT_ACCOUNT_ID: &str = "contract.near";

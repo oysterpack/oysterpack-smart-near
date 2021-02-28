@@ -1,0 +1,2 @@
+[build]
+rustflags = ["-Z", "strip=symbols"]
