@@ -31,7 +31,7 @@ ls -la ../target/wasm32-unknown-unknown/release/${PACKAGE}.wasm
 [tasks.near-dev-deploy]
 command = "near"
 args = ["dev-deploy", "../target/wasm32-unknown-unknown/release/${PACKAGE}.wasm"]
-dependencies = ["build"]
+dependencies = ["build-release"]
 
 [tasks.near-state]
 command = "near"

@@ -1,2 +1,2 @@
 [build]
-rustflags = ["-Z", "strip=symbols"]
+rustflags = ["-C", "link-args=-s"]
