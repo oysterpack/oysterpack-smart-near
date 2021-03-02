@@ -4,6 +4,7 @@ use near_sdk::{
     env, near_bindgen, wee_alloc, PanicOnDefault,
 };
 use oysterpack_smart_near::data::Object;
+use oysterpack_smart_near::model::YoctoNear;
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
@@ -14,8 +15,6 @@ pub struct Contract {
     #[borsh_skip]
     key_value_store: KeyValueStoreService,
 }
-
-type Data = Object<u128, u128>;
 
 #[near_bindgen]
 impl Contract {
@@ -28,21 +27,23 @@ impl Contract {
     }
 }
 
+type Data = Object<u128, YoctoNear>;
+
 #[near_bindgen]
 impl KeyValueStore for Contract {
-    fn get(&self, key: U128) -> Option<U128> {
+    fn get(&self, key: U128) -> Option<YoctoNear> {
         self.key_value_store.get(key)
     }
 
-    fn set(&mut self, key: U128, value: U128) {
-        self.set(key, value)
+    fn set(&mut self, key: U128, value: YoctoNear) {
+        self.key_value_store.set(key, value)
     }
 }
 
 trait KeyValueStore {
-    fn get(&self, key: U128) -> Option<U128>;
+    fn get(&self, key: U128) -> Option<YoctoNear>;
 
-    fn set(&mut self, key: U128, value: U128);
+    fn set(&mut self, key: U128, value: YoctoNear);
 }
 
 trait HasKeyValueStore {
@@ -55,11 +56,11 @@ impl<T> KeyValueStore for T
 where
     T: HasKeyValueStore,
 {
-    fn get(&self, key: U128) -> Option<U128> {
+    fn get(&self, key: U128) -> Option<YoctoNear> {
         self.get_key_value_store().get(key)
     }
 
-    fn set(&mut self, key: U128, value: U128) {
+    fn set(&mut self, key: U128, value: YoctoNear) {
         self.get_mut_key_value_store().set(key, value);
     }
 }
@@ -68,13 +69,13 @@ where
 struct KeyValueStoreService;
 
 impl KeyValueStore for KeyValueStoreService {
-    fn get(&self, key: U128) -> Option<U128> {
+    fn get(&self, key: U128) -> Option<YoctoNear> {
         Data::load(&key.0)
             .unwrap()
             .map(|object| (*object.value()).into())
     }
 
-    fn set(&mut self, key: U128, value: U128) {
-        Data::new(key.0, value.0).save()
+    fn set(&mut self, key: U128, value: YoctoNear) {
+        Data::new(key.0, value).save();
     }
 }
