@@ -1,3 +1,5 @@
+pub struct AccountManager {}
+
 #[cfg(test)]
 mod tests {
     #[test]

@@ -12,12 +12,12 @@ use std::{fmt::Debug, hash::Hash};
 #[derive(Clone, Debug, PartialEq)]
 pub struct Object<K, V>(K, V)
 where
-    K: BorshSerialize + Clone + Debug + PartialEq + Hash,
+    K: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Hash,
     V: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq;
 
 impl<K, V> Object<K, V>
 where
-    K: BorshSerialize + Clone + Debug + PartialEq + Hash,
+    K: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Hash,
     V: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq,
 {
     /// Object is created in memory, i.e., it is not persisted to storage.
@@ -70,7 +70,7 @@ where
 
 impl<K, V> Deref for Object<K, V>
 where
-    K: BorshSerialize + Clone + Debug + PartialEq + Hash,
+    K: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Hash,
     V: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq,
 {
     type Target = V;
@@ -82,7 +82,7 @@ where
 
 impl<K, V> DerefMut for Object<K, V>
 where
-    K: BorshSerialize + Clone + Debug + PartialEq + Hash,
+    K: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Hash,
     V: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {

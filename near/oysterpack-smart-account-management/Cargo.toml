@@ -1,5 +1,5 @@
 [package]
-name = "oysterpack-smart-account-registry"
+name = "oysterpack-smart-account-management"
 version = "0.1.0"
 authors = ["oysterpack.inc <oysterpack.inc@gmail.com>"]
 edition = "2018"
