@@ -28,16 +28,6 @@ impl Contract {
     }
 }
 
-// impl HasKeyValueStore for Contract {
-//     fn get_key_value_store(&self) -> &dyn KeyValueStore {
-//         &self.key_value_store
-//     }
-//
-//     fn get_mut_key_value_store(&mut self) -> &mut dyn KeyValueStore {
-//         &mut self.key_value_store
-//     }
-// }
-
 #[near_bindgen]
 impl KeyValueStore for Contract {
     fn get(&self, key: U128) -> Option<U128> {
