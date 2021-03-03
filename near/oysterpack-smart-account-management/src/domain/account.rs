@@ -7,9 +7,10 @@ use oysterpack_smart_near::domain::YoctoNear;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 
-/// key = account ID hash
+/// account ID hash -> [`AccountData`]
 pub type AccountObject<T> = Object<Hash, AccountData<T>>;
 
+/// Represents a persistent contract account that wraps [`AccountObject`]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Account<T>(AccountObject<T>)
 where
@@ -19,6 +20,7 @@ impl<T> Account<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq,
 {
+    /// Creates a new in memory account object
     pub fn new(account_id: &str, near_balance: YoctoNear, data: T) -> Self {
         let key = Hash::from(account_id);
         Self(AccountObject::<T>::new(
@@ -33,6 +35,8 @@ where
         AccountObject::load(&key).map(|account| Self(account))
     }
 
+    /// ## Panics
+    /// if the account is not registered
     pub fn registered_account(account_id: &str) -> Self {
         Account::load(account_id).unwrap()
     }
@@ -67,6 +71,9 @@ where
     }
 }
 
+/// Account data that is stored on the blockchain
+/// - all accounts must have a NEAR balance because all contract accounts are required to pay for
+///   its storage
 #[derive(BorshSerialize, BorshDeserialize, Clone, Debug, PartialEq)]
 pub struct AccountData<T>
 where
@@ -80,6 +87,7 @@ impl<T> AccountData<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq,
 {
+    /// constructor
     pub fn new(near_balance: YoctoNear, data: T) -> Self {
         Self { near_balance, data }
     }
@@ -88,12 +96,16 @@ where
         self.near_balance
     }
 
+    /// ## Panics
+    /// if overflow occurs
     pub fn incr_near_balance(&mut self, amount: YoctoNear) {
-        *self.near_balance += amount.value();
+        *self.near_balance = self.near_balance.checked_add(amount.value()).unwrap();
     }
 
+    /// ## Panics
+    /// if overflow occurs
     pub fn dec_near_balance(&mut self, amount: YoctoNear) {
-        *self.near_balance -= amount.value();
+        *self.near_balance = self.near_balance.checked_sub(amount.value()).unwrap();
     }
 
     pub fn set_near_balance(&mut self, amount: YoctoNear) {
@@ -104,6 +116,7 @@ where
         &self.data
     }
 
+    /// returns a mutable reference to data that enables the account data to be changed
     pub fn data_mut(&mut self) -> &mut T {
         &mut self.data
     }

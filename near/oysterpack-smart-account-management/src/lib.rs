@@ -1,7 +1,10 @@
+//! Provides account management support for NEAR smart contracts
+
 mod account_manager;
-pub mod domain;
+mod domain;
 mod interface;
 
+pub use domain::*;
 pub use interface::*;
 
 #[cfg(test)]
