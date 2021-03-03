@@ -11,10 +11,18 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+pub const ZERO_NEAR: YoctoNear = YoctoNear(0);
+
 #[derive(
     BorshSerialize, BorshDeserialize, Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Default,
 )]
 pub struct YoctoNear(u128);
+
+impl YoctoNear {
+    pub fn value(&self) -> u128 {
+        self.0
+    }
+}
 
 impl From<u128> for YoctoNear {
     fn from(value: u128) -> Self {

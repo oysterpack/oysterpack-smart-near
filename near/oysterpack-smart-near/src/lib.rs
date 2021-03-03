@@ -1,5 +1,5 @@
 pub mod core;
 pub mod data;
-pub mod model;
+pub mod domain;
 
 pub use crate::core::*;

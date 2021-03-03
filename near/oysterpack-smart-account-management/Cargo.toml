@@ -7,3 +7,6 @@ edition = "2018"
 [dependencies]
 near-sdk = "3.0.0-pre.2"
 oysterpack-smart-near = {path = "../oysterpack-smart-near"}
+
+[dev-dependencies]
+oysterpack-smart-near-test = { path = "../oysterpack-smart-near-test" }

@@ -3,6 +3,7 @@ use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
 };
+use rusty_ulid::Ulid;
 use std::convert::TryInto;
 
 #[derive(
@@ -40,15 +41,58 @@ impl From<&[u8]> for Hash {
 
 impl From<&str> for Hash {
     fn from(value: &str) -> Self {
-        assert!(value.len() > 0, "value cannot be empty");
-        let hash = env::sha256(value.as_bytes());
-        Self(hash.try_into().unwrap())
+        Hash::from(value.as_bytes())
     }
 }
 
 impl From<ValidAccountId> for Hash {
     fn from(account_id: ValidAccountId) -> Self {
-        Hash::from(account_id.as_ref().as_str())
+        let hash = env::sha256(account_id.as_ref().as_bytes());
+        Self(hash.try_into().unwrap())
+    }
+}
+
+impl From<&ValidAccountId> for Hash {
+    fn from(account_id: &ValidAccountId) -> Self {
+        let hash = env::sha256(account_id.as_ref().as_bytes());
+        Self(hash.try_into().unwrap())
+    }
+}
+
+/// Use Case: used as object attribute key
+/// - (object_id, attribute_id)
+/// - where ULID should be used for attribute_id to avoid collisions
+impl From<(&str, u128)> for Hash {
+    fn from((k1, k2): (&str, u128)) -> Self {
+        Hash::from((k1.as_bytes(), k2))
+    }
+}
+
+/// Use Case: used as object attribute key
+/// - (object_id, attribute_id)
+/// - where ULID should be used for attribute_id to avoid collisions
+impl From<(ValidAccountId, u128)> for Hash {
+    fn from((k1, k2): (ValidAccountId, u128)) -> Self {
+        Hash::from((k1.as_ref().as_bytes(), k2))
+    }
+}
+
+impl From<(&ValidAccountId, u128)> for Hash {
+    fn from((k1, k2): (&ValidAccountId, u128)) -> Self {
+        Hash::from((k1.as_ref().as_bytes(), k2))
+    }
+}
+
+/// Use Case: used as object attribute key
+/// - (object_id, attribute_id)
+/// - where ULID should be used for attribute_id to avoid collisions
+impl From<(&[u8], u128)> for Hash {
+    fn from((k1, k2): (&[u8], u128)) -> Self {
+        assert!(k1.len() > 0, "k1 cannot be empty");
+        let ulid = Ulid::from(k2);
+        let ulid_bytes: [u8; 16] = ulid.into();
+        let key: Vec<u8> = [k1, &ulid_bytes].concat();
+        Hash::from(key.as_slice())
     }
 }
 
@@ -87,5 +131,17 @@ mod test {
     fn hash_from_empty_bytes() {
         test_env::setup();
         Hash::from("".as_bytes());
+    }
+
+    #[test]
+    fn from_object_attribute() {
+        test_env::setup();
+
+        let object_id = "object_id";
+        let attribute_id: u128 = 1952096956452045446682821566586971355;
+        assert_eq!(
+            Hash::from((object_id, attribute_id)),
+            Hash::from((object_id, attribute_id))
+        );
     }
 }

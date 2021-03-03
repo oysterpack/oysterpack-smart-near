@@ -4,7 +4,7 @@ use near_sdk::{
     env, near_bindgen, wee_alloc, PanicOnDefault,
 };
 use oysterpack_smart_near::data::Object;
-use oysterpack_smart_near::model::YoctoNear;
+use oysterpack_smart_near::domain::YoctoNear;
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;

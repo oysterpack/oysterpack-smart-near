@@ -1,4 +1,4 @@
-//! NEAR typesafe domain model
+//! NEAR typesafe domain domain
 //! - all domain objects should support Borsh and JSON serialization
 
 mod yocto_near;
