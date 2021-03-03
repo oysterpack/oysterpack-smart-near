@@ -3,7 +3,6 @@ use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
 };
-use rusty_ulid::Ulid;
 use std::convert::TryInto;
 
 #[derive(
@@ -88,9 +87,31 @@ impl From<(&ValidAccountId, u128)> for Hash {
 /// - where ULID should be used for attribute_id to avoid collisions
 impl From<(&[u8], u128)> for Hash {
     fn from((k1, k2): (&[u8], u128)) -> Self {
+        // taken from rusty_ulid crate
+        fn u128_to_bytes(value: u128) -> [u8; 16] {
+            let value = ((value >> 64) as u64, (value & 0xFFFF_FFFF_FFFF_FFFF) as u64);
+            [
+                ((value.0 >> 56) & 0xFF) as u8,
+                ((value.0 >> 48) & 0xFF) as u8,
+                ((value.0 >> 40) & 0xFF) as u8,
+                ((value.0 >> 32) & 0xFF) as u8,
+                ((value.0 >> 24) & 0xFF) as u8,
+                ((value.0 >> 16) & 0xFF) as u8,
+                ((value.0 >> 8) & 0xFF) as u8,
+                (value.0 & 0xFF) as u8,
+                ((value.1 >> 56) & 0xFF) as u8,
+                ((value.1 >> 48) & 0xFF) as u8,
+                ((value.1 >> 40) & 0xFF) as u8,
+                ((value.1 >> 32) & 0xFF) as u8,
+                ((value.1 >> 24) & 0xFF) as u8,
+                ((value.1 >> 16) & 0xFF) as u8,
+                ((value.1 >> 8) & 0xFF) as u8,
+                (value.1 & 0xFF) as u8,
+            ]
+        }
+
         assert!(k1.len() > 0, "k1 cannot be empty");
-        let ulid = Ulid::from(k2);
-        let ulid_bytes: [u8; 16] = ulid.into();
+        let ulid_bytes: [u8; 16] = u128_to_bytes(k2);
         let key: Vec<u8> = [k1, &ulid_bytes].concat();
         Hash::from(key.as_slice())
     }

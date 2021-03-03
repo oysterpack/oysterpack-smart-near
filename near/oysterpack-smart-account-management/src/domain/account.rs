@@ -30,9 +30,7 @@ where
     /// tries to load the account from storage
     pub fn load(account_id: &str) -> Option<Self> {
         let key = Hash::from(account_id);
-        AccountObject::load(&key)
-            .map(|account| account.map(|account| Self(account)))
-            .unwrap()
+        AccountObject::load(&key).map(|account| Self(account))
     }
 
     pub fn registered_account(account_id: &str) -> Self {

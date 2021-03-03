@@ -1,8 +1,7 @@
 //! Provides abstraction for object storage on the NEAR blockchain
 
-use failure::Fail;
 use near_sdk::{
-    borsh::{maybestd::io::Error as BorshError, BorshDeserialize, BorshSerialize},
+    borsh::{BorshDeserialize, BorshSerialize},
     env,
 };
 use std::ops::{Deref, DerefMut};
@@ -39,15 +38,16 @@ where
     }
 
     /// Tries to load the object from storage using the specified key.
-    pub fn load(key: &K) -> Result<Option<Self>, ObjectError> {
+    ///
+    /// ## Panics
+    /// if Borsh deserialization fails - which should never happen, but if it does then it means
+    /// there is a bug
+    /// - either in borsh (unlikely), or an object of a different type was stored with the same key
+    pub fn load(key: &K) -> Option<Self> {
         let key_bytes = object_serialize_key(key);
-        match env::storage_read(&key_bytes) {
-            None => Ok(None),
-            Some(value) => match V::try_from_slice(&value) {
-                Ok(value) => Ok(Some(Object(key.clone(), value))),
-                Err(err) => Err(ObjectError::BorshDeserializationFailed(err)),
-            },
-        }
+        env::storage_read(&key_bytes)
+            .map(|value| V::try_from_slice(&value).unwrap())
+            .map(|value| Object(key.clone(), value))
     }
 
     /// Saves the object to persistent storage on the NEAR blockchain
@@ -112,12 +112,6 @@ fn object_serialize_key<K: BorshSerialize>(key: &K) -> Vec<u8> {
     env::sha256(&bytes)
 }
 
-#[derive(Fail, Debug)]
-pub enum ObjectError {
-    #[fail(display = "Borsh deserialization failed: {}", _0)]
-    BorshDeserializationFailed(BorshError),
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -140,7 +134,7 @@ mod test {
         data.save();
         assert!(object_exists(data.key()));
 
-        let mut data2 = Data::load(data.key()).unwrap().unwrap();
+        let mut data2 = Data::load(data.key()).unwrap();
         assert_eq!(data, data2);
 
         // change the value and then save it
@@ -148,11 +142,11 @@ mod test {
         assert_eq!(*data2.value(), 3);
         data2.save();
 
-        let data3 = Data::load(data.key()).unwrap().unwrap();
+        let data3 = Data::load(data.key()).unwrap();
         assert_eq!(data3, data2);
 
         // delete from storage
         assert!(data3.delete());
-        assert!(Data::load(data.key()).unwrap().is_none())
+        assert!(Data::load(data.key()).is_none())
     }
 }
