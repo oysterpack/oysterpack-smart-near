@@ -89,15 +89,15 @@ where
     }
 
     pub fn incr_near_balance(&mut self, amount: YoctoNear) {
-        *self.near_balance.deref_mut() += amount.value();
+        *self.near_balance += amount.value();
     }
 
     pub fn dec_near_balance(&mut self, amount: YoctoNear) {
-        *self.near_balance.deref_mut() -= amount.value();
+        *self.near_balance -= amount.value();
     }
 
     pub fn set_near_balance(&mut self, amount: YoctoNear) {
-        *self.near_balance.deref_mut() = amount.value();
+        *self.near_balance = amount.value();
     }
 
     pub fn data(&self) -> &T {

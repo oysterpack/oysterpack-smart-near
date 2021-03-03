@@ -70,7 +70,7 @@ struct KeyValueStoreService;
 
 impl KeyValueStore for KeyValueStoreService {
     fn get(&self, key: U128) -> Option<YoctoNear> {
-        Data::load(&key.0).map(|object| (*object.value()).into())
+        Data::load(&key.0).map(|object| (*object).into())
     }
 
     fn set(&mut self, key: U128, value: YoctoNear) {

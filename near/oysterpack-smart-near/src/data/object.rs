@@ -29,10 +29,6 @@ where
         &self.0
     }
 
-    pub fn value(&self) -> &V {
-        &self.1
-    }
-
     pub fn exists(key: &K) -> bool {
         object_exists(key)
     }
@@ -76,7 +72,7 @@ where
     type Target = V;
 
     fn deref(&self) -> &Self::Target {
-        self.value()
+        &self.1
     }
 }
 
@@ -138,8 +134,8 @@ mod test {
         assert_eq!(data, data2);
 
         // change the value and then save it
-        *data2.deref_mut() = 3_u128;
-        assert_eq!(*data2.value(), 3);
+        *data2 = 3_u128;
+        assert_eq!(*data2, 3);
         data2.save();
 
         let data3 = Data::load(data.key()).unwrap();
