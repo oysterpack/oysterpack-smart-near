@@ -5,6 +5,12 @@ use near_sdk::{
 };
 use std::convert::TryInto;
 
+/// sha256 hashed data
+///
+/// The main use case is to use Hash to hash keys for NEAR Trie storage, which provides the following
+/// benefits
+/// - keys are evenly distributed
+/// - key size is constant 32 bytes
 #[derive(
     BorshDeserialize,
     BorshSerialize,

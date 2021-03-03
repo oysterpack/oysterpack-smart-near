@@ -1,3 +1,5 @@
-pub mod object;
+//! Provides support to work with data stored on the NEAR blockchain
 
-pub use object::{object_exists, Object};
+mod object;
+
+pub use object::*;

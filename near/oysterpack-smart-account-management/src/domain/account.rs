@@ -1,5 +1,5 @@
 use oysterpack_smart_near::data::Object;
-use oysterpack_smart_near::hash::Hash;
+use oysterpack_smart_near::Hash;
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 

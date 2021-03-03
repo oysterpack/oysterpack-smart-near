@@ -1,4 +1,6 @@
-pub mod hash;
+mod hash;
+
+pub use hash::*;
 
 use uint::construct_uint;
 
