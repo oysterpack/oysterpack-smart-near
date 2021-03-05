@@ -1,16 +1,18 @@
-use near_sdk::json_types::U128;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    env, near_bindgen, wee_alloc, PanicOnDefault,
+    env,
+    json_types::U128,
+    near_bindgen, wee_alloc, PanicOnDefault,
 };
-use oysterpack_smart_near::data::Object;
-use oysterpack_smart_near::domain::YoctoNear;
+use oysterpack_smart_account_management::{AccountStats, AccountStorageEvent, StorageBalance};
+use oysterpack_smart_near::{data::Object, domain::YoctoNear, EVENT_BUS};
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
+#[borsh_init(init)]
 pub struct Contract {
     #[borsh_skip]
     key_value_store: KeyValueStoreService,
@@ -19,13 +21,31 @@ pub struct Contract {
 #[near_bindgen]
 impl Contract {
     #[init]
-    pub fn init() -> Self {
+    pub fn init_state() -> Self {
         assert!(!env::state_exists(), "contract is already initialized");
         Self {
             key_value_store: KeyValueStoreService,
         }
     }
+
+    pub fn simulate_account_storage_event(&self) {
+        EVENT_BUS.post(&AccountStorageEvent::Registered(StorageBalance {
+            total: 100.into(),
+            available: 0.into(),
+        }));
+    }
 }
+
+impl Contract {
+    fn init(&mut self) {
+        EVENT_BUS.register(AccountStats::on_account_storage_event);
+        unsafe {
+            FOO = 1;
+        }
+    }
+}
+
+static mut FOO: u128 = 0;
 
 type Data = Object<u128, YoctoNear>;
 
@@ -70,7 +90,8 @@ struct KeyValueStoreService;
 
 impl KeyValueStore for KeyValueStoreService {
     fn get(&self, key: U128) -> Option<YoctoNear> {
-        Data::load(&key.0).map(|object| (*object).into())
+        let foo = unsafe { FOO };
+        Data::load(&key.0).map(|object| YoctoNear::from(object.value() + foo))
     }
 
     fn set(&mut self, key: U128, value: YoctoNear) {

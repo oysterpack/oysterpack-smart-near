@@ -1,5 +1,7 @@
+mod eventbus;
 mod hash;
 
+pub use eventbus::*;
 pub use hash::*;
 
 use uint::construct_uint;
