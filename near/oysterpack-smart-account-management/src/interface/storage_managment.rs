@@ -65,7 +65,7 @@ pub trait StorageManagement {
     /// `#[payable]`
     fn storage_deposit(
         &mut self,
-        account_id: ValidAccountId,
+        account_id: Option<ValidAccountId>,
         registration_only: Option<bool>,
     ) -> StorageBalance;
 

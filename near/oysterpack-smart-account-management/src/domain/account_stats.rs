@@ -2,16 +2,22 @@ use crate::AccountStorageEvent;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
+    serde::{Deserialize, Serialize},
 };
+use oysterpack_smart_near::data::numbers::U128;
 use oysterpack_smart_near::{data::Object, domain::YoctoNear};
 
 const ACCOUNT_STATS_KEY: u128 = 1952364736129901845182088441739779955;
 
 type AccountStatsObject = Object<u128, AccountStats>;
 
-#[derive(BorshSerialize, BorshDeserialize, Copy, Clone, Debug, PartialEq, Default)]
+/// Account statistics
+#[derive(
+    BorshSerialize, BorshDeserialize, Deserialize, Serialize, Copy, Clone, Debug, PartialEq, Default,
+)]
+#[serde(crate = "near_sdk::serde")]
 pub struct AccountStats {
-    total_registered_accounts: u128,
+    total_registered_accounts: U128,
     total_accounts_near_balance: YoctoNear,
     total_accounts_storage_available_balance: YoctoNear,
 }

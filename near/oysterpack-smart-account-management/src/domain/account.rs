@@ -3,6 +3,7 @@ use oysterpack_smart_near::Hash;
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
+use crate::StorageBalance;
 use oysterpack_smart_near::domain::YoctoNear;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
@@ -14,11 +15,11 @@ pub type AccountObject<T> = Object<Hash, AccountData<T>>;
 #[derive(Clone, Debug, PartialEq)]
 pub struct Account<T>(AccountObject<T>)
 where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq;
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default;
 
 impl<T> Account<T>
 where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     /// Creates a new in memory account object
     pub fn new(account_id: &str, near_balance: YoctoNear, data: T) -> Self {
@@ -49,11 +50,18 @@ where
     pub fn delete(self) -> bool {
         self.0.delete()
     }
+
+    pub fn storage_balance(&self, required_min_storage_balance: YoctoNear) -> StorageBalance {
+        StorageBalance {
+            total: self.near_balance,
+            available: (self.near_balance.value() - required_min_storage_balance.value()).into(),
+        }
+    }
 }
 
 impl<T> Deref for Account<T>
 where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     type Target = AccountObject<T>;
 
@@ -64,7 +72,7 @@ where
 
 impl<T> DerefMut for Account<T>
 where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
