@@ -27,7 +27,7 @@ pub fn assert_min_near_attached(min: YoctoNear) {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use oysterpack_smart_near_test::*;
 

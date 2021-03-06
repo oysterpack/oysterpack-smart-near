@@ -74,7 +74,7 @@ mod test {
     use super::*;
 
     use lazy_static::lazy_static;
-    use std::sync::RwLock;
+    use std::sync::Mutex;
 
     #[derive(Debug)]
     struct CountEvent(i32);
@@ -84,10 +84,10 @@ mod test {
 
     // define events
     lazy_static! {
-        static ref COUNT_EVENTS: RwLock<EventHandlers<CountEvent>> =
-            RwLock::new(EventHandlers::new());
-        static ref STRING_EVENTS: RwLock<EventHandlers<StringEvent>> =
-            RwLock::new(EventHandlers::new());
+        static ref COUNT_EVENTS: Mutex<EventHandlers<CountEvent>> =
+            Mutex::new(EventHandlers::new());
+        static ref STRING_EVENTS: Mutex<EventHandlers<StringEvent>> =
+            Mutex::new(EventHandlers::new());
     }
 
     // TODO: create macro for this boilerplate code
@@ -96,14 +96,14 @@ mod test {
         where
             F: FnOnce(&EventHandlers<Self>),
         {
-            f(&*COUNT_EVENTS.read().unwrap())
+            f(&*COUNT_EVENTS.lock().unwrap())
         }
 
         fn handlers_mut<F>(f: F)
         where
             F: FnOnce(&mut EventHandlers<Self>),
         {
-            f(&mut *COUNT_EVENTS.write().unwrap())
+            f(&mut *COUNT_EVENTS.lock().unwrap())
         }
     }
 
@@ -112,14 +112,14 @@ mod test {
         where
             F: FnOnce(&EventHandlers<Self>),
         {
-            f(&*STRING_EVENTS.read().unwrap())
+            f(&*STRING_EVENTS.lock().unwrap())
         }
 
         fn handlers_mut<F>(f: F)
         where
             F: FnOnce(&mut EventHandlers<Self>),
         {
-            f(&mut *STRING_EVENTS.write().unwrap())
+            f(&mut *STRING_EVENTS.lock().unwrap())
         }
     }
 

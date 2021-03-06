@@ -41,7 +41,7 @@ impl Display for ErrorConst {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use regex::Regex;
 

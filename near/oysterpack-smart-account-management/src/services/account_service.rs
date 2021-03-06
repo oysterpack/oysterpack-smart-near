@@ -8,14 +8,13 @@ use near_sdk::{
     json_types::ValidAccountId,
     AccountId, Promise,
 };
+use oysterpack_smart_near::service::{Deploy, Init, Service};
 use oysterpack_smart_near::{
     asserts::{assert_min_near_attached, assert_yocto_near_attached},
     domain::YoctoNear,
     EVENT_BUS,
 };
-use std::fmt::Debug;
-use std::marker::PhantomData;
-use std::ops::Deref;
+use std::{fmt::Debug, marker::PhantomData, ops::Deref, sync::Mutex};
 
 pub struct AccountService<T>
 where
@@ -25,6 +24,50 @@ where
     _phantom: PhantomData<T>,
 }
 
+impl<T> Service for AccountService<T>
+where
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+{
+    type State = StorageBalanceBounds;
+
+    fn state_key() -> u128 {
+        1952475351321611295376996018476025471
+    }
+}
+
+impl<T> Init for AccountService<T>
+where
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+{
+    fn init() -> Self {
+        let state = Self::load_state().unwrap();
+        Self {
+            storage_balance_bounds: *state,
+            _phantom: Default::default(),
+        }
+    }
+}
+
+impl<T> Deploy for AccountService<T>
+where
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+{
+    fn deploy<F>(initial_state_provider: Option<F>) -> Self
+    where
+        F: FnOnce() -> Self::State,
+    {
+        let state = initial_state_provider.expect("initial state must be provided")();
+        let state = Self::new_state(state);
+        state.save();
+        Self {
+            storage_balance_bounds: *state,
+            _phantom: Default::default(),
+        }
+    }
+}
+
+/// account related functions to make it more ergonomic to work with by encapsulating the [`AccountData`]
+/// generic type
 impl<T> AccountService<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
@@ -76,9 +119,11 @@ where
             account_id.as_ref().clone()
         });
 
+        let storage_balance_bounds = self.storage_balance_bounds();
+
         let registration_only = registration_only.unwrap_or(false);
         if registration_only {
-            assert_min_near_attached(self.storage_balance_bounds.min);
+            assert_min_near_attached(storage_balance_bounds.min);
         }
         let deposit: YoctoNear = env::attached_deposit().into();
 
@@ -88,7 +133,7 @@ where
                     // refund the full deposit
                     Promise::new(account_id).transfer(deposit.value());
                 } else {
-                    if let Some(max) = self.storage_balance_bounds.max {
+                    if let Some(max) = storage_balance_bounds.max {
                         self.deposit_with_max_bound(
                             account_id,
                             &mut account,
@@ -108,7 +153,7 @@ where
             }
         };
 
-        account.storage_balance(self.storage_balance_bounds.min)
+        account.storage_balance(storage_balance_bounds.min)
     }
 
     fn storage_withdraw(amount: Option<YoctoNear>) -> StorageBalance {
@@ -130,13 +175,18 @@ where
             .map(|account| StorageBalance {
                 total: account.near_balance(),
                 available: (account.near_balance().value()
-                    - self.storage_balance_bounds.min.value())
+                    - self.storage_balance_bounds().min.value())
                 .into(),
             })
     }
 }
 
-// helper functions
+impl<T> AccountTracking for AccountService<T> where
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default
+{
+}
+
+/// helper functions
 impl<T> AccountService<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
@@ -174,7 +224,7 @@ where
 
     fn register(&self, account: Account<T>) -> Account<T> {
         EVENT_BUS.post(&AccountStorageEvent::Registered(
-            account.storage_balance(self.storage_balance_bounds.min),
+            account.storage_balance(self.storage_balance_bounds().min),
         ));
         account.save();
         account
@@ -188,14 +238,14 @@ where
     ) -> YoctoNear {
         if registration_only {
             // only take the min required and refund the rest
-            let refund_amount = deposit.value() - self.storage_balance_bounds.min.value();
+            let refund_amount = deposit.value() - self.storage_balance_bounds().min.value();
             if refund_amount > 0 {
                 Promise::new(account_id.to_string()).transfer(refund_amount);
             }
-            self.storage_balance_bounds.min
+            self.storage_balance_bounds().min
         } else {
             // refund deposit that is over the max allowed
-            self.storage_balance_bounds.max.map_or(deposit, |max| {
+            self.storage_balance_bounds().max.map_or(deposit, |max| {
                 if deposit.value() > max.value() {
                     let refund_amount = deposit.value() - max.value();
                     Promise::new(account_id.to_string()).transfer(refund_amount);
@@ -225,5 +275,187 @@ impl Deref for MaxStorageBalance {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+#[cfg(test)]
+mod tests_service {
+    use super::*;
+    use lazy_static::lazy_static;
+    use oysterpack_smart_near::YOCTO;
+    use oysterpack_smart_near_test::*;
+
+    lazy_static! {
+        pub static ref ACCOUNT_SERVICE: Mutex<AccountService<()>> =
+            Mutex::new(AccountService::<()>::init());
+    }
+
+    fn deploy_account_service() {
+        AccountService::<()>::deploy(Some(|| StorageBalanceBounds {
+            min: YOCTO.into(),
+            max: None,
+        }));
+    }
+
+    #[test]
+    fn deploy_and_use() {
+        // Arrange
+        let account_id = "bob";
+        let mut ctx = new_context(account_id);
+        testing_env!(ctx);
+
+        // Act
+        deploy_account_service();
+        let service = ACCOUNT_SERVICE.lock().unwrap();
+        let storage_bounds = service.storage_balance_bounds();
+        assert_eq!(storage_bounds.min, YOCTO.into());
+        assert!(storage_bounds.max.is_none());
+    }
+}
+
+#[cfg(test)]
+mod tests_storage_deposit_for_self_registration_only {
+    use super::*;
+    use lazy_static::lazy_static;
+    use oysterpack_smart_near::YOCTO;
+    use oysterpack_smart_near_test::*;
+
+    lazy_static! {
+        pub static ref ACCOUNT_SERVICE: Mutex<AccountService<()>> =
+            Mutex::new(AccountService::<()>::init());
+    }
+
+    fn deploy_account_service() {
+        AccountService::<()>::deploy(Some(|| StorageBalanceBounds {
+            min: YOCTO.into(),
+            max: None,
+        }));
+    }
+
+    #[test]
+    fn unknown_account_with_exact_storage_deposit() {
+        // Arrange
+        let account_id = "bob";
+        let mut ctx = new_context(account_id);
+        testing_env!(ctx.clone());
+
+        deploy_account_service();
+        let mut service = ACCOUNT_SERVICE.lock().unwrap();
+
+        // attach min storage
+        ctx.attached_deposit = service.storage_balance_bounds().min.value();
+        testing_env!(ctx.clone());
+
+        // Act
+        let storage_balance = service.storage_deposit(None, Some(true));
+
+        // Assert
+        assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
+        assert_eq!(storage_balance.available, 0.into());
+
+        // Assert account was registered
+        let account = service.registered_account(account_id);
+        assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
+    }
+
+    #[test]
+    fn unknown_account_with_over_payment() {
+        // Arrange
+        let account_id = "bob";
+        let mut ctx = new_context(account_id);
+        testing_env!(ctx.clone());
+
+        deploy_account_service();
+        let mut service = ACCOUNT_SERVICE.lock().unwrap();
+
+        // attach min storage
+        ctx.attached_deposit = service.storage_balance_bounds().min.value() * 3;
+        testing_env!(ctx.clone());
+
+        // Act
+        let storage_balance = service.storage_deposit(None, Some(true));
+
+        // Assert
+        assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
+        assert_eq!(storage_balance.available, 0.into());
+
+        // Assert account was registered
+        let account = service.registered_account(account_id);
+        assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
+
+        // Assert overpayment was refunded
+        let receipts = deserialize_receipts();
+        assert_eq!(receipts.len(), 1);
+        let receipt = &receipts[0];
+        assert_eq!(&receipt.receiver_id, account_id);
+        let action = &receipt.actions[0];
+        match action {
+            Action::Transfer(action) => {
+                assert_eq!(
+                    action.deposit,
+                    service.storage_balance_bounds().min.value() * 2
+                );
+            }
+            _ => panic!("expected Transfer"),
+        }
+    }
+
+    #[test]
+    fn already_registered() {
+        // Arrange
+        let account_id = "bob";
+        let mut ctx = new_context(account_id);
+        testing_env!(ctx.clone());
+
+        deploy_account_service();
+        let mut service = ACCOUNT_SERVICE.lock().unwrap();
+
+        // attach min storage
+        ctx.attached_deposit = service.storage_balance_bounds().min.value();
+        testing_env!(ctx.clone());
+
+        // register the user
+        service.storage_deposit(None, Some(true));
+
+        // Act - try registering again
+        let storage_balance = service.storage_deposit(None, Some(true));
+        assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
+        assert_eq!(storage_balance.available, 0.into());
+
+        // Assert the deposit was refunded
+        let receipts = deserialize_receipts();
+        assert_eq!(receipts.len(), 1);
+        let receipt = &receipts[0];
+        assert_eq!(&receipt.receiver_id, account_id);
+        let action = &receipt.actions[0];
+        match action {
+            Action::Transfer(action) => {
+                assert_eq!(action.deposit, ctx.attached_deposit.into());
+            }
+            _ => panic!("expected Transfer"),
+        }
+    }
+
+    /// NOTE: separate lazy_static is required for each test that panics because the panic
+    /// causes the mutex to become posiened - which will cause any tests running after this that
+    /// use the serice to fail.
+    lazy_static! {
+        pub static ref ACCOUNT_SERVICE_zero_deposit_attached: Mutex<AccountService<()>> =
+            Mutex::new(AccountService::<()>::init());
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [INSUFFICIENT_NEAR_DEPOSIT]")]
+    fn zero_deposit_attached() {
+        // Arrange
+        let account_id = "bob";
+        let mut ctx = new_context(account_id);
+        testing_env!(ctx.clone());
+
+        deploy_account_service();
+        let mut service = ACCOUNT_SERVICE_zero_deposit_attached.lock().unwrap();
+
+        // Act - register the user with no deposit attached
+        service.storage_deposit(None, Some(true));
     }
 }

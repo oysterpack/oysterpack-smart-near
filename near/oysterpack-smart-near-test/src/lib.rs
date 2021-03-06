@@ -3,9 +3,8 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
     serde_json,
     test_utils::{get_created_receipts, VMContextBuilder},
-    PromiseResult, VMContext,
+    AccountId, Balance, Gas, PromiseResult, PublicKey, VMContext,
 };
-use near_vm_logic::mocks::mock_external::Action;
 use oysterpack_smart_near::YOCTO;
 
 pub use near_sdk::{testing_env, MockedBlockchain};
@@ -65,6 +64,77 @@ pub struct Receipt {
     pub receiver_id: String,
     pub receipt_indices: Vec<usize>,
     pub actions: Vec<Action>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub enum Action {
+    CreateAccount,
+    DeployContract(DeployContractAction),
+    FunctionCall(FunctionCallAction),
+    Transfer(TransferAction),
+    Stake(StakeAction),
+    AddKeyWithFullAccess(AddKeyWithFullAccessAction),
+    AddKeyWithFunctionCall(AddKeyWithFunctionCallAction),
+    DeleteKey(DeleteKeyAction),
+    DeleteAccount(DeleteAccountAction),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub struct DeployContractAction {
+    pub code: Vec<u8>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub struct FunctionCallAction {
+    pub method_name: Vec<u8>,
+    pub args: Vec<u8>,
+    pub gas: Gas,
+    pub deposit: Balance,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub struct TransferAction {
+    pub deposit: Balance,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub struct StakeAction {
+    pub stake: Balance,
+    public_key: PublicKey,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub struct AddKeyWithFullAccessAction {
+    pub public_key: PublicKey,
+    pub nonce: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub struct AddKeyWithFunctionCallAction {
+    pub public_key: PublicKey,
+    pub nonce: u64,
+    pub allowance: Option<Balance>,
+    pub receiver_id: AccountId,
+    pub method_names: Vec<Vec<u8>>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub struct DeleteKeyAction {
+    pub public_key: PublicKey,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub struct DeleteAccountAction {
+    pub beneficiary_id: AccountId,
 }
 
 pub fn deserialize_receipts() -> Vec<Receipt> {

@@ -34,6 +34,7 @@ impl AccountStats {
     }
 
     pub fn on_account_storage_event(event: &AccountStorageEvent) {
+        // TODO
         env::log(format!("{:?}", event).as_bytes());
     }
 }
@@ -41,14 +42,19 @@ impl AccountStats {
 #[cfg(test)]
 mod test {
     use super::*;
-    use oysterpack_smart_near::Hash;
     use oysterpack_smart_near_test::*;
 
     #[test]
-    fn hash_id() {
+    fn on_account_storage_event() {
         // Arrange
         let account_id = "bob.near";
         let context = new_context(account_id);
         testing_env!(context);
+
+        let stats = AccountStats::load();
+        assert_eq!(stats.total_registered_accounts, 0.into());
+        assert_eq!(stats.total_accounts_near_balance, 0.into());
+        assert_eq!(stats.total_accounts_storage_available_balance, 0.into());
+        // TODO
     }
 }

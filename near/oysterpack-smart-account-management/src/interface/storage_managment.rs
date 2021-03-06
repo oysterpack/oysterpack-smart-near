@@ -1,10 +1,11 @@
 use lazy_static::lazy_static;
 use near_sdk::{
+    borsh::{self, BorshDeserialize, BorshSerialize},
     json_types::ValidAccountId,
     serde::{Deserialize, Serialize},
 };
 use oysterpack_smart_near::{domain::YoctoNear, Event, EventHandlers};
-use std::sync::RwLock;
+use std::sync::Mutex;
 
 /// # Account Storage API
 ///
@@ -126,7 +127,9 @@ pub struct StorageBalance {
     pub available: YoctoNear,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
+#[derive(
+    BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, PartialEq, Clone, Copy,
+)]
 #[serde(crate = "near_sdk::serde")]
 pub struct StorageBalanceBounds {
     /// the minimum balance that must be maintained for storage by the account on the contract
@@ -141,8 +144,8 @@ pub struct StorageBalanceBounds {
 }
 
 lazy_static! {
-    pub static ref ACCOUNT_STORAGE_EVENTS: RwLock<EventHandlers<AccountStorageEvent>> =
-        RwLock::new(EventHandlers::new());
+    pub static ref ACCOUNT_STORAGE_EVENTS: Mutex<EventHandlers<AccountStorageEvent>> =
+        Mutex::new(EventHandlers::new());
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -162,13 +165,13 @@ impl Event for AccountStorageEvent {
     where
         F: FnOnce(&EventHandlers<Self>),
     {
-        f(&*ACCOUNT_STORAGE_EVENTS.read().unwrap())
+        f(&*ACCOUNT_STORAGE_EVENTS.lock().unwrap())
     }
 
     fn handlers_mut<F>(f: F)
     where
         F: FnOnce(&mut EventHandlers<Self>),
     {
-        f(&mut *ACCOUNT_STORAGE_EVENTS.write().unwrap())
+        f(&mut *ACCOUNT_STORAGE_EVENTS.lock().unwrap())
     }
 }
