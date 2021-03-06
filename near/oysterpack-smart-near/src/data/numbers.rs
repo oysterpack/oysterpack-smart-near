@@ -16,7 +16,7 @@ pub const U128_ZERO: U128 = U128(0);
 #[derive(
     BorshSerialize, BorshDeserialize, Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Default,
 )]
-pub struct U128(u128);
+pub struct U128(pub u128);
 
 impl U128 {
     pub fn value(&self) -> u128 {
