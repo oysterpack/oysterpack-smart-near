@@ -13,3 +13,4 @@ crypto_box = "0.5.0"
 
 [dev-dependencies]
 oysterpack-smart-near-test = { path = "../oysterpack-smart-near-test" }
+regex = "1.4.3"
