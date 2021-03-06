@@ -15,6 +15,7 @@ use oysterpack_smart_near::{
 };
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::ops::Deref;
 
 pub struct AccountService<T>
 where
@@ -148,20 +149,20 @@ where
         deposit: Deposit,
         max: MaxStorageBalance,
     ) {
-        if account.near_balance() < max.0 {
-            let max_allowed_deposit = max.0.value() - account.near_balance().value();
-            let deposit = if deposit.0.value() > max_allowed_deposit {
+        if account.near_balance() < *max {
+            let max_allowed_deposit = max.value() - account.near_balance().value();
+            let deposit = if deposit.value() > max_allowed_deposit {
                 // refund amount over the upper bound
-                Promise::new(account_id).transfer(deposit.0.value() - max_allowed_deposit);
+                Promise::new(account_id).transfer(deposit.value() - max_allowed_deposit);
                 Deposit(max_allowed_deposit.into())
             } else {
                 deposit
             };
 
-            self.deposit(account, deposit.0);
+            self.deposit(account, *deposit);
         } else {
             // account storage balance is already at max limit - thus refund the full deposit amount
-            Promise::new(account_id).transfer(deposit.0.value());
+            Promise::new(account_id).transfer(deposit.value());
         }
     }
 
@@ -209,4 +210,20 @@ where
 
 struct Deposit(YoctoNear);
 
+impl Deref for Deposit {
+    type Target = YoctoNear;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 struct MaxStorageBalance(YoctoNear);
+
+impl Deref for MaxStorageBalance {
+    type Target = YoctoNear;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}

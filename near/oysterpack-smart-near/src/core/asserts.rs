@@ -3,11 +3,11 @@ use crate::{ErrCode, ErrorConst};
 use near_sdk::env;
 
 const ERR_YOCTONEAR_DEPOSIT_REQUIRED: ErrorConst = ErrorConst(
-    ErrCode("ERR_YOCTONEAR_DEPOSIT_REQUIRED"),
+    ErrCode("YOCTONEAR_DEPOSIT_REQUIRED"),
     "exactly 1 yoctoNEAR must be attached",
 );
 
-const ERR_INSUFFICIENT_NEAR_DEPOSIT: ErrCode = ErrCode("ERR_INSUFFICIENT_NEAR_DEPOSIT");
+const ERR_INSUFFICIENT_NEAR_DEPOSIT: ErrCode = ErrCode("INSUFFICIENT_NEAR_DEPOSIT");
 
 /// used to protect functions that transfer value against FCAK calls
 pub fn assert_yocto_near_attached() {

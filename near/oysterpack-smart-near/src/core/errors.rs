@@ -5,7 +5,7 @@ pub struct ErrCode(pub &'static str);
 
 impl Display for ErrCode {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "[{}]", self.0)
+        write!(f, "[ERR] [{}]", self.0)
     }
 }
 
@@ -31,7 +31,7 @@ impl Display for ErrorConst {
 mod test {
     use super::*;
 
-    const ERR_1: ErrCode = ErrCode("ERR_1");
+    const ERR_1: ErrCode = ErrCode("INVALID_ACCOUNT_ID");
 
     #[test]
     fn error_display() {
