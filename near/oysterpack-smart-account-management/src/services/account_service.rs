@@ -368,10 +368,10 @@ mod tests_storage_deposit {
 
         test(service.clone(), storage_balance);
     }
+
     #[cfg(test)]
     mod tests_storage_deposit_for_self_registration_only {
         use super::*;
-        use lazy_static::lazy_static;
 
         #[test]
         fn unknown_account_with_exact_storage_deposit() {
@@ -464,21 +464,14 @@ mod tests_storage_deposit {
         #[test]
         #[should_panic(expected = "[ERR] [INSUFFICIENT_NEAR_DEPOSIT]")]
         fn zero_deposit_attached() {
-            lazy_static! {
-                static ref ACCOUNT_SERVICE: Mutex<AccountService<()>> =
-                    Mutex::new(AccountService::<()>::init());
-            }
-
-            // Arrange
-            let account_id = "bob";
-            let ctx = new_context(account_id);
-            testing_env!(ctx.clone());
-
-            AccountService::<()>::deploy(Some(|| STORAGE_BALANCE_BOUNDS));
-            let mut service = ACCOUNT_SERVICE.lock().unwrap();
-
-            // Act - register the user with no deposit attached
-            service.storage_deposit(None, Some(true));
+            run_test(
+                STORAGE_BALANCE_BOUNDS,
+                None,
+                Some(true),
+                0.into(),
+                false,
+                |_service, _storage_balance| {},
+            );
         }
     }
 }
