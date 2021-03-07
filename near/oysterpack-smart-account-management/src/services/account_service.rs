@@ -8,19 +8,21 @@ use near_sdk::{
     json_types::ValidAccountId,
     AccountId, Promise,
 };
-use oysterpack_smart_near::service::{Deploy, Init, Service};
+use oysterpack_smart_near::service::{Deploy, Service};
 use oysterpack_smart_near::{
     asserts::{assert_min_near_attached, assert_yocto_near_attached},
     domain::YoctoNear,
     EVENT_BUS,
 };
-use std::{fmt::Debug, marker::PhantomData, ops::Deref, sync::Mutex};
+use std::{fmt::Debug, marker::PhantomData, ops::Deref};
 
+#[derive(Clone, Copy)]
 pub struct AccountService<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     storage_balance_bounds: StorageBalanceBounds,
+    unregister: fn(Account<T>, bool) -> bool,
     _phantom: PhantomData<T>,
 }
 
@@ -35,14 +37,15 @@ where
     }
 }
 
-impl<T> Init for AccountService<T>
+impl<T> AccountService<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    fn init() -> Self {
+    fn new(unregister: fn(Account<T>, bool) -> bool) -> Self {
         let state = Self::load_state().unwrap();
         Self {
             storage_balance_bounds: *state,
+            unregister,
             _phantom: Default::default(),
         }
     }
@@ -52,17 +55,12 @@ impl<T> Deploy for AccountService<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    fn deploy<F>(initial_state_provider: Option<F>) -> Self
-    where
-        F: FnOnce() -> Self::State,
-    {
-        let state = initial_state_provider.expect("initial state must be provided")();
+    type Config = Self::State;
+
+    fn deploy(config: Option<Self::Config>) {
+        let state = config.expect("initial state must be provided");
         let state = Self::new_state(state);
         state.save();
-        Self {
-            storage_balance_bounds: *state,
-            _phantom: Default::default(),
-        }
     }
 }
 
@@ -286,12 +284,16 @@ mod tests_service {
     use oysterpack_smart_near_test::*;
 
     lazy_static! {
-        pub static ref ACCOUNT_SERVICE: Mutex<AccountService<()>> =
-            Mutex::new(AccountService::<()>::init());
+        pub static ref ACCOUNT_SERVICE: AccountService<()> =
+            AccountService::<()>::new(unregister_always);
+    }
+
+    fn unregister_always(_account: Account<()>, _force: bool) -> bool {
+        true
     }
 
     fn deploy_account_service() {
-        AccountService::<()>::deploy(Some(|| StorageBalanceBounds {
+        AccountService::<()>::deploy(Some(StorageBalanceBounds {
             min: YOCTO.into(),
             max: None,
         }));
@@ -306,7 +308,7 @@ mod tests_service {
 
         // Act
         deploy_account_service();
-        let service = ACCOUNT_SERVICE.lock().unwrap();
+        let service = *ACCOUNT_SERVICE;
         let storage_bounds = service.storage_balance_bounds();
         assert_eq!(storage_bounds.min, YOCTO.into());
         assert!(storage_bounds.max.is_none());
@@ -319,7 +321,6 @@ mod tests_storage_deposit {
     use lazy_static::lazy_static;
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
-    use std::sync::{Arc, Mutex};
 
     const STORAGE_BALANCE_BOUNDS: StorageBalanceBounds = StorageBalanceBounds {
         min: YoctoNear(YOCTO),
@@ -336,54 +337,70 @@ mod tests_storage_deposit {
         already_registered: bool, // if true, then the account ID will be registered before hand using storage balance min
         test: F,
     ) where
-        F: FnOnce(Arc<Mutex<AccountService<()>>>, StorageBalance),
+        F: FnOnce(AccountService<()>, StorageBalance),
     {
         lazy_static! {
-            static ref ACCOUNT_SERVICE: Arc<Mutex<AccountService<()>>> =
-                Arc::new(Mutex::new(AccountService::<()>::init()));
+            static ref ACCOUNT_SERVICE: AccountService<()> =
+                AccountService::<()>::new(unregister_always);
+        }
+
+        fn unregister_always(_account: Account<()>, _force: bool) -> bool {
+            true
         }
 
         let predecessor_account_id = account_id.unwrap_or(PREDECESSOR_ACCOUNT_ID);
         let mut ctx = new_context(predecessor_account_id);
         testing_env!(ctx.clone());
 
-        AccountService::<()>::deploy(Some(|| storage_balance_bounds));
+        AccountService::<()>::deploy(Some(storage_balance_bounds));
 
         ctx.attached_deposit = deposit.value();
         testing_env!(ctx.clone());
 
-        let service: Arc<Mutex<AccountService<()>>> = ACCOUNT_SERVICE.clone();
+        let mut service = *ACCOUNT_SERVICE;
 
         if already_registered {
-            let service = service.lock().unwrap();
             let account =
                 service.new_account(predecessor_account_id, storage_balance_bounds.min, ());
             account.save();
         }
 
-        let storage_balance = {
-            let mut service = service.lock().unwrap();
-            service.storage_deposit(account_id.map(to_valid_account_id), registration_only)
-        };
+        let storage_balance =
+            service.storage_deposit(account_id.map(to_valid_account_id), registration_only);
 
         test(service.clone(), storage_balance);
     }
 
     #[cfg(test)]
-    mod tests_storage_deposit_for_self_registration_only {
+    mod self_registration_only {
         use super::*;
+
+        const ACCOUNT_ID_NONE: Option<&str> = None;
+        const REGISTRATION_ONLY: Option<bool> = Some(true);
+
+        fn run_test<F>(
+            deposit: YoctoNear,
+            already_registered: bool, // if true, then the account ID will be registered before hand using storage balance min
+            test: F,
+        ) where
+            F: FnOnce(AccountService<()>, StorageBalance),
+        {
+            super::run_test(
+                STORAGE_BALANCE_BOUNDS,
+                ACCOUNT_ID_NONE,
+                REGISTRATION_ONLY,
+                deposit,
+                already_registered,
+                test,
+            );
+        }
 
         #[test]
         fn unknown_account_with_exact_storage_deposit() {
             run_test(
-                STORAGE_BALANCE_BOUNDS,
-                None,
-                Some(true),
                 STORAGE_BALANCE_BOUNDS.min,
                 false,
                 |service, storage_balance: StorageBalance| {
-                    let service = service.lock().unwrap();
-
                     assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
                     assert_eq!(storage_balance.available, 0.into());
 
@@ -396,14 +413,9 @@ mod tests_storage_deposit {
         #[test]
         fn unknown_account_with_over_payment() {
             run_test(
-                STORAGE_BALANCE_BOUNDS,
-                None,
-                Some(true),
                 (STORAGE_BALANCE_BOUNDS.min.value() * 3).into(),
                 false,
                 |service, storage_balance: StorageBalance| {
-                    let service = service.lock().unwrap();
-
                     // Assert
                     assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
                     assert_eq!(storage_balance.available, 0.into());
@@ -434,14 +446,9 @@ mod tests_storage_deposit {
         #[test]
         fn already_registered() {
             run_test(
-                STORAGE_BALANCE_BOUNDS,
-                None,
-                Some(true),
                 STORAGE_BALANCE_BOUNDS.min,
                 true,
                 |service, storage_balance: StorageBalance| {
-                    let service = service.lock().unwrap();
-
                     assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
                     assert_eq!(storage_balance.available, 0.into());
 
@@ -464,14 +471,13 @@ mod tests_storage_deposit {
         #[test]
         #[should_panic(expected = "[ERR] [INSUFFICIENT_NEAR_DEPOSIT]")]
         fn zero_deposit_attached() {
-            run_test(
-                STORAGE_BALANCE_BOUNDS,
-                None,
-                Some(true),
-                0.into(),
-                false,
-                |_service, _storage_balance| {},
-            );
+            run_test(0.into(), false, |_service, _storage_balance| {});
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [INSUFFICIENT_NEAR_DEPOSIT]")]
+        fn zero_deposit_attached_already_registered() {
+            run_test(0.into(), true, |_service, _storage_balance| {});
         }
     }
 }

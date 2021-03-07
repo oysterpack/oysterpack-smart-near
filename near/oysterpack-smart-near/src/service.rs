@@ -5,12 +5,9 @@
 //!   - recommendation is to use ULID to generate the storage key
 //! - Each service is responsible for managing its own state. This means when the service state changes
 //!   it is the service's responsibility to save it to storage.
-//! - Service lifecycle hooks:
-//!   - [`Deploy`]
-//!   - [`Init`]
+//! - [`Deploy`] - defines a pattern to standardize service deployment
 //! - All services are lazily loaded. The pattern is to leverage lazy_static, i.e., define each service
 //!   as a lazy_static, which will only be initialized on demand.
-//!
 
 use crate::data::Object;
 use near_sdk::borsh::{BorshDeserialize, BorshSerialize};
@@ -39,28 +36,18 @@ pub trait Service {
 /// service state type
 pub type ServiceState<T> = Object<u128, T>;
 
-/// provides standard interface for contracts to use at deployment time to run service related deployment
-/// code
+/// Provides standard interface pattern for contracts to use at deployment time to run service related
+/// deployment code.
+/// - for example, service may require config to initialize its persistent state
+///
+/// ## NOTES
+/// - services may not need to implement ['Deploy']
 pub trait Deploy: Service {
+    type Config;
+
     /// invoked when the contract is first deployed
     /// - main use case is to initialize any service state
-    fn deploy<F>(initial_state_provider: Option<F>) -> Self
-    where
-        F: FnOnce() -> Self::State;
-}
-
-/// provide standard interface that is meant to be used to lazily initialize the service
-/// - one of its basic functions is to load its state from storage
-pub trait Init: Service {
-    /// invoked when the contract is first used when the contract is invoked.
-    ///
-    /// The pattern is to define all your services via lazy_static, which will initialize the service
-    /// the first time it is referenced.
-    ///
-    /// For example, the service may load some state from storage into memory. Then when the service
-    /// is destroyed, it will store the state back to storage.
-    ///
-    fn init() -> Self;
+    fn deploy(config: Option<Self::Config>);
 }
 
 #[cfg(test)]
@@ -72,7 +59,7 @@ mod tests {
     use std::sync::Mutex;
 
     lazy_static! {
-        static ref FOO: Mutex<Foo> = Mutex::new(Foo::init());
+        static ref FOO: Mutex<Foo> = Mutex::new(Foo::new());
     }
 
     type FooState = ServiceState<u128>;
@@ -88,21 +75,21 @@ mod tests {
         }
     }
 
-    impl Deploy for Foo {
-        fn deploy<F>(initial_state_provider: Option<F>) -> Self
-        where
-            F: FnOnce() -> Self::State,
-        {
-            let state = Foo::new_state(0);
-            state.save();
+    impl Foo {
+        fn new() -> Self {
+            let state = Foo::load_state().unwrap_or(Foo::new_state(0));
             Self { state }
         }
     }
 
-    impl Init for Foo {
-        fn init() -> Self {
-            let state = Foo::load_state().expect("service is not deployed");
-            Self { state }
+    impl Deploy for Foo {
+        type Config = u128;
+
+        fn deploy(config: Option<Self::Config>) {
+            if let Some(config) = config {
+                let state = Self::new_state(config);
+                state.save();
+            }
         }
     }
 
@@ -112,7 +99,7 @@ mod tests {
         let ctx = new_context("bob");
         testing_env!(ctx);
 
-        Foo::deploy();
+        Foo::deploy(None);
 
         // Act
         {
