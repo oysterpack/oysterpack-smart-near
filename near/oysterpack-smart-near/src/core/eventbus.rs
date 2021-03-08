@@ -1,4 +1,4 @@
-//! Provides support for an [`EventBus'] for stateless [`EventHandler`] functions
+//! Provides support for an eventbus for stateless [`EventHandler`] functions
 
 /// registers an event handler
 pub fn register<T>(f: EventHandler<T>)
@@ -18,8 +18,7 @@ where
 /// stateless event handler function
 pub type EventHandler<T> = fn(&T);
 
-/// There is 1 [`EventBus`] per event type.
-/// This maps each [`EventBus`] to its event handlers
+/// Used to store registered event handlers
 pub struct EventHandlers<T: Event + ?Sized>(Vec<EventHandler<T>>);
 
 impl<T: Event + ?Sized> EventHandlers<T> {
