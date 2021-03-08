@@ -1,6 +1,6 @@
 use crate::{
-    Account, AccountRepository, AccountStorageEvent, AccountStorageUsage, AccountTracking,
-    StorageBalance, StorageBalanceBounds, StorageManagement, StorageUsageBounds,
+    Account, AccountRepository, AccountStats, AccountStorageEvent, AccountStorageUsage,
+    AccountTracking, StorageBalance, StorageBalanceBounds, StorageManagement, StorageUsageBounds,
 };
 use near_sdk::{
     borsh::{BorshDeserialize, BorshSerialize},
@@ -355,6 +355,9 @@ mod tests_storage_deposit {
         let mut ctx = new_context(PREDECESSOR_ACCOUNT_ID);
         testing_env!(ctx.clone());
 
+        AccountStats::register_account_storage_event_handler();
+        AccountStats::reset();
+
         let storage_balance_bounds: StorageBalanceBounds = storage_usage_bounds.into();
 
         AccountService::<()>::deploy(Some(storage_usage_bounds));
@@ -371,6 +374,10 @@ mod tests_storage_deposit {
                 (),
             );
             account.save();
+            EVENT_BUS.post(&AccountStorageEvent::Registered(
+                account.storage_balance(storage_balance_bounds.min),
+                account.storage_usage(),
+            ));
         }
 
         let storage_balance =
@@ -411,6 +418,15 @@ mod tests_storage_deposit {
 
                     let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
                     assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
+
+                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    let account_stats = service.account_stats();
+                    assert_eq!(account_stats.total_registered_accounts, 1.into());
+                    assert_eq!(account_stats.total_near_balance, account.near_balance());
+                    assert_eq!(
+                        account_stats.total_storage_usage,
+                        account.serialized_byte_size().into()
+                    );
                 },
             );
         }
@@ -428,6 +444,15 @@ mod tests_storage_deposit {
                     // Assert account was registered
                     let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
                     assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
+
+                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    let account_stats = service.account_stats();
+                    assert_eq!(account_stats.total_registered_accounts, 1.into());
+                    assert_eq!(account_stats.total_near_balance, account.near_balance());
+                    assert_eq!(
+                        account_stats.total_storage_usage,
+                        account.serialized_byte_size().into()
+                    );
 
                     // Assert overpayment was refunded
                     let receipts = deserialize_receipts();
@@ -526,6 +551,15 @@ mod tests_storage_deposit {
 
                     let account = service.registered_account(ACCOUNT_ID);
                     assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
+
+                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    let account_stats = service.account_stats();
+                    assert_eq!(account_stats.total_registered_accounts, 1.into());
+                    assert_eq!(account_stats.total_near_balance, account.near_balance());
+                    assert_eq!(
+                        account_stats.total_storage_usage,
+                        account.serialized_byte_size().into()
+                    );
                 },
             );
         }
@@ -543,6 +577,15 @@ mod tests_storage_deposit {
                     // Assert account was registered
                     let account = service.registered_account(ACCOUNT_ID);
                     assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
+
+                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    let account_stats = service.account_stats();
+                    assert_eq!(account_stats.total_registered_accounts, 1.into());
+                    assert_eq!(account_stats.total_near_balance, account.near_balance());
+                    assert_eq!(
+                        account_stats.total_storage_usage,
+                        account.serialized_byte_size().into()
+                    );
 
                     // Assert overpayment was refunded
                     let receipts = deserialize_receipts();
@@ -657,6 +700,15 @@ mod tests_storage_deposit {
 
                     let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
                     assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
+
+                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    let account_stats = service.account_stats();
+                    assert_eq!(account_stats.total_registered_accounts, 1.into());
+                    assert_eq!(account_stats.total_near_balance, account.near_balance());
+                    assert_eq!(
+                        account_stats.total_storage_usage,
+                        account.serialized_byte_size().into()
+                    );
                 },
             );
         }
@@ -678,6 +730,15 @@ mod tests_storage_deposit {
                     // Assert account was registered
                     let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
                     assert_eq!(account.near_balance(), deposit_amount);
+
+                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    let account_stats = service.account_stats();
+                    assert_eq!(account_stats.total_registered_accounts, 1.into());
+                    assert_eq!(account_stats.total_near_balance, account.near_balance());
+                    assert_eq!(
+                        account_stats.total_storage_usage,
+                        account.serialized_byte_size().into()
+                    );
                 },
             );
         }
@@ -701,6 +762,15 @@ mod tests_storage_deposit {
                     // Assert account was registered
                     let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
                     assert_eq!(account.near_balance(), storage_balance_bounds.max.unwrap());
+
+                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    let account_stats = service.account_stats();
+                    assert_eq!(account_stats.total_registered_accounts, 1.into());
+                    assert_eq!(account_stats.total_near_balance, account.near_balance());
+                    assert_eq!(
+                        account_stats.total_storage_usage,
+                        account.serialized_byte_size().into()
+                    );
 
                     let receipts = deserialize_receipts();
                     let receipt = &receipts[0];
@@ -793,6 +863,15 @@ mod tests_storage_deposit {
 
                     let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
                     assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
+
+                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    let account_stats = service.account_stats();
+                    assert_eq!(account_stats.total_registered_accounts, 1.into());
+                    assert_eq!(account_stats.total_near_balance, account.near_balance());
+                    assert_eq!(
+                        account_stats.total_storage_usage,
+                        account.serialized_byte_size().into()
+                    );
                 },
             );
         }
@@ -814,6 +893,15 @@ mod tests_storage_deposit {
                     // Assert account was registered
                     let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
                     assert_eq!(account.near_balance(), deposit_amount);
+
+                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    let account_stats = service.account_stats();
+                    assert_eq!(account_stats.total_registered_accounts, 1.into());
+                    assert_eq!(account_stats.total_near_balance, account.near_balance());
+                    assert_eq!(
+                        account_stats.total_storage_usage,
+                        account.serialized_byte_size().into()
+                    );
                 },
             );
         }
@@ -831,6 +919,16 @@ mod tests_storage_deposit {
                     assert_eq!(
                         storage_balance.available,
                         service.storage_balance_bounds().min
+                    );
+
+                    let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
+                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    let account_stats = service.account_stats();
+                    assert_eq!(account_stats.total_registered_accounts, 1.into());
+                    assert_eq!(account_stats.total_near_balance, account.near_balance());
+                    assert_eq!(
+                        account_stats.total_storage_usage,
+                        account.serialized_byte_size().into()
                     );
                 },
             );

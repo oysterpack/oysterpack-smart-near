@@ -4,9 +4,12 @@ use near_sdk::{
     env,
     serde::{Deserialize, Serialize},
 };
-use oysterpack_smart_near::data::numbers::U128;
-use oysterpack_smart_near::domain::StorageUsage;
-use oysterpack_smart_near::{data::Object, domain::YoctoNear};
+
+use oysterpack_smart_near::{
+    data::{numbers::U128, Object},
+    domain::{StorageUsage, YoctoNear},
+    EVENT_BUS,
+};
 
 const ACCOUNT_STATS_KEY: u128 = 1952364736129901845182088441739779955;
 
@@ -23,6 +26,8 @@ pub struct AccountStats {
     pub total_storage_usage: StorageUsage,
 }
 
+static mut ACCOUNT_STORAGE_EVENT_HANDLER_REGISTERED: bool = false;
+
 impl AccountStats {
     pub fn load() -> AccountStats {
         let stats = AccountStatsObject::load(&ACCOUNT_STATS_KEY)
@@ -32,6 +37,26 @@ impl AccountStats {
 
     pub fn save(&self) {
         AccountStatsObject::new(ACCOUNT_STATS_KEY, *self).save();
+    }
+
+    /// meant for unit testing purposes
+    pub(crate) fn reset() {
+        let mut stats = AccountStats::load();
+        stats.total_storage_usage = 0.into();
+        stats.total_near_balance = 0.into();
+        stats.total_registered_accounts = 0.into();
+        stats.save();
+    }
+
+    /// can be safely called multiple times and will only register the event handler once
+    pub fn register_account_storage_event_handler() {
+        let registered = unsafe { ACCOUNT_STORAGE_EVENT_HANDLER_REGISTERED };
+        if !registered {
+            EVENT_BUS.register(AccountStats::on_account_storage_event);
+            unsafe {
+                ACCOUNT_STORAGE_EVENT_HANDLER_REGISTERED = true;
+            }
+        }
     }
 
     pub fn on_account_storage_event(event: &AccountStorageEvent) {
@@ -130,7 +155,7 @@ mod test {
         let context = new_context(account_id);
         testing_env!(context);
 
-        EVENT_BUS.register(AccountStats::on_account_storage_event);
+        AccountStats::register_account_storage_event_handler();
 
         let stats = AccountStats::load();
         assert_eq!(stats.total_registered_accounts, 0.into());

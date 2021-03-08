@@ -29,10 +29,13 @@ impl Contract {
     }
 
     pub fn simulate_account_storage_event(&self) {
-        EVENT_BUS.post(&AccountStorageEvent::Registered(StorageBalance {
-            total: 100.into(),
-            available: 0.into(),
-        }));
+        EVENT_BUS.post(&AccountStorageEvent::Registered(
+            StorageBalance {
+                total: 100.into(),
+                available: 0.into(),
+            },
+            1000.into(),
+        ));
     }
 }
 
