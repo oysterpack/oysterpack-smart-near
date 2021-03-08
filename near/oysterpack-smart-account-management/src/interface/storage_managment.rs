@@ -92,7 +92,7 @@ pub trait StorageManagement {
     /// - If the specified withdrawal amount is greater than the account's available storage balance
     ///
     /// `#[payable]`
-    fn storage_withdraw(amount: Option<YoctoNear>) -> StorageBalance;
+    fn storage_withdraw(&mut self, amount: Option<YoctoNear>) -> StorageBalance;
 
     /// Unregisters the predecessor account and returns the storage NEAR deposit.
     ///
@@ -110,7 +110,7 @@ pub trait StorageManagement {
     /// - if exactly 1 yoctoNEAR is not attached
     ///
     /// `#[payable]`
-    fn storage_unregister(force: Option<bool>) -> bool;
+    fn storage_unregister(&mut self, force: Option<bool>) -> bool;
 
     /// Returns minimum and maximum allowed balance amounts to interact with this contract.
     fn storage_balance_bounds(&self) -> StorageBalanceBounds;

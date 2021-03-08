@@ -4,8 +4,14 @@ use near_sdk::{
     json_types::U128,
     near_bindgen, wee_alloc, PanicOnDefault,
 };
-use oysterpack_smart_account_management::{AccountStats, AccountStorageEvent, StorageBalance};
-use oysterpack_smart_near::{data::Object, domain::YoctoNear, EVENT_BUS};
+use oysterpack_smart_account_management::{
+    Account, AccountManagementService, AccountStats, AccountStorageEvent, StorageBalance,
+    StorageBalanceBounds, StorageUsageBounds,
+};
+use oysterpack_smart_near::{data::Object, domain::YoctoNear, eventbus, service::*};
+
+use oysterpack_smart_account_management::services::account_service::*;
+use shaku::*;
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
@@ -16,6 +22,8 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 pub struct Contract {
     #[borsh_skip]
     key_value_store: KeyValueStoreService,
+    #[borsh_skip]
+    account_service_module: AccountServiceModule,
 }
 
 #[near_bindgen]
@@ -23,13 +31,18 @@ impl Contract {
     #[init]
     pub fn init_state() -> Self {
         assert!(!env::state_exists(), "contract is already initialized");
+        AccountService::<()>::deploy(Some(StorageUsageBounds {
+            min: 1000.into(),
+            max: None,
+        }));
         Self {
             key_value_store: KeyValueStoreService,
+            account_service_module: Default::default(),
         }
     }
 
     pub fn simulate_account_storage_event(&self) {
-        EVENT_BUS.post(&AccountStorageEvent::Registered(
+        eventbus::post(&AccountStorageEvent::Registered(
             StorageBalance {
                 total: 100.into(),
                 available: 0.into(),
@@ -37,12 +50,17 @@ impl Contract {
             1000.into(),
         ));
     }
+
+    pub fn storage_balance_bounds(&self) -> StorageBalanceBounds {
+        let service: &dyn AccountManagementService<()> = self.account_service_module.resolve_ref();
+        service.storage_usage_bounds().into()
+    }
 }
 
 impl Contract {
     /// get run each time the contract is loaded from storage and instantiated
     fn init(&mut self) {
-        EVENT_BUS.register(AccountStats::on_account_storage_event);
+        eventbus::register(AccountStats::on_account_storage_event);
         unsafe {
             FOO = 1;
         }
@@ -102,3 +120,30 @@ impl KeyValueStore for KeyValueStoreService {
         Data::new(key.0, value).save();
     }
 }
+
+//////////
+module! {
+    pub AccountServiceModule {
+        components = [AccountServiceComponent],
+        providers = []
+    }
+}
+
+pub type AccountServiceComponent = AccountService<()>;
+
+impl Default for AccountServiceModule {
+    fn default() -> Self {
+        AccountServiceModule::builder()
+            .with_component_parameters::<AccountServiceComponent>(AccountServiceParameters {
+                unregister: unregister_always,
+                _phantom: Default::default(),
+            })
+            .build()
+    }
+}
+
+fn unregister_always(_account: Account<()>, _force: bool) -> bool {
+    true
+}
+
+/////

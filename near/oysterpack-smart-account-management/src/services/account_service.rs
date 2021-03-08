@@ -1,6 +1,7 @@
 use crate::{
-    Account, AccountRepository, AccountStats, AccountStorageEvent, AccountStorageUsage,
-    AccountTracking, StorageBalance, StorageBalanceBounds, StorageManagement, StorageUsageBounds,
+    Account, AccountManagementService, AccountRepository, AccountStats, AccountStorageEvent,
+    AccountStorageUsage, AccountTracking, StorageBalance, StorageBalanceBounds, StorageManagement,
+    StorageUsageBounds,
 };
 use near_sdk::{
     borsh::{BorshDeserialize, BorshSerialize},
@@ -16,18 +17,52 @@ use oysterpack_smart_near::{
 };
 use std::{fmt::Debug, marker::PhantomData, ops::Deref};
 
+use shaku::*;
+
+#[derive(Component)]
+#[shaku(interface = AccountManagementService<T>)]
 #[derive(Clone, Copy)]
 pub struct AccountService<T>
 where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+    T: BorshSerialize
+        + BorshDeserialize
+        + Clone
+        + Debug
+        + PartialEq
+        + Default
+        + Sync
+        + Send
+        + Sized
+        + 'static,
 {
     unregister: fn(Account<T>, bool) -> bool,
     _phantom: PhantomData<T>,
 }
 
+impl<T> AccountManagementService<T> for AccountService<T> where
+    T: BorshSerialize
+        + BorshDeserialize
+        + Clone
+        + Debug
+        + PartialEq
+        + Default
+        + Sync
+        + Send
+        + Sized
+{
+}
+
 impl<T> Service for AccountService<T>
 where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+    T: BorshSerialize
+        + BorshDeserialize
+        + Clone
+        + Debug
+        + PartialEq
+        + Default
+        + Sync
+        + Send
+        + Sized,
 {
     type State = StorageUsageBounds;
 
@@ -38,7 +73,15 @@ where
 
 impl<T> AccountService<T>
 where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+    T: BorshSerialize
+        + BorshDeserialize
+        + Clone
+        + Debug
+        + PartialEq
+        + Default
+        + Sync
+        + Send
+        + Sized,
 {
     fn new(unregister: fn(Account<T>, bool) -> bool) -> Self {
         Self {
@@ -50,7 +93,16 @@ where
 
 impl<T> Deploy for AccountService<T>
 where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+    T: BorshSerialize
+        + BorshDeserialize
+        + Clone
+        + Debug
+        + PartialEq
+        + Default
+        + Sync
+        + Send
+        + Sized
+        + 'static,
 {
     type Config = Self::State;
 
@@ -62,13 +114,13 @@ where
 }
 
 impl<T> AccountRepository<T> for AccountService<T> where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + Sync + Send
 {
 }
 
 impl<T> AccountStorageUsage for AccountService<T>
 where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + Sync + Send,
 {
     fn storage_usage_bounds(&self) -> StorageUsageBounds {
         *Self::load_state().unwrap()
@@ -82,7 +134,16 @@ where
 
 impl<T> StorageManagement for AccountService<T>
 where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+    T: BorshSerialize
+        + BorshDeserialize
+        + Clone
+        + Debug
+        + PartialEq
+        + Default
+        + Sync
+        + Send
+        + Sized
+        + 'static,
 {
     /// Payable method that receives an attached deposit of Ⓝ for a given account.
     ///
@@ -143,12 +204,12 @@ where
         account.storage_balance(storage_balance_bounds.min)
     }
 
-    fn storage_withdraw(amount: Option<YoctoNear>) -> StorageBalance {
+    fn storage_withdraw(&mut self, amount: Option<YoctoNear>) -> StorageBalance {
         assert_yocto_near_attached();
         unimplemented!()
     }
 
-    fn storage_unregister(force: Option<bool>) -> bool {
+    fn storage_unregister(&mut self, force: Option<bool>) -> bool {
         assert_yocto_near_attached();
         unimplemented!()
     }
@@ -169,14 +230,14 @@ where
 }
 
 impl<T> AccountTracking for AccountService<T> where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + Sync + Send
 {
 }
 
 /// helper functions
 impl<T> AccountService<T>
 where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + Sync + Send,
 {
     /// refunds deposit amount that is above the max allowed storage balance
     fn deposit_with_max_bound(
@@ -281,6 +342,15 @@ mod tests_service {
     use lazy_static::lazy_static;
     use oysterpack_smart_near_test::*;
 
+    pub type AccountServiceComponent = AccountService<()>;
+
+    module! {
+        AccountServiceModule {
+            components = [AccountServiceComponent],
+            providers = []
+        }
+    }
+
     lazy_static! {
         pub static ref ACCOUNT_SERVICE: AccountService<()> =
             AccountService::<()>::new(unregister_always);
@@ -313,6 +383,34 @@ mod tests_service {
             (env::storage_byte_cost() * 1000).into()
         );
         assert!(storage_balance_bounds.max.is_none());
+    }
+
+    #[test]
+    fn deploy_and_use_module() {
+        // Arrange
+        let account_id = "bob";
+        let ctx = new_context(account_id);
+        testing_env!(ctx);
+
+        // Act
+        deploy_account_service();
+
+        let module: AccountServiceModule = AccountServiceModule::builder()
+            .with_component_parameters::<AccountServiceComponent>(AccountServiceParameters {
+                unregister: unregister_always,
+                _phantom: Default::default(),
+            })
+            .build();
+
+        let service: &dyn AccountManagementService<()> = module.resolve_ref();
+        let storage_balance_bounds = service.storage_balance_bounds();
+        assert_eq!(
+            storage_balance_bounds.min,
+            (env::storage_byte_cost() * 1000).into()
+        );
+        assert!(storage_balance_bounds.max.is_none());
+
+        let storage_usage_bounds = service.storage_usage_bounds();
     }
 }
 
