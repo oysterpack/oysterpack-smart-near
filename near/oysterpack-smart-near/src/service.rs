@@ -1,4 +1,4 @@
-//! This package provides a standard for building reusable smart contract stateful services
+//! This package provides a standard for building reusable smart contract stateful components
 //!
 //! ## Service Design
 //! - Service declares it state type and defines a u128 based storage key
@@ -6,7 +6,7 @@
 //! - Each service is responsible for managing its own state. This means when the service state changes
 //!   it is the service's responsibility to save it to storage.
 //! - [`Deploy`] - defines a pattern to standardize service deployment
-//! - All services are lazily loaded. The pattern is to leverage lazy_static, i.e., define each service
+//! - All components are lazily loaded. The pattern is to leverage lazy_static, i.e., define each service
 //!   as a lazy_static, which will only be initialized on demand.
 
 use crate::data::Object;
@@ -41,7 +41,7 @@ pub type ServiceState<T> = Object<u128, T>;
 /// - for example, service may require config to initialize its persistent state
 ///
 /// ## NOTES
-/// - services may not need to implement ['Deploy']
+/// - components may not need to implement ['Deploy']
 pub trait Deploy: Service {
     type Config;
 

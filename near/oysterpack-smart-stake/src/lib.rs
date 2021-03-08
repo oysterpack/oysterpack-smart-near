@@ -10,7 +10,7 @@ use oysterpack_smart_account_management::{
 };
 use oysterpack_smart_near::{data::Object, domain::YoctoNear, eventbus, service::*};
 
-use oysterpack_smart_account_management::services::account_service::*;
+use oysterpack_smart_account_management::components::account_service::*;
 use shaku::*;
 
 #[global_allocator]

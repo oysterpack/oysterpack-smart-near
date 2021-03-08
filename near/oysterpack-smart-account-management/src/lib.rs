@@ -3,9 +3,9 @@
 pub use domain::*;
 pub use interface::*;
 
+pub mod components;
 mod domain;
 mod interface;
-pub mod services;
 
 #[cfg(test)]
 mod tests {
