@@ -23,6 +23,7 @@ where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     /// Creates a new in memory account object
+    /// - its storage usage will be initialized to the serialized object byte size
     pub fn new(account_id: &str, near_balance: YoctoNear, data: T) -> Self {
         let key = Hash::from(account_id);
         let mut account = Self(AccountObject::<T>::new(
