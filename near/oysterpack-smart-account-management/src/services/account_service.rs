@@ -75,7 +75,8 @@ where
     }
 
     fn storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage> {
-        unimplemented!()
+        self.load_account(account_id.as_ref().as_str())
+            .map(|account| account.storage_usage())
     }
 }
 
@@ -214,6 +215,7 @@ where
     ) -> Account<T> {
         EVENT_BUS.post(&AccountStorageEvent::Registered(
             account.storage_balance(storage_balance_bounds.min),
+            account.storage_usage(),
         ));
         account.save();
         account
