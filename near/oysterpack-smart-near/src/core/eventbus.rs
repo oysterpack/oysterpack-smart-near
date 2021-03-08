@@ -82,12 +82,22 @@ mod test {
     #[derive(Debug)]
     struct StringEvent(String);
 
+    type CountEventHandlers = EventHandlers<CountEvent>;
+    type StringEventHandlers = EventHandlers<StringEvent>;
+
+    fn create_count_handlers() -> CountEventHandlers {
+        EventHandlers::new()
+    }
+
+    fn create_string_event_handlers() -> StringEventHandlers {
+        EventHandlers::new()
+    }
+
     // define events
     lazy_static! {
-        static ref COUNT_EVENTS: Mutex<EventHandlers<CountEvent>> =
-            Mutex::new(EventHandlers::new());
-        static ref STRING_EVENTS: Mutex<EventHandlers<StringEvent>> =
-            Mutex::new(EventHandlers::new());
+        static ref COUNT_EVENTS: Mutex<CountEventHandlers> = Mutex::new(create_count_handlers());
+        static ref STRING_EVENTS: Mutex<StringEventHandlers> =
+            Mutex::new(create_string_event_handlers());
     }
 
     // TODO: create macro for this boilerplate code
