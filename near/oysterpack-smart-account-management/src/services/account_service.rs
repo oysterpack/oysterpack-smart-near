@@ -12,7 +12,7 @@ use oysterpack_smart_near::service::{Deploy, Service};
 use oysterpack_smart_near::{
     asserts::{assert_min_near_attached, assert_yocto_near_attached},
     domain::{StorageUsage, YoctoNear},
-    EVENT_BUS,
+    eventbus,
 };
 use std::{fmt::Debug, marker::PhantomData, ops::Deref};
 
@@ -203,7 +203,7 @@ where
     }
 
     fn deposit(&self, account: &mut Account<T>, deposit: YoctoNear) {
-        EVENT_BUS.post(&AccountStorageEvent::Deposit(deposit));
+        eventbus::post(&AccountStorageEvent::Deposit(deposit));
         account.incr_near_balance(deposit);
         account.save();
     }
@@ -213,7 +213,7 @@ where
         account: Account<T>,
         storage_balance_bounds: StorageBalanceBounds,
     ) -> Account<T> {
-        EVENT_BUS.post(&AccountStorageEvent::Registered(
+        eventbus::post(&AccountStorageEvent::Registered(
             account.storage_balance(storage_balance_bounds.min),
             account.storage_usage(),
         ));
@@ -374,7 +374,7 @@ mod tests_storage_deposit {
                 (),
             );
             account.save();
-            EVENT_BUS.post(&AccountStorageEvent::Registered(
+            eventbus::post(&AccountStorageEvent::Registered(
                 account.storage_balance(storage_balance_bounds.min),
                 account.storage_usage(),
             ));
@@ -419,7 +419,7 @@ mod tests_storage_deposit {
                     let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
                     assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
-                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    // AccountStorageEvent:Registered event should have been published to update stats
                     let account_stats = service.account_stats();
                     assert_eq!(account_stats.total_registered_accounts, 1.into());
                     assert_eq!(account_stats.total_near_balance, account.near_balance());
@@ -445,7 +445,7 @@ mod tests_storage_deposit {
                     let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
                     assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
-                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    // AccountStorageEvent:Registered event should have been published to update stats
                     let account_stats = service.account_stats();
                     assert_eq!(account_stats.total_registered_accounts, 1.into());
                     assert_eq!(account_stats.total_near_balance, account.near_balance());
@@ -552,7 +552,7 @@ mod tests_storage_deposit {
                     let account = service.registered_account(ACCOUNT_ID);
                     assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
-                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    // AccountStorageEvent:Registered event should have been published to update stats
                     let account_stats = service.account_stats();
                     assert_eq!(account_stats.total_registered_accounts, 1.into());
                     assert_eq!(account_stats.total_near_balance, account.near_balance());
@@ -578,7 +578,7 @@ mod tests_storage_deposit {
                     let account = service.registered_account(ACCOUNT_ID);
                     assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
-                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    // AccountStorageEvent:Registered event should have been published to update stats
                     let account_stats = service.account_stats();
                     assert_eq!(account_stats.total_registered_accounts, 1.into());
                     assert_eq!(account_stats.total_near_balance, account.near_balance());
@@ -701,7 +701,7 @@ mod tests_storage_deposit {
                     let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
                     assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
-                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    // AccountStorageEvent:Registered event should have been published to update stats
                     let account_stats = service.account_stats();
                     assert_eq!(account_stats.total_registered_accounts, 1.into());
                     assert_eq!(account_stats.total_near_balance, account.near_balance());
@@ -731,7 +731,7 @@ mod tests_storage_deposit {
                     let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
                     assert_eq!(account.near_balance(), deposit_amount);
 
-                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    // AccountStorageEvent:Registered event should have been published to update stats
                     let account_stats = service.account_stats();
                     assert_eq!(account_stats.total_registered_accounts, 1.into());
                     assert_eq!(account_stats.total_near_balance, account.near_balance());
@@ -763,7 +763,7 @@ mod tests_storage_deposit {
                     let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
                     assert_eq!(account.near_balance(), storage_balance_bounds.max.unwrap());
 
-                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    // AccountStorageEvent:Registered event should have been published to update stats
                     let account_stats = service.account_stats();
                     assert_eq!(account_stats.total_registered_accounts, 1.into());
                     assert_eq!(account_stats.total_near_balance, account.near_balance());
@@ -864,7 +864,7 @@ mod tests_storage_deposit {
                     let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
                     assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
-                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    // AccountStorageEvent:Registered event should have been published to update stats
                     let account_stats = service.account_stats();
                     assert_eq!(account_stats.total_registered_accounts, 1.into());
                     assert_eq!(account_stats.total_near_balance, account.near_balance());
@@ -894,7 +894,7 @@ mod tests_storage_deposit {
                     let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
                     assert_eq!(account.near_balance(), deposit_amount);
 
-                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    // AccountStorageEvent:Registered event should have been published to update stats
                     let account_stats = service.account_stats();
                     assert_eq!(account_stats.total_registered_accounts, 1.into());
                     assert_eq!(account_stats.total_near_balance, account.near_balance());
@@ -922,7 +922,7 @@ mod tests_storage_deposit {
                     );
 
                     let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
-                    /// AccountStorageEvent:Registered event should have been published to update stats
+                    // AccountStorageEvent:Registered event should have been published to update stats
                     let account_stats = service.account_stats();
                     assert_eq!(account_stats.total_registered_accounts, 1.into());
                     assert_eq!(account_stats.total_near_balance, account.near_balance());

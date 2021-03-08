@@ -7,7 +7,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 use oysterpack_smart_near::domain::{StorageUsage, StorageUsageChange};
-use oysterpack_smart_near::{domain::YoctoNear, Event, EventHandlers};
+use oysterpack_smart_near::{domain::YoctoNear, eventbus::*};
 use std::sync::Mutex;
 
 /// # Account Storage API
@@ -174,7 +174,7 @@ pub enum AccountStorageEvent {
     Unregistered(YoctoNear, StorageUsage),
 }
 
-/// TODO: create macro to generate boilerplate code for event: #[event]
+// TODO: create macro to generate boilerplate code for event: #[event]
 lazy_static! {
     pub static ref ACCOUNT_STORAGE_EVENTS: Mutex<EventHandlers<AccountStorageEvent>> =
         Mutex::new(EventHandlers::new());

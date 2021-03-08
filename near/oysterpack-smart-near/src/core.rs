@@ -1,10 +1,9 @@
 pub mod asserts;
 mod errors;
-mod eventbus;
+pub mod eventbus;
 mod hash;
 
 pub use errors::*;
-pub use eventbus::*;
 pub use hash::*;
 
 use uint::construct_uint;

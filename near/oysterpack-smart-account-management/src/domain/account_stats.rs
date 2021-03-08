@@ -8,7 +8,7 @@ use near_sdk::{
 use oysterpack_smart_near::{
     data::{numbers::U128, Object},
     domain::{StorageUsage, YoctoNear},
-    EVENT_BUS,
+    eventbus,
 };
 
 const ACCOUNT_STATS_KEY: u128 = 1952364736129901845182088441739779955;
@@ -52,7 +52,7 @@ impl AccountStats {
     pub fn register_account_storage_event_handler() {
         let registered = unsafe { ACCOUNT_STORAGE_EVENT_HANDLER_REGISTERED };
         if !registered {
-            EVENT_BUS.register(AccountStats::on_account_storage_event);
+            eventbus::register(AccountStats::on_account_storage_event);
             unsafe {
                 ACCOUNT_STORAGE_EVENT_HANDLER_REGISTERED = true;
             }
@@ -167,7 +167,7 @@ mod test {
             total: YOCTO.into(),
             available: 0.into(),
         };
-        EVENT_BUS.post(&AccountStorageEvent::Registered(
+        eventbus::post(&AccountStorageEvent::Registered(
             storage_balance,
             1000.into(),
         ));
@@ -179,7 +179,7 @@ mod test {
         assert_eq!(stats.total_storage_usage, 1000.into());
 
         // Act - deposit
-        EVENT_BUS.post(&AccountStorageEvent::Deposit(YOCTO.into()));
+        eventbus::post(&AccountStorageEvent::Deposit(YOCTO.into()));
 
         // Assert
         let stats = AccountStats::load();
@@ -188,7 +188,7 @@ mod test {
         assert_eq!(stats.total_storage_usage, 1000.into());
 
         // Act - withdraw
-        EVENT_BUS.post(&AccountStorageEvent::Withdrawal(YOCTO.into()));
+        eventbus::post(&AccountStorageEvent::Withdrawal(YOCTO.into()));
 
         // Assert
         let stats = AccountStats::load();
@@ -197,7 +197,7 @@ mod test {
         assert_eq!(stats.total_storage_usage, 1000.into());
 
         // Act - storage usage increase
-        EVENT_BUS.post(&AccountStorageEvent::StorageUsageChanged(1000.into()));
+        eventbus::post(&AccountStorageEvent::StorageUsageChanged(1000.into()));
 
         // Assert
         let stats = AccountStats::load();
@@ -206,7 +206,7 @@ mod test {
         assert_eq!(stats.total_storage_usage, 2000.into());
 
         // Act - storage usage decrease
-        EVENT_BUS.post(&AccountStorageEvent::StorageUsageChanged(
+        eventbus::post(&AccountStorageEvent::StorageUsageChanged(
             StorageUsageChange(-1000),
         ));
 
@@ -217,7 +217,7 @@ mod test {
         assert_eq!(stats.total_storage_usage, 1000.into());
 
         // Act - account unregistered
-        EVENT_BUS.post(&AccountStorageEvent::Unregistered(
+        eventbus::post(&AccountStorageEvent::Unregistered(
             YOCTO.into(),
             StorageUsage(1000),
         ));
