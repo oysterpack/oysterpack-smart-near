@@ -1,6 +1,8 @@
+use crate::StorageUsageBounds;
 use lazy_static::lazy_static;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
+    env,
     json_types::ValidAccountId,
     serde::{Deserialize, Serialize},
 };
@@ -141,6 +143,18 @@ pub struct StorageBalanceBounds {
     /// and does not adjust per-user storage over time. A contract which implements `max` must
     /// refund deposits that would increase a user's storage balance beyond this amount.
     pub max: Option<YoctoNear>,
+}
+
+impl From<StorageUsageBounds> for StorageBalanceBounds {
+    fn from(bounds: StorageUsageBounds) -> Self {
+        let storage_byte_cost = env::storage_byte_cost();
+        Self {
+            min: (storage_byte_cost * bounds.min.value() as u128).into(),
+            max: bounds
+                .max
+                .map(|max| (storage_byte_cost * max.value() as u128).into()),
+        }
+    }
 }
 
 lazy_static! {

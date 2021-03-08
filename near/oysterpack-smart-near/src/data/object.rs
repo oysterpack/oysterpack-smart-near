@@ -62,6 +62,13 @@ where
         let key = object_serialize_key(&self.0);
         env::storage_remove(&key)
     }
+
+    /// Returns the borsh serialized byte size for the object
+    pub fn serialized_byte_size(&self) -> u64 {
+        let key_len = self.0.try_to_vec().unwrap().len() as u64;
+        let value_len = self.1.try_to_vec().unwrap().len() as u64;
+        key_len + value_len
+    }
 }
 
 impl<K, V> Deref for Object<K, V>

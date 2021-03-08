@@ -1,6 +1,6 @@
 use crate::{
-    Account, AccountRepository, AccountStorageEvent, AccountTracking, StorageBalance,
-    StorageBalanceBounds, StorageManagement,
+    Account, AccountRepository, AccountStorageEvent, AccountStorageUsage, AccountTracking,
+    StorageBalance, StorageBalanceBounds, StorageManagement, StorageUsageBounds,
 };
 use near_sdk::{
     borsh::{BorshDeserialize, BorshSerialize},
@@ -11,7 +11,7 @@ use near_sdk::{
 use oysterpack_smart_near::service::{Deploy, Service};
 use oysterpack_smart_near::{
     asserts::{assert_min_near_attached, assert_yocto_near_attached},
-    domain::YoctoNear,
+    domain::{StorageUsage, YoctoNear},
     EVENT_BUS,
 };
 use std::{fmt::Debug, marker::PhantomData, ops::Deref};
@@ -29,7 +29,7 @@ impl<T> Service for AccountService<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    type State = StorageBalanceBounds;
+    type State = StorageUsageBounds;
 
     fn state_key() -> u128 {
         1952475351321611295376996018476025471
@@ -64,6 +64,19 @@ where
 impl<T> AccountRepository<T> for AccountService<T> where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default
 {
+}
+
+impl<T> AccountStorageUsage for AccountService<T>
+where
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+{
+    fn storage_usage_bounds(&self) -> StorageUsageBounds {
+        *Self::load_state().unwrap()
+    }
+
+    fn storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage> {
+        unimplemented!()
+    }
 }
 
 impl<T> StorageManagement for AccountService<T>
@@ -140,7 +153,7 @@ where
     }
 
     fn storage_balance_bounds(&self) -> StorageBalanceBounds {
-        *Self::load_state().unwrap()
+        self.storage_usage_bounds().into()
     }
 
     fn storage_balance_of(&self, account_id: ValidAccountId) -> Option<StorageBalance> {
@@ -264,7 +277,6 @@ impl Deref for MaxStorageBalance {
 mod tests_service {
     use super::*;
     use lazy_static::lazy_static;
-    use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
     lazy_static! {
@@ -277,8 +289,8 @@ mod tests_service {
     }
 
     fn deploy_account_service() {
-        AccountService::<()>::deploy(Some(StorageBalanceBounds {
-            min: YOCTO.into(),
+        AccountService::<()>::deploy(Some(StorageUsageBounds {
+            min: 1000.into(),
             max: None,
         }));
     }
@@ -293,9 +305,12 @@ mod tests_service {
         // Act
         deploy_account_service();
         let service = *ACCOUNT_SERVICE;
-        let storage_bounds = service.storage_balance_bounds();
-        assert_eq!(storage_bounds.min, YOCTO.into());
-        assert!(storage_bounds.max.is_none());
+        let storage_balance_bounds = service.storage_balance_bounds();
+        assert_eq!(
+            storage_balance_bounds.min,
+            (env::storage_byte_cost() * 1000).into()
+        );
+        assert!(storage_balance_bounds.max.is_none());
     }
 }
 
@@ -303,18 +318,21 @@ mod tests_service {
 mod tests_storage_deposit {
     use super::*;
     use lazy_static::lazy_static;
-    use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
-    const STORAGE_BALANCE_BOUNDS: StorageBalanceBounds = StorageBalanceBounds {
-        min: YoctoNear(YOCTO),
+    const STORAGE_USAGE_BOUNDS: StorageUsageBounds = StorageUsageBounds {
+        min: StorageUsage(1000),
         max: None,
     };
+
+    fn storage_balance_min() -> YoctoNear {
+        (STORAGE_USAGE_BOUNDS.min.value() as u128 * env::STORAGE_PRICE_PER_BYTE).into()
+    }
 
     const PREDECESSOR_ACCOUNT_ID: &str = "alice";
 
     fn run_test<F>(
-        storage_balance_bounds: StorageBalanceBounds,
+        storage_usage_bounds: StorageUsageBounds,
         account_id: Option<&str>,
         registration_only: Option<bool>,
         deposit: YoctoNear,
@@ -335,7 +353,9 @@ mod tests_storage_deposit {
         let mut ctx = new_context(PREDECESSOR_ACCOUNT_ID);
         testing_env!(ctx.clone());
 
-        AccountService::<()>::deploy(Some(storage_balance_bounds));
+        let storage_balance_bounds: StorageBalanceBounds = storage_usage_bounds.into();
+
+        AccountService::<()>::deploy(Some(storage_usage_bounds));
 
         ctx.attached_deposit = deposit.value();
         testing_env!(ctx.clone());
@@ -369,7 +389,7 @@ mod tests_storage_deposit {
             F: FnOnce(AccountService<()>, StorageBalance),
         {
             super::run_test(
-                STORAGE_BALANCE_BOUNDS,
+                STORAGE_USAGE_BOUNDS,
                 None,
                 Some(true),
                 deposit,
@@ -381,7 +401,7 @@ mod tests_storage_deposit {
         #[test]
         fn unknown_account_with_exact_storage_deposit() {
             run_test(
-                STORAGE_BALANCE_BOUNDS.min,
+                storage_balance_min(),
                 false,
                 |service, storage_balance: StorageBalance| {
                     assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
@@ -396,7 +416,7 @@ mod tests_storage_deposit {
         #[test]
         fn unknown_account_with_over_payment() {
             run_test(
-                (STORAGE_BALANCE_BOUNDS.min.value() * 3).into(),
+                (storage_balance_min().value() * 3).into(),
                 false,
                 |service, storage_balance: StorageBalance| {
                     // Assert
@@ -429,7 +449,7 @@ mod tests_storage_deposit {
         #[test]
         fn already_registered() {
             run_test(
-                STORAGE_BALANCE_BOUNDS.min,
+                storage_balance_min(),
                 true,
                 |service, storage_balance: StorageBalance| {
                     assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
@@ -443,7 +463,7 @@ mod tests_storage_deposit {
                     let action = &receipt.actions[0];
                     match action {
                         Action::Transfer(action) => {
-                            assert_eq!(action.deposit, STORAGE_BALANCE_BOUNDS.min.value());
+                            assert_eq!(action.deposit, storage_balance_min().value());
                         }
                         _ => panic!("expected Transfer"),
                     }
@@ -484,7 +504,7 @@ mod tests_storage_deposit {
             F: FnOnce(AccountService<()>, StorageBalance),
         {
             super::run_test(
-                STORAGE_BALANCE_BOUNDS,
+                STORAGE_USAGE_BOUNDS,
                 Some(ACCOUNT_ID),
                 Some(true),
                 deposit,
@@ -496,7 +516,7 @@ mod tests_storage_deposit {
         #[test]
         fn unknown_account_with_exact_storage_deposit() {
             run_test(
-                STORAGE_BALANCE_BOUNDS.min,
+                storage_balance_min(),
                 false,
                 |service, storage_balance: StorageBalance| {
                     assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
@@ -511,7 +531,7 @@ mod tests_storage_deposit {
         #[test]
         fn unknown_account_with_over_payment() {
             run_test(
-                (STORAGE_BALANCE_BOUNDS.min.value() * 3).into(),
+                (storage_balance_min().value() * 3).into(),
                 false,
                 |service, storage_balance: StorageBalance| {
                     // Assert
@@ -544,7 +564,7 @@ mod tests_storage_deposit {
         #[test]
         fn already_registered() {
             run_test(
-                STORAGE_BALANCE_BOUNDS.min,
+                storage_balance_min(),
                 true,
                 |service, storage_balance: StorageBalance| {
                     assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
@@ -558,7 +578,7 @@ mod tests_storage_deposit {
                     let action = &receipt.actions[0];
                     match action {
                         Action::Transfer(action) => {
-                            assert_eq!(action.deposit, STORAGE_BALANCE_BOUNDS.min.value());
+                            assert_eq!(action.deposit, storage_balance_min().value());
                         }
                         _ => panic!("expected Transfer"),
                     }
@@ -597,7 +617,25 @@ mod tests_storage_deposit {
             F: FnOnce(AccountService<()>, StorageBalance),
         {
             super::run_test(
-                STORAGE_BALANCE_BOUNDS,
+                STORAGE_USAGE_BOUNDS,
+                None,
+                None,
+                deposit,
+                already_registered,
+                test,
+            );
+        }
+
+        fn run_test_with_storage_balance_bounds<F>(
+            deposit: YoctoNear,
+            already_registered: bool, // if true, then the account ID will be registered before hand using storage balance min
+            storage_usage_bounds: StorageUsageBounds,
+            test: F,
+        ) where
+            F: FnOnce(AccountService<()>, StorageBalance),
+        {
+            super::run_test(
+                storage_usage_bounds,
                 None,
                 None,
                 deposit,
@@ -609,7 +647,7 @@ mod tests_storage_deposit {
         #[test]
         fn unknown_account_with_exact_storage_deposit() {
             run_test(
-                STORAGE_BALANCE_BOUNDS.min,
+                storage_balance_min(),
                 false,
                 |service, storage_balance: StorageBalance| {
                     assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
@@ -623,7 +661,143 @@ mod tests_storage_deposit {
 
         #[test]
         fn unknown_account_with_over_payment() {
-            let deposit_amount: YoctoNear = (STORAGE_BALANCE_BOUNDS.min.value() * 3).into();
+            let deposit_amount: YoctoNear = (storage_balance_min().value() * 3).into();
+            run_test(
+                deposit_amount,
+                false,
+                |service, storage_balance: StorageBalance| {
+                    // Assert
+                    assert_eq!(storage_balance.total, deposit_amount);
+                    assert_eq!(
+                        storage_balance.available,
+                        (service.storage_balance_bounds().min.value() * 2).into()
+                    );
+
+                    // Assert account was registered
+                    let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
+                    assert_eq!(account.near_balance(), deposit_amount);
+                },
+            );
+        }
+
+        #[test]
+        fn unknown_account_with_over_payment_above_max_bounce() {
+            let deposit_amount: YoctoNear = (storage_balance_min().value() * 3).into();
+            run_test_with_storage_balance_bounds(
+                deposit_amount,
+                false,
+                StorageUsageBounds {
+                    min: STORAGE_USAGE_BOUNDS.min,
+                    max: Some((STORAGE_USAGE_BOUNDS.min.value() * 2).into()),
+                },
+                |service, storage_balance: StorageBalance| {
+                    let storage_balance_bounds = service.storage_balance_bounds();
+                    // Assert
+                    assert_eq!(storage_balance.total, storage_balance_bounds.max.unwrap());
+                    assert_eq!(storage_balance.available, storage_balance_bounds.min);
+
+                    // Assert account was registered
+                    let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
+                    assert_eq!(account.near_balance(), storage_balance_bounds.max.unwrap());
+
+                    let receipts = deserialize_receipts();
+                    let receipt = &receipts[0];
+                    assert_eq!(receipt.receiver_id, PREDECESSOR_ACCOUNT_ID);
+                    match &receipt.actions[0] {
+                        Action::Transfer(transfer) => {
+                            assert_eq!(transfer.deposit, storage_balance_bounds.min.value());
+                        }
+                        _ => panic!("expected Transfer action"),
+                    }
+                },
+            );
+        }
+
+        #[test]
+        fn already_registered() {
+            run_test(
+                storage_balance_min(),
+                true,
+                |service, storage_balance: StorageBalance| {
+                    assert_eq!(
+                        storage_balance.total.value(),
+                        service.storage_balance_bounds().min.value() * 2
+                    );
+                    assert_eq!(
+                        storage_balance.available,
+                        service.storage_balance_bounds().min
+                    );
+                },
+            );
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [INSUFFICIENT_NEAR_DEPOSIT]")]
+        fn zero_deposit_attached() {
+            run_test(0.into(), false, |_service, _storage_balance| {});
+        }
+
+        #[test]
+        fn zero_deposit_attached_already_registered() {
+            run_test(0.into(), true, |service, storage_balance| {
+                let storage_balance_bounds = service.storage_balance_bounds();
+                assert_eq!(storage_balance.total, storage_balance_bounds.min);
+                assert_eq!(storage_balance.available, 0.into());
+            });
+        }
+
+        #[test]
+        fn one_deposit_attached_already_registered() {
+            run_test(1.into(), true, |service, storage_balance| {
+                let storage_balance_bounds = service.storage_balance_bounds();
+                assert_eq!(
+                    storage_balance.total.value(),
+                    storage_balance_bounds.min.value() + 1
+                );
+                assert_eq!(storage_balance.available, 1.into());
+            });
+        }
+    }
+
+    #[cfg(test)]
+    mod self_deposit_with_registration_only_false {
+        use super::*;
+
+        fn run_test<F>(
+            deposit: YoctoNear,
+            already_registered: bool, // if true, then the account ID will be registered before hand using storage balance min
+            test: F,
+        ) where
+            F: FnOnce(AccountService<()>, StorageBalance),
+        {
+            super::run_test(
+                STORAGE_USAGE_BOUNDS,
+                None,
+                Some(false),
+                deposit,
+                already_registered,
+                test,
+            );
+        }
+
+        #[test]
+        fn unknown_account_with_exact_storage_deposit() {
+            run_test(
+                storage_balance_min(),
+                false,
+                |service, storage_balance: StorageBalance| {
+                    assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
+                    assert_eq!(storage_balance.available, 0.into());
+
+                    let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
+                    assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
+                },
+            );
+        }
+
+        #[test]
+        fn unknown_account_with_over_payment() {
+            let deposit_amount: YoctoNear = (storage_balance_min().value() * 3).into();
             run_test(
                 deposit_amount,
                 false,
@@ -645,7 +819,7 @@ mod tests_storage_deposit {
         #[test]
         fn already_registered() {
             run_test(
-                STORAGE_BALANCE_BOUNDS.min,
+                storage_balance_min(),
                 true,
                 |service, storage_balance: StorageBalance| {
                     assert_eq!(

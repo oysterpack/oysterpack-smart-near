@@ -19,7 +19,6 @@ type AccountStatsObject = Object<u128, AccountStats>;
 pub struct AccountStats {
     total_registered_accounts: U128,
     total_accounts_near_balance: YoctoNear,
-    total_accounts_storage_available_balance: YoctoNear,
 }
 
 impl AccountStats {
@@ -54,7 +53,6 @@ mod test {
         let stats = AccountStats::load();
         assert_eq!(stats.total_registered_accounts, 0.into());
         assert_eq!(stats.total_accounts_near_balance, 0.into());
-        assert_eq!(stats.total_accounts_storage_available_balance, 0.into());
         // TODO
     }
 }

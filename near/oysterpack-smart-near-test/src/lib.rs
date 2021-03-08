@@ -20,9 +20,9 @@ pub const DEFAULT_CONTRACT_ACCOUNT_BALANCE: u128 = 10000 * YOCTO;
 /// - `account_balance` is set to 10000 NEAR
 pub fn new_context(predecessor_account_id: &str) -> VMContext {
     VMContextBuilder::new()
-        .current_account_id(DEFAULT_CONTRACT_ACCOUNT_ID.to_string())
-        .signer_account_id(predecessor_account_id.to_string())
-        .predecessor_account_id(predecessor_account_id.to_string())
+        .current_account_id(to_valid_account_id(&DEFAULT_CONTRACT_ACCOUNT_ID))
+        .signer_account_id(to_valid_account_id(&predecessor_account_id))
+        .predecessor_account_id(to_valid_account_id(&predecessor_account_id))
         .account_balance(DEFAULT_CONTRACT_ACCOUNT_BALANCE)
         .build()
 }

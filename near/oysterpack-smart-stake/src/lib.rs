@@ -37,6 +37,7 @@ impl Contract {
 }
 
 impl Contract {
+    /// get run each time the contract is loaded from storage and instantiated
     fn init(&mut self) {
         EVENT_BUS.register(AccountStats::on_account_storage_event);
         unsafe {
