@@ -32,7 +32,6 @@ where
         + Default
         + Sync
         + Send
-        + Sized
         + 'static,
 {
     unregister: fn(Account<T>, bool) -> bool,
@@ -40,29 +39,13 @@ where
 }
 
 impl<T> AccountManagementService<T> for AccountService<T> where
-    T: BorshSerialize
-        + BorshDeserialize
-        + Clone
-        + Debug
-        + PartialEq
-        + Default
-        + Sync
-        + Send
-        + Sized
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + Sync + Send
 {
 }
 
 impl<T> Service for AccountService<T>
 where
-    T: BorshSerialize
-        + BorshDeserialize
-        + Clone
-        + Debug
-        + PartialEq
-        + Default
-        + Sync
-        + Send
-        + Sized,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + Sync + Send,
 {
     type State = StorageUsageBounds;
 
@@ -73,15 +56,7 @@ where
 
 impl<T> AccountService<T>
 where
-    T: BorshSerialize
-        + BorshDeserialize
-        + Clone
-        + Debug
-        + PartialEq
-        + Default
-        + Sync
-        + Send
-        + Sized,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + Sync + Send,
 {
     fn new(unregister: fn(Account<T>, bool) -> bool) -> Self {
         Self {
@@ -101,7 +76,6 @@ where
         + Default
         + Sync
         + Send
-        + Sized
         + 'static,
 {
     type Config = Self::State;
@@ -142,7 +116,6 @@ where
         + Default
         + Sync
         + Send
-        + Sized
         + 'static,
 {
     /// Payable method that receives an attached deposit of Ⓝ for a given account.
