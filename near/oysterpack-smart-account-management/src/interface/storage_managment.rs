@@ -107,6 +107,8 @@ pub trait StorageManagement {
     /// ## Returns
     /// - true if the account was successfully unregistered
     /// - false indicates that the account is not registered with the contract
+    ///
+    /// ## Panics
     /// - if exactly 1 yoctoNEAR is not attached
     ///
     /// `#[payable]`
