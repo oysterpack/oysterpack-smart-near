@@ -24,28 +24,20 @@ use shaku::*;
 #[derive(Clone, Copy)]
 pub struct AccountService<T>
 where
-    T: BorshSerialize
-        + BorshDeserialize
-        + Clone
-        + Debug
-        + PartialEq
-        + Default
-        + Sync
-        + Send
-        + 'static,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + 'static,
 {
     unregister: fn(Account<T>, bool) -> bool,
     _phantom: PhantomData<T>,
 }
 
 impl<T> AccountManagementService<T> for AccountService<T> where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + Sync + Send
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default
 {
 }
 
 impl<T> Service for AccountService<T>
 where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + Sync + Send,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     type State = StorageUsageBounds;
 
@@ -56,7 +48,7 @@ where
 
 impl<T> AccountService<T>
 where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + Sync + Send,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     fn new(unregister: fn(Account<T>, bool) -> bool) -> Self {
         Self {
@@ -68,15 +60,7 @@ where
 
 impl<T> Deploy for AccountService<T>
 where
-    T: BorshSerialize
-        + BorshDeserialize
-        + Clone
-        + Debug
-        + PartialEq
-        + Default
-        + Sync
-        + Send
-        + 'static,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + 'static,
 {
     type Config = Self::State;
 
@@ -88,13 +72,13 @@ where
 }
 
 impl<T> AccountRepository<T> for AccountService<T> where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + Sync + Send
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default
 {
 }
 
 impl<T> AccountStorageUsage for AccountService<T>
 where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + Sync + Send,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     fn storage_usage_bounds(&self) -> StorageUsageBounds {
         *Self::load_state().unwrap()
@@ -108,15 +92,7 @@ where
 
 impl<T> StorageManagement for AccountService<T>
 where
-    T: BorshSerialize
-        + BorshDeserialize
-        + Clone
-        + Debug
-        + PartialEq
-        + Default
-        + Sync
-        + Send
-        + 'static,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + 'static,
 {
     /// Payable method that receives an attached deposit of Ⓝ for a given account.
     ///
@@ -203,14 +179,14 @@ where
 }
 
 impl<T> AccountTracking for AccountService<T> where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + Sync + Send
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default
 {
 }
 
 /// helper functions
 impl<T> AccountService<T>
 where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + Sync + Send,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     /// refunds deposit amount that is above the max allowed storage balance
     fn deposit_with_max_bound(
