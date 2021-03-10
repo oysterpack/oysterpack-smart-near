@@ -4,16 +4,16 @@ use near_sdk::{
     json_types::U128,
     near_bindgen, wee_alloc, PanicOnDefault,
 };
+use oysterpack_smart_account_management::components::account_management::{
+    AccountManagementComponent, UnregisterAccount,
+};
+use oysterpack_smart_account_management::components::account_storage_usage::AccountStorageUsageComponent;
 use oysterpack_smart_account_management::{
     Account, AccountStats, AccountStorageEvent, AccountStorageUsage, StorageBalance,
     StorageBalanceBounds, StorageUsageBounds,
 };
 use oysterpack_smart_near::{eventbus, service::*};
-
-use oysterpack_smart_account_management::components::account_management::{
-    AccountManagementComponent, UnregisterAccount,
-};
-use oysterpack_smart_account_management::components::account_storage_usage::AccountStorageUsageComponent;
+use teloc::*;
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
@@ -36,7 +36,7 @@ impl Contract {
             max: None,
         }));
         Self {
-            account_management: AccountManagementComponent::new(Box::new(UnregisterMock)),
+            account_management: create_account_management_component(),
         }
     }
 
@@ -60,12 +60,26 @@ impl Contract {
     fn init(&mut self) {
         // TODO: should be owned by the component
         eventbus::register(AccountStats::on_account_storage_event);
-        self.account_management = AccountManagementComponent::new(Box::new(UnregisterMock));
+        self.account_management = create_account_management_component();
     }
 }
 
+#[derive(Dependency)]
 struct UnregisterMock;
 
 impl UnregisterAccount for UnregisterMock {
     fn unregister_account(&mut self, _force: bool) {}
+}
+
+impl From<Box<UnregisterMock>> for Box<dyn UnregisterAccount> {
+    fn from(x: Box<UnregisterMock>) -> Self {
+        x
+    }
+}
+
+fn create_account_management_component() -> AccountManagementComponent<()> {
+    let container = ServiceProvider::new()
+        .add_transient_c::<Box<dyn UnregisterAccount>, Box<UnregisterMock>>()
+        .add_transient::<AccountManagementComponent<()>>();
+    container.resolve()
 }

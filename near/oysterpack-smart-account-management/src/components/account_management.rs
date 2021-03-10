@@ -16,6 +16,7 @@ use oysterpack_smart_near::{
     eventbus,
 };
 use std::{fmt::Debug, ops::Deref};
+use teloc::*;
 
 use crate::components::account_storage_usage::AccountStorageUsageComponent;
 
@@ -40,6 +41,7 @@ pub trait UnregisterAccount {
 }
 
 /// constructor
+#[inject]
 impl<T> AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
@@ -301,6 +303,57 @@ mod tests_service {
 
         let service: AccountManagementComponent<()> =
             AccountManagementComponent::new(Box::new(UnregisterMock));
+        let storage_balance_bounds = service.storage_balance_bounds();
+        assert_eq!(
+            storage_balance_bounds.min,
+            (env::storage_byte_cost() * 1000).into()
+        );
+        assert!(storage_balance_bounds.max.is_none());
+
+        let _storage_usage_bounds = service.storage_balance_of(to_valid_account_id(account_id));
+    }
+}
+
+#[cfg(test)]
+mod tests_teloc {
+    use super::*;
+    use oysterpack_smart_near_test::*;
+
+    fn deploy_account_service() {
+        AccountStorageUsageComponent::<()>::deploy(Some(StorageUsageBounds {
+            min: 1000.into(),
+            max: None,
+        }));
+    }
+
+    #[derive(Dependency)]
+    struct UnregisterMock;
+
+    impl UnregisterAccount for UnregisterMock {
+        fn unregister_account(&mut self, force: bool) {}
+    }
+
+    impl From<Box<UnregisterMock>> for Box<dyn UnregisterAccount> {
+        fn from(x: Box<UnregisterMock>) -> Self {
+            x
+        }
+    }
+
+    #[test]
+    fn deploy_and_use_module() {
+        // Arrange
+        let account_id = "bob";
+        let ctx = new_context(account_id);
+        testing_env!(ctx);
+
+        // Act
+        deploy_account_service();
+
+        let container = ServiceProvider::new()
+            .add_transient_c::<Box<dyn UnregisterAccount>, Box<UnregisterMock>>()
+            .add_transient::<AccountManagementComponent<()>>();
+
+        let service: AccountManagementComponent<()> = container.resolve();
         let storage_balance_bounds = service.storage_balance_bounds();
         assert_eq!(
             storage_balance_bounds.min,
