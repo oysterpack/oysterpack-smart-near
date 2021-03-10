@@ -5,12 +5,14 @@ use near_sdk::{
     near_bindgen, wee_alloc, PanicOnDefault,
 };
 use oysterpack_smart_account_management::{
-    Account, AccountStats, AccountStorageEvent, StorageBalance, StorageBalanceBounds,
-    StorageUsageBounds,
+    Account, AccountStats, AccountStorageEvent, AccountStorageUsage, StorageBalance,
+    StorageBalanceBounds, StorageUsageBounds,
 };
-use oysterpack_smart_near::{data::Object, domain::YoctoNear, eventbus, service::*};
+use oysterpack_smart_near::{eventbus, service::*};
 
-use oysterpack_smart_account_management::components::account_management::AccountManagementComponent;
+use oysterpack_smart_account_management::components::account_management::{
+    AccountManagementComponent, UnregisterAccount,
+};
 use oysterpack_smart_account_management::components::account_storage_usage::AccountStorageUsageComponent;
 
 #[global_allocator]
@@ -21,7 +23,7 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 #[borsh_init(init)]
 pub struct Contract {
     #[borsh_skip]
-    account_management: Option<AccountManagementComponent<()>>,
+    account_management: AccountManagementComponent<()>,
 }
 
 #[near_bindgen]
@@ -34,7 +36,7 @@ impl Contract {
             max: None,
         }));
         Self {
-            account_management: Some(AccountManagementComponent::new(unregister_account)),
+            account_management: AccountManagementComponent::new(Box::new(UnregisterMock)),
         }
     }
 
@@ -47,6 +49,10 @@ impl Contract {
             1000.into(),
         ));
     }
+
+    pub fn storage_usage_bounds(&self) -> StorageUsageBounds {
+        self.account_management.storage_usage_bounds()
+    }
 }
 
 impl Contract {
@@ -54,7 +60,12 @@ impl Contract {
     fn init(&mut self) {
         // TODO: should be owned by the component
         eventbus::register(AccountStats::on_account_storage_event);
+        self.account_management = AccountManagementComponent::new(Box::new(UnregisterMock));
     }
 }
 
-fn unregister_account(account: Account<()>, force: bool) {}
+struct UnregisterMock;
+
+impl UnregisterAccount for UnregisterMock {
+    fn unregister_account(&mut self, _force: bool) {}
+}

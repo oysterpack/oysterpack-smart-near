@@ -24,14 +24,19 @@ use crate::components::account_storage_usage::AccountStorageUsageComponent;
 /// 2. [`StorageManagement`] - NEP-145
 /// 3. ['AccountReporting`]
 /// 4. ['AccountStorageUsage`]
+#[derive(Default)]
 pub struct AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     /// must be provided by the contract
-    unregister: fn(Account<T>, force: bool),
+    unregister: Option<Box<dyn UnregisterAccount>>,
 
     account_storage_usage: AccountStorageUsageComponent<T>,
+}
+
+pub trait UnregisterAccount {
+    fn unregister_account(&mut self, force: bool);
 }
 
 /// constructor
@@ -39,9 +44,9 @@ impl<T> AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    pub fn new(unregister: fn(Account<T>, force: bool)) -> Self {
+    pub fn new(unregister: Box<dyn UnregisterAccount>) -> Self {
         Self {
-            unregister,
+            unregister: Some(unregister),
             account_storage_usage: Default::default(),
         }
     }
@@ -139,7 +144,10 @@ where
         match self.load_account(env::predecessor_account_id().as_str()) {
             None => false,
             Some(account) => {
-                (self.unregister)(account.clone(), force.unwrap_or(false));
+                self.unregister
+                    .as_mut()
+                    .unwrap()
+                    .unregister_account(force.unwrap_or(false));
                 send_refund(account.near_balance());
                 true
             }
@@ -275,7 +283,11 @@ mod tests_service {
         }));
     }
 
-    fn unregister_mock(_account: Account<()>, _force: bool) {}
+    struct UnregisterMock;
+
+    impl UnregisterAccount for UnregisterMock {
+        fn unregister_account(&mut self, force: bool) {}
+    }
 
     #[test]
     fn deploy_and_use_module() {
@@ -288,7 +300,7 @@ mod tests_service {
         deploy_account_service();
 
         let service: AccountManagementComponent<()> =
-            AccountManagementComponent::new(unregister_mock);
+            AccountManagementComponent::new(Box::new(UnregisterMock));
         let storage_balance_bounds = service.storage_balance_bounds();
         assert_eq!(
             storage_balance_bounds.min,
@@ -305,7 +317,11 @@ mod tests_storage_deposit {
     use super::*;
     use oysterpack_smart_near_test::*;
 
-    fn unregister_mock(_account: Account<()>, _force: bool) {}
+    struct UnregisterMock;
+
+    impl UnregisterAccount for UnregisterMock {
+        fn unregister_account(&mut self, force: bool) {}
+    }
 
     const STORAGE_USAGE_BOUNDS: StorageUsageBounds = StorageUsageBounds {
         min: StorageUsage(1000),
@@ -340,7 +356,7 @@ mod tests_storage_deposit {
         testing_env!(ctx.clone());
 
         let mut service: AccountManagementComponent<()> =
-            AccountManagementComponent::new(unregister_mock);
+            AccountManagementComponent::new(Box::new(UnregisterMock));
         let storage_balance_bounds = service.storage_balance_bounds();
 
         if already_registered {
