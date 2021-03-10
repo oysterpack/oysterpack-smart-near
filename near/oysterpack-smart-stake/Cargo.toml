@@ -9,7 +9,6 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 near-sdk = "=3.0.0-pre.2"
-shaku = {version = "0.6.1", default-features = false, features= ["derive"]}
 oysterpack-smart-near = {path = "../oysterpack-smart-near"}
 oysterpack-smart-account-management = {path = "../oysterpack-smart-account-management"}
 

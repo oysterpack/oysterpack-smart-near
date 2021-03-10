@@ -5,11 +5,13 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
+use lazy_static::lazy_static;
 use oysterpack_smart_near::{
     data::{numbers::U128, Object},
     domain::{StorageUsage, YoctoNear},
     eventbus,
 };
+use std::sync::Mutex;
 
 const ACCOUNT_STATS_KEY: u128 = 1952364736129901845182088441739779955;
 
@@ -26,7 +28,9 @@ pub struct AccountStats {
     pub total_storage_usage: StorageUsage,
 }
 
-static mut ACCOUNT_STORAGE_EVENT_HANDLER_REGISTERED: bool = false;
+lazy_static! {
+    static ref ACCOUNT_STORAGE_EVENT_HANDLER_REGISTERED: Mutex<bool> = Mutex::new(false);
+}
 
 impl AccountStats {
     pub fn load() -> AccountStats {
@@ -50,12 +54,10 @@ impl AccountStats {
 
     /// can be safely called multiple times and will only register the event handler once
     pub fn register_account_storage_event_handler() {
-        let registered = unsafe { ACCOUNT_STORAGE_EVENT_HANDLER_REGISTERED };
-        if !registered {
+        let mut registered = ACCOUNT_STORAGE_EVENT_HANDLER_REGISTERED.lock().unwrap();
+        if !*registered {
             eventbus::register(AccountStats::on_account_storage_event);
-            unsafe {
-                ACCOUNT_STORAGE_EVENT_HANDLER_REGISTERED = true;
-            }
+            *registered = true;
         }
     }
 

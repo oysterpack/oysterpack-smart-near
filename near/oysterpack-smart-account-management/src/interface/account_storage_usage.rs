@@ -24,3 +24,20 @@ pub struct StorageUsageBounds {
     /// max storage that the contract is allowed to have on the contract
     pub max: Option<StorageUsage>,
 }
+
+pub trait HasAccountStorageUsage {
+    fn account_storage_usage(&self) -> &dyn AccountStorageUsage;
+}
+
+impl<T> AccountStorageUsage for T
+where
+    T: HasAccountStorageUsage,
+{
+    fn storage_usage_bounds(&self) -> StorageUsageBounds {
+        self.account_storage_usage().storage_usage_bounds()
+    }
+
+    fn storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage> {
+        self.account_storage_usage().storage_usage(account_id)
+    }
+}

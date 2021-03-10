@@ -1,7 +1,7 @@
 use crate::{
-    Account, AccountManagementService, AccountRepository, AccountStats, AccountStorageEvent,
-    AccountStorageUsage, AccountTracking, StorageBalance, StorageBalanceBounds, StorageManagement,
-    StorageUsageBounds,
+    Account, AccountReporting, AccountRepository, AccountStats, AccountStorageEvent,
+    AccountStorageUsage, HasAccountStorageUsage, StorageBalance, StorageBalanceBounds,
+    StorageManagement, StorageUsageBounds,
 };
 use near_sdk::{
     borsh::{BorshDeserialize, BorshSerialize},
@@ -9,88 +9,64 @@ use near_sdk::{
     json_types::ValidAccountId,
     Promise,
 };
-use oysterpack_smart_near::service::{Deploy, Service};
+use oysterpack_smart_near::service::Deploy;
 use oysterpack_smart_near::{
     asserts::{assert_min_near_attached, assert_yocto_near_attached},
     domain::{StorageUsage, YoctoNear},
     eventbus,
 };
-use std::{fmt::Debug, marker::PhantomData, ops::Deref};
+use std::{fmt::Debug, ops::Deref};
 
-use shaku::*;
+use crate::components::account_storage_usage::AccountStorageUsageComponent;
 
-#[derive(Component)]
-#[shaku(interface = AccountManagementService<T>)]
-#[derive(Clone, Copy)]
-pub struct AccountService<T>
-where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + 'static,
-{
-    unregister: fn(Account<T>, bool) -> bool,
-    _phantom: PhantomData<T>,
-}
-
-impl<T> AccountManagementService<T> for AccountService<T> where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default
-{
-}
-
-impl<T> Service for AccountService<T>
+/// Core account management component implements the following interfaces:
+/// 1. [`AccountRepository`]
+/// 2. [`StorageManagement`] - NEP-145
+/// 3. ['AccountReporting`]
+/// 4. ['AccountStorageUsage`]
+pub struct AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    type State = StorageUsageBounds;
+    /// must be provided by the contract
+    unregister: fn(Account<T>, force: bool),
 
-    fn state_key() -> u128 {
-        1952475351321611295376996018476025471
-    }
+    account_storage_usage: AccountStorageUsageComponent<T>,
 }
 
-impl<T> AccountService<T>
+/// constructor
+impl<T> AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    fn new(unregister: fn(Account<T>, bool) -> bool) -> Self {
+    pub fn new(unregister: fn(Account<T>, force: bool)) -> Self {
         Self {
             unregister,
-            _phantom: Default::default(),
+            account_storage_usage: Default::default(),
         }
     }
 }
 
-impl<T> Deploy for AccountService<T>
-where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + 'static,
-{
-    type Config = Self::State;
-
-    fn deploy(config: Option<Self::Config>) {
-        let state = config.expect("initial state must be provided");
-        let state = Self::new_state(state);
-        state.save();
-    }
-}
-
-impl<T> AccountRepository<T> for AccountService<T> where
+impl<T> AccountRepository<T> for AccountManagementComponent<T> where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default
 {
 }
 
-impl<T> AccountStorageUsage for AccountService<T>
+impl<T> AccountReporting for AccountManagementComponent<T> where
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default
+{
+}
+
+impl<T> HasAccountStorageUsage for AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    fn storage_usage_bounds(&self) -> StorageUsageBounds {
-        *Self::load_state().unwrap()
-    }
-
-    fn storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage> {
-        self.load_account(account_id.as_ref().as_str())
-            .map(|account| account.storage_usage())
+    fn account_storage_usage(&self) -> &dyn AccountStorageUsage {
+        &self.account_storage_usage
     }
 }
 
-impl<T> StorageManagement for AccountService<T>
+impl<T> StorageManagement for AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + 'static,
 {
@@ -160,11 +136,18 @@ where
 
     fn storage_unregister(&mut self, force: Option<bool>) -> bool {
         assert_yocto_near_attached();
-        unimplemented!()
+        match self.load_account(env::predecessor_account_id().as_str()) {
+            None => false,
+            Some(account) => {
+                (self.unregister)(account.clone(), force.unwrap_or(false));
+                send_refund(account.near_balance());
+                true
+            }
+        }
     }
 
     fn storage_balance_bounds(&self) -> StorageBalanceBounds {
-        self.storage_usage_bounds().into()
+        self.account_storage_usage.storage_usage_bounds().into()
     }
 
     fn storage_balance_of(&self, account_id: ValidAccountId) -> Option<StorageBalance> {
@@ -178,13 +161,8 @@ where
     }
 }
 
-impl<T> AccountTracking for AccountService<T> where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default
-{
-}
-
 /// helper functions
-impl<T> AccountService<T>
+impl<T> AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
@@ -288,51 +266,16 @@ impl Deref for MaxStorageBalance {
 #[cfg(test)]
 mod tests_service {
     use super::*;
-    use lazy_static::lazy_static;
     use oysterpack_smart_near_test::*;
 
-    pub type AccountServiceComponent = AccountService<()>;
-
-    module! {
-        AccountServiceModule {
-            components = [AccountServiceComponent],
-            providers = []
-        }
-    }
-
-    lazy_static! {
-        pub static ref ACCOUNT_SERVICE: AccountService<()> =
-            AccountService::<()>::new(unregister_always);
-    }
-
-    fn unregister_always(_account: Account<()>, _force: bool) -> bool {
-        true
-    }
-
     fn deploy_account_service() {
-        AccountService::<()>::deploy(Some(StorageUsageBounds {
+        AccountStorageUsageComponent::<()>::deploy(Some(StorageUsageBounds {
             min: 1000.into(),
             max: None,
         }));
     }
 
-    #[test]
-    fn deploy_and_use() {
-        // Arrange
-        let account_id = "bob";
-        let ctx = new_context(account_id);
-        testing_env!(ctx);
-
-        // Act
-        deploy_account_service();
-        let service = *ACCOUNT_SERVICE;
-        let storage_balance_bounds = service.storage_balance_bounds();
-        assert_eq!(
-            storage_balance_bounds.min,
-            (env::storage_byte_cost() * 1000).into()
-        );
-        assert!(storage_balance_bounds.max.is_none());
-    }
+    fn unregister_mock(_account: Account<()>, _force: bool) {}
 
     #[test]
     fn deploy_and_use_module() {
@@ -344,14 +287,8 @@ mod tests_service {
         // Act
         deploy_account_service();
 
-        let module: AccountServiceModule = AccountServiceModule::builder()
-            .with_component_parameters::<AccountServiceComponent>(AccountServiceParameters {
-                unregister: unregister_always,
-                _phantom: Default::default(),
-            })
-            .build();
-
-        let service: &dyn AccountManagementService<()> = module.resolve_ref();
+        let service: AccountManagementComponent<()> =
+            AccountManagementComponent::new(unregister_mock);
         let storage_balance_bounds = service.storage_balance_bounds();
         assert_eq!(
             storage_balance_bounds.min,
@@ -359,15 +296,16 @@ mod tests_service {
         );
         assert!(storage_balance_bounds.max.is_none());
 
-        let storage_usage_bounds = service.storage_usage_bounds();
+        let _storage_usage_bounds = service.storage_balance_of(to_valid_account_id(account_id));
     }
 }
 
 #[cfg(test)]
 mod tests_storage_deposit {
     use super::*;
-    use lazy_static::lazy_static;
     use oysterpack_smart_near_test::*;
+
+    fn unregister_mock(_account: Account<()>, _force: bool) {}
 
     const STORAGE_USAGE_BOUNDS: StorageUsageBounds = StorageUsageBounds {
         min: StorageUsage(1000),
@@ -388,31 +326,22 @@ mod tests_storage_deposit {
         already_registered: bool, // if true, then the account ID will be registered before hand using storage balance min
         test: F,
     ) where
-        F: FnOnce(AccountService<()>, StorageBalance),
+        F: FnOnce(AccountManagementComponent<()>, StorageBalance),
     {
-        lazy_static! {
-            static ref ACCOUNT_SERVICE: AccountService<()> =
-                AccountService::<()>::new(unregister_always);
-        }
-
-        fn unregister_always(_account: Account<()>, _force: bool) -> bool {
-            true
-        }
-
         let mut ctx = new_context(PREDECESSOR_ACCOUNT_ID);
         testing_env!(ctx.clone());
 
         AccountStats::register_account_storage_event_handler();
         AccountStats::reset();
 
-        let storage_balance_bounds: StorageBalanceBounds = storage_usage_bounds.into();
-
-        AccountService::<()>::deploy(Some(storage_usage_bounds));
+        AccountStorageUsageComponent::<()>::deploy(Some(storage_usage_bounds));
 
         ctx.attached_deposit = deposit.value();
         testing_env!(ctx.clone());
 
-        let mut service = *ACCOUNT_SERVICE;
+        let mut service: AccountManagementComponent<()> =
+            AccountManagementComponent::new(unregister_mock);
+        let storage_balance_bounds = service.storage_balance_bounds();
 
         if already_registered {
             let account = service.new_account(
@@ -430,7 +359,7 @@ mod tests_storage_deposit {
         let storage_balance =
             service.storage_deposit(account_id.map(to_valid_account_id), registration_only);
 
-        test(service.clone(), storage_balance);
+        test(service, storage_balance);
     }
 
     #[cfg(test)]
@@ -442,7 +371,7 @@ mod tests_storage_deposit {
             already_registered: bool, // if true, then the account ID will be registered before hand using storage balance min
             test: F,
         ) where
-            F: FnOnce(AccountService<()>, StorageBalance),
+            F: FnOnce(AccountManagementComponent<()>, StorageBalance),
         {
             super::run_test(
                 STORAGE_USAGE_BOUNDS,
@@ -575,7 +504,7 @@ mod tests_storage_deposit {
             already_registered: bool, // if true, then the account ID will be registered before hand using storage balance min
             test: F,
         ) where
-            F: FnOnce(AccountService<()>, StorageBalance),
+            F: FnOnce(AccountManagementComponent<()>, StorageBalance),
         {
             super::run_test(
                 STORAGE_USAGE_BOUNDS,
@@ -698,7 +627,7 @@ mod tests_storage_deposit {
     }
 
     #[cfg(test)]
-    mod self_deposit {
+    mod self_deposit_with_implied_registration_only_false {
         use super::*;
 
         fn run_test<F>(
@@ -706,7 +635,7 @@ mod tests_storage_deposit {
             already_registered: bool, // if true, then the account ID will be registered before hand using storage balance min
             test: F,
         ) where
-            F: FnOnce(AccountService<()>, StorageBalance),
+            F: FnOnce(AccountManagementComponent<()>, StorageBalance),
         {
             super::run_test(
                 STORAGE_USAGE_BOUNDS,
@@ -724,7 +653,7 @@ mod tests_storage_deposit {
             storage_usage_bounds: StorageUsageBounds,
             test: F,
         ) where
-            F: FnOnce(AccountService<()>, StorageBalance),
+            F: FnOnce(AccountManagementComponent<()>, StorageBalance),
         {
             super::run_test(
                 storage_usage_bounds,
@@ -887,7 +816,7 @@ mod tests_storage_deposit {
             already_registered: bool, // if true, then the account ID will be registered before hand using storage balance min
             test: F,
         ) where
-            F: FnOnce(AccountService<()>, StorageBalance),
+            F: FnOnce(AccountManagementComponent<()>, StorageBalance),
         {
             super::run_test(
                 STORAGE_USAGE_BOUNDS,

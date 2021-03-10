@@ -5,13 +5,13 @@ use near_sdk::{
     near_bindgen, wee_alloc, PanicOnDefault,
 };
 use oysterpack_smart_account_management::{
-    Account, AccountManagementService, AccountStats, AccountStorageEvent, StorageBalance,
-    StorageBalanceBounds, StorageUsageBounds,
+    Account, AccountStats, AccountStorageEvent, StorageBalance, StorageBalanceBounds,
+    StorageUsageBounds,
 };
 use oysterpack_smart_near::{data::Object, domain::YoctoNear, eventbus, service::*};
 
-use oysterpack_smart_account_management::components::account_service::*;
-use shaku::*;
+use oysterpack_smart_account_management::components::account_management::AccountManagementComponent;
+use oysterpack_smart_account_management::components::account_storage_usage::AccountStorageUsageComponent;
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
@@ -21,7 +21,7 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 #[borsh_init(init)]
 pub struct Contract {
     #[borsh_skip]
-    account_service_module: AccountServiceModule,
+    account_management: Option<AccountManagementComponent<()>>,
 }
 
 #[near_bindgen]
@@ -29,12 +29,12 @@ impl Contract {
     #[init]
     pub fn init_state() -> Self {
         assert!(!env::state_exists(), "contract is already initialized");
-        AccountService::<()>::deploy(Some(StorageUsageBounds {
+        AccountStorageUsageComponent::<()>::deploy(Some(StorageUsageBounds {
             min: 1000.into(),
             max: None,
         }));
         Self {
-            account_service_module: Default::default(),
+            account_management: Some(AccountManagementComponent::new(unregister_account)),
         }
     }
 
@@ -47,43 +47,14 @@ impl Contract {
             1000.into(),
         ));
     }
-
-    pub fn storage_balance_bounds(&self) -> StorageBalanceBounds {
-        let service: &dyn AccountManagementService<()> = self.account_service_module.resolve_ref();
-        service.storage_usage_bounds().into()
-    }
 }
 
 impl Contract {
     /// gets run each time the contract is loaded from storage and instantiated
     fn init(&mut self) {
+        // TODO: should be owned by the component
         eventbus::register(AccountStats::on_account_storage_event);
     }
 }
 
-//////////
-module! {
-    pub AccountServiceModule {
-        components = [AccountServiceComponent],
-        providers = []
-    }
-}
-
-pub type AccountServiceComponent = AccountService<()>;
-
-impl Default for AccountServiceModule {
-    fn default() -> Self {
-        AccountServiceModule::builder()
-            .with_component_parameters::<AccountServiceComponent>(AccountServiceParameters {
-                unregister: unregister_always,
-                _phantom: Default::default(),
-            })
-            .build()
-    }
-}
-
-fn unregister_always(_account: Account<()>, _force: bool) -> bool {
-    true
-}
-
-/////
+fn unregister_account(account: Account<()>, force: bool) {}
