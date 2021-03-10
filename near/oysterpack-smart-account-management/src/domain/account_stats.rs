@@ -43,7 +43,7 @@ impl AccountStats {
         AccountStatsObject::new(ACCOUNT_STATS_KEY, *self).save();
     }
 
-    /// meant for unit testing purposes
+    #[cfg(test)]
     pub(crate) fn reset() {
         let mut stats = AccountStats::load();
         stats.total_storage_usage = 0.into();
