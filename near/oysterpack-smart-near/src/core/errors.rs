@@ -1,3 +1,4 @@
+use near_sdk::env;
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -30,6 +31,24 @@ where
     }
 }
 
+impl<Msg> Error<Msg>
+where
+    Msg: Display,
+{
+    pub fn panic(&self) {
+        env::panic(self.to_string().as_bytes())
+    }
+
+    pub fn assert<F>(&self, check: F)
+    where
+        F: FnOnce() -> bool,
+    {
+        if !check() {
+            self.panic();
+        }
+    }
+}
+
 /// Error that can be defined as a constant, i.e., the error message is constant
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ErrorConst(pub ErrCode, pub &'static str);
@@ -40,9 +59,25 @@ impl Display for ErrorConst {
     }
 }
 
+impl ErrorConst {
+    pub fn panic(&self) {
+        env::panic(self.to_string().as_bytes())
+    }
+
+    pub fn assert<F>(&self, check: F)
+    where
+        F: FnOnce() -> bool,
+    {
+        if !check() {
+            self.panic();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use oysterpack_smart_near_test::*;
     use regex::Regex;
 
     #[test]
@@ -63,5 +98,27 @@ mod tests {
         println!("{}", ERR.error("BOOM"));
 
         assert!(err_fmt_regex.is_match(&err.to_string()));
+    }
+
+    #[test]
+    #[should_panic(expected = "BOOM")]
+    fn error_panic() {
+        let context = new_context("bob");
+        testing_env!(context);
+
+        const ERR_CODE: ErrCode = ErrCode("INVALID_ACCOUNT_ID");
+        let err: Error<String> = ERR_CODE.error("BOOM".to_string());
+        err.panic();
+    }
+
+    #[test]
+    #[should_panic(expected = "BOOM")]
+    fn error_const_panic() {
+        let context = new_context("bob");
+        testing_env!(context);
+
+        const ERR_CODE: ErrCode = ErrCode("INVALID_ACCOUNT_ID");
+        const ERR: ErrorConst = ErrorConst(ERR_CODE, "BOOM");
+        ERR.panic();
     }
 }

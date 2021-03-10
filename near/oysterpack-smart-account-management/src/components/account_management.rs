@@ -11,12 +11,18 @@ use near_sdk::{
 use oysterpack_smart_near::{
     asserts::{assert_min_near_attached, assert_yocto_near_attached},
     domain::YoctoNear,
-    eventbus,
+    eventbus, ErrCode, ErrorConst,
 };
 use std::{fmt::Debug, ops::Deref};
 use teloc::*;
 
 use crate::components::account_storage_usage::AccountStorageUsageComponent;
+
+pub const ERR_CODE_INSUFFICIENT_STORAGE_BALANCE: ErrCode = ErrCode("INSUFFICIENT_STORAGE_BALANCE");
+pub const ERR_INSUFFICIENT_STORAGE_BALANCE: ErrorConst = ErrorConst(
+    ERR_CODE_INSUFFICIENT_STORAGE_BALANCE,
+    "account's available storage balance is insufficient to satisfy request",
+);
 
 /// Core account management component implements the following interfaces:
 /// 1. [`AccountRepository`]
@@ -136,7 +142,29 @@ where
 
     fn storage_withdraw(&mut self, amount: Option<YoctoNear>) -> StorageBalance {
         assert_yocto_near_attached();
-        unimplemented!()
+
+        let mut account = self.registered_account(env::predecessor_account_id().as_str());
+        let storage_balance_bounds = self.storage_balance_bounds();
+        let account_available_balance = account
+            .storage_balance(storage_balance_bounds.min)
+            .available;
+        match amount {
+            Some(amount) => {
+                ERR_INSUFFICIENT_STORAGE_BALANCE.assert(|| account_available_balance >= amount);
+                send_refund(amount);
+                account.dec_near_balance(amount);
+                account.save();
+            }
+            None => {
+                if account_available_balance.value() > 0 {
+                    send_refund(account_available_balance);
+                    account.dec_near_balance(account_available_balance);
+                    account.save();
+                }
+            }
+        }
+
+        account.storage_balance(storage_balance_bounds.min)
     }
 
     fn storage_unregister(&mut self, force: Option<bool>) -> bool {
@@ -288,7 +316,7 @@ mod tests_service {
     struct UnregisterMock;
 
     impl UnregisterAccount for UnregisterMock {
-        fn unregister_account(&mut self, force: bool) {}
+        fn unregister_account(&mut self, _force: bool) {}
     }
 
     #[test]
@@ -332,7 +360,7 @@ mod tests_teloc {
     struct UnregisterMock;
 
     impl UnregisterAccount for UnregisterMock {
-        fn unregister_account(&mut self, force: bool) {}
+        fn unregister_account(&mut self, _force: bool) {}
     }
 
     impl From<Box<UnregisterMock>> for Box<dyn UnregisterAccount> {
