@@ -6,26 +6,6 @@ use oysterpack_smart_account_management::{
 use oysterpack_smart_near::{contract_context::SmartContractContext, eventbus, service::*};
 use teloc::*;
 
-#[derive(Dependency)]
-struct UnregisterMock;
-
-impl UnregisterAccount for UnregisterMock {
-    fn unregister_account(&mut self, _force: bool) {}
-}
-
-impl From<Box<UnregisterMock>> for Box<dyn UnregisterAccount> {
-    fn from(x: Box<UnregisterMock>) -> Self {
-        x
-    }
-}
-
-fn create_account_management_component() -> AccountManagementComponent<()> {
-    let container = ServiceProvider::new()
-        .add_transient_c::<Box<dyn UnregisterAccount>, Box<UnregisterMock>>()
-        .add_transient::<AccountManagementComponent<()>>();
-    container.resolve()
-}
-
 #[derive(Default)]
 pub struct Context {
     pub account_management: AccountManagementComponent<()>,
@@ -48,4 +28,24 @@ impl SmartContractContext for Context {
             max: None,
         }));
     }
+}
+
+#[derive(Dependency)]
+struct UnregisterMock;
+
+impl UnregisterAccount for UnregisterMock {
+    fn unregister_account(&mut self, _force: bool) {}
+}
+
+impl From<Box<UnregisterMock>> for Box<dyn UnregisterAccount> {
+    fn from(x: Box<UnregisterMock>) -> Self {
+        x
+    }
+}
+
+fn create_account_management_component() -> AccountManagementComponent<()> {
+    let container = ServiceProvider::new()
+        .add_transient_c::<Box<dyn UnregisterAccount>, Box<UnregisterMock>>()
+        .add_transient::<AccountManagementComponent<()>>();
+    container.resolve()
 }
