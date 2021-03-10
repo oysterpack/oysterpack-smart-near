@@ -1,5 +1,5 @@
 use oysterpack_smart_near::data::Object;
-use oysterpack_smart_near::Hash;
+use oysterpack_smart_near::{ErrCode, ErrorConst, Hash};
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
@@ -8,6 +8,11 @@ use oysterpack_smart_near::domain::{StorageUsage, StorageUsageChange, YoctoNear}
 use std::convert::TryInto;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
+
+pub const ERR_ACCOUNT_NOT_REGISTERED: ErrorConst = ErrorConst(
+    ErrCode("ACCOUNT_NOT_REGISTERED"),
+    "account is not registered",
+);
 
 /// account ID hash -> [`AccountData`]
 pub type AccountObject<T> = Object<Hash, AccountData<T>>;
@@ -44,7 +49,10 @@ where
     /// ## Panics
     /// if the account is not registered
     pub fn registered_account(account_id: &str) -> Self {
-        Account::load(account_id).unwrap()
+        Account::load(account_id).unwrap_or_else(|| {
+            ERR_ACCOUNT_NOT_REGISTERED.panic();
+            unreachable!()
+        })
     }
 
     pub fn exists(account_id: &str) -> bool {

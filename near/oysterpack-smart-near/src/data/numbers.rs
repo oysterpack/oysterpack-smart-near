@@ -6,6 +6,7 @@ use near_sdk::{
     },
     serde_json,
 };
+use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 use std::{
     fmt::{self, Display, Formatter},
     ops::{Deref, DerefMut},
@@ -44,6 +45,50 @@ impl DerefMut for U128 {
     }
 }
 
+impl Add<u128> for U128 {
+    type Output = Self;
+
+    fn add(self, rhs: u128) -> Self::Output {
+        (self.0 + rhs).into()
+    }
+}
+
+impl AddAssign<u128> for U128 {
+    fn add_assign(&mut self, rhs: u128) {
+        self.0 += rhs;
+    }
+}
+
+impl Sub<u128> for U128 {
+    type Output = Self;
+
+    fn sub(self, rhs: u128) -> Self::Output {
+        (self.0 - rhs).into()
+    }
+}
+
+impl SubAssign<u128> for U128 {
+    fn sub_assign(&mut self, rhs: u128) {
+        self.0 -= rhs;
+    }
+}
+
+impl Mul<u128> for U128 {
+    type Output = Self;
+
+    fn mul(self, rhs: u128) -> Self::Output {
+        (self.0 * rhs).into()
+    }
+}
+
+impl Div<u128> for U128 {
+    type Output = Self;
+
+    fn div(self, rhs: u128) -> Self::Output {
+        (self.0 / rhs).into()
+    }
+}
+
 impl Display for U128 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
@@ -65,13 +110,13 @@ impl<'de> Deserialize<'de> for U128 {
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_str(YoctoNearVisitor)
+        deserializer.deserialize_str(U128Visitor)
     }
 }
 
-struct YoctoNearVisitor;
+struct U128Visitor;
 
-impl<'de> Visitor<'de> for YoctoNearVisitor {
+impl<'de> Visitor<'de> for U128Visitor {
     type Value = U128;
 
     fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
@@ -83,7 +128,7 @@ impl<'de> Visitor<'de> for YoctoNearVisitor {
         E: de::Error,
     {
         let value: u128 = serde_json::from_str(v)
-            .map_err(|_| de::Error::custom("JSON parsing failed for YoctoNear"))?;
+            .map_err(|_| de::Error::custom("JSON parsing failed for U128"))?;
         Ok(U128(value))
     }
 

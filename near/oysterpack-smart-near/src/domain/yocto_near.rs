@@ -6,6 +6,7 @@ use near_sdk::{
     },
     serde_json,
 };
+use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 use std::{
     fmt::{self, Display, Formatter},
     ops::{Deref, DerefMut},
@@ -41,6 +42,50 @@ impl Deref for YoctoNear {
 impl DerefMut for YoctoNear {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl Add<u128> for YoctoNear {
+    type Output = Self;
+
+    fn add(self, rhs: u128) -> Self::Output {
+        (self.0 + rhs).into()
+    }
+}
+
+impl AddAssign<u128> for YoctoNear {
+    fn add_assign(&mut self, rhs: u128) {
+        self.0 += rhs;
+    }
+}
+
+impl Sub<u128> for YoctoNear {
+    type Output = Self;
+
+    fn sub(self, rhs: u128) -> Self::Output {
+        (self.0 - rhs).into()
+    }
+}
+
+impl SubAssign<u128> for YoctoNear {
+    fn sub_assign(&mut self, rhs: u128) {
+        self.0 -= rhs;
+    }
+}
+
+impl Mul<u128> for YoctoNear {
+    type Output = Self;
+
+    fn mul(self, rhs: u128) -> Self::Output {
+        (self.0 * rhs).into()
+    }
+}
+
+impl Div<u128> for YoctoNear {
+    type Output = Self;
+
+    fn div(self, rhs: u128) -> Self::Output {
+        (self.0 / rhs).into()
     }
 }
 

@@ -79,6 +79,8 @@ pub trait StorageManagement {
     /// - The attached yoctoNEAR will be refunded with the withdrawal transfer.
     /// - The account is required to attach exactly 1 yoctoNEAR to the function call to prevent
     ///   restricted function-call access-key call.
+    /// - If the withdrawal amount is zero, then the 1 yoctoNEAR attached deposit is not refunded
+    ///   because it would cost more to send the refund
     ///
     /// ## Arguments
     /// - `amount` - the amount to withdraw from the account's storage available balance expressed in yoctoNEAR
