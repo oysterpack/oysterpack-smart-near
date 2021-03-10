@@ -274,6 +274,8 @@ impl Deref for MaxStorageBalance {
 #[cfg(test)]
 mod tests_service {
     use super::*;
+    use crate::StorageUsageBounds;
+    use oysterpack_smart_near::service::*;
     use oysterpack_smart_near_test::*;
 
     fn deploy_account_service() {
@@ -315,6 +317,8 @@ mod tests_service {
 #[cfg(test)]
 mod tests_teloc {
     use super::*;
+    use crate::StorageUsageBounds;
+    use oysterpack_smart_near::service::*;
     use oysterpack_smart_near_test::*;
 
     fn deploy_account_service() {
@@ -366,6 +370,9 @@ mod tests_teloc {
 #[cfg(test)]
 mod tests_storage_deposit {
     use super::*;
+    use crate::{AccountStats, StorageUsageBounds};
+    use oysterpack_smart_near::domain::StorageUsage;
+    use oysterpack_smart_near::service::*;
     use oysterpack_smart_near_test::*;
 
     struct UnregisterMock;
