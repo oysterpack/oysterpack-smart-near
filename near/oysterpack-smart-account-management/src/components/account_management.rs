@@ -510,6 +510,11 @@ mod tests_storage_management {
                         assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
                         assert_eq!(storage_balance.available, 0.into());
 
+                        let storage_balance_2 = service
+                            .storage_balance_of(to_valid_account_id(PREDECESSOR_ACCOUNT_ID))
+                            .unwrap();
+                        assert_eq!(storage_balance, storage_balance_2);
+
                         let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
@@ -534,6 +539,11 @@ mod tests_storage_management {
                         // Assert
                         assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
                         assert_eq!(storage_balance.available, 0.into());
+
+                        let storage_balance_2 = service
+                            .storage_balance_of(to_valid_account_id(PREDECESSOR_ACCOUNT_ID))
+                            .unwrap();
+                        assert_eq!(storage_balance, storage_balance_2);
 
                         // Assert account was registered
                         let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
@@ -575,6 +585,11 @@ mod tests_storage_management {
                     |service, storage_balance: StorageBalance| {
                         assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
                         assert_eq!(storage_balance.available, 0.into());
+
+                        let storage_balance_2 = service
+                            .storage_balance_of(to_valid_account_id(PREDECESSOR_ACCOUNT_ID))
+                            .unwrap();
+                        assert_eq!(storage_balance, storage_balance_2);
 
                         // Assert the deposit was refunded
                         let receipts = deserialize_receipts();
@@ -643,6 +658,11 @@ mod tests_storage_management {
                         assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
                         assert_eq!(storage_balance.available, 0.into());
 
+                        let storage_balance_2 = service
+                            .storage_balance_of(to_valid_account_id(ACCOUNT_ID))
+                            .unwrap();
+                        assert_eq!(storage_balance, storage_balance_2);
+
                         let account = service.registered_account(ACCOUNT_ID);
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
@@ -667,6 +687,11 @@ mod tests_storage_management {
                         // Assert
                         assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
                         assert_eq!(storage_balance.available, 0.into());
+
+                        let storage_balance_2 = service
+                            .storage_balance_of(to_valid_account_id(ACCOUNT_ID))
+                            .unwrap();
+                        assert_eq!(storage_balance, storage_balance_2);
 
                         // Assert account was registered
                         let account = service.registered_account(ACCOUNT_ID);
@@ -708,6 +733,11 @@ mod tests_storage_management {
                     |service, storage_balance: StorageBalance| {
                         assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
                         assert_eq!(storage_balance.available, 0.into());
+
+                        let storage_balance_2 = service
+                            .storage_balance_of(to_valid_account_id(ACCOUNT_ID))
+                            .unwrap();
+                        assert_eq!(storage_balance, storage_balance_2);
 
                         // Assert the deposit was refunded
                         let receipts = deserialize_receipts();
@@ -792,6 +822,11 @@ mod tests_storage_management {
                         assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
                         assert_eq!(storage_balance.available, 0.into());
 
+                        let storage_balance_2 = service
+                            .storage_balance_of(to_valid_account_id(PREDECESSOR_ACCOUNT_ID))
+                            .unwrap();
+                        assert_eq!(storage_balance, storage_balance_2);
+
                         let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
@@ -820,6 +855,11 @@ mod tests_storage_management {
                             storage_balance.available,
                             (service.storage_balance_bounds().min.value() * 2).into()
                         );
+
+                        let storage_balance_2 = service
+                            .storage_balance_of(to_valid_account_id(PREDECESSOR_ACCOUNT_ID))
+                            .unwrap();
+                        assert_eq!(storage_balance, storage_balance_2);
 
                         // Assert account was registered
                         let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
@@ -852,6 +892,12 @@ mod tests_storage_management {
                         // Assert
                         assert_eq!(storage_balance.total, storage_balance_bounds.max.unwrap());
                         assert_eq!(storage_balance.available, storage_balance_bounds.min);
+
+                        // Assert account NEAR balance was persisted
+                        let storage_balance_2 = service
+                            .storage_balance_of(to_valid_account_id(PREDECESSOR_ACCOUNT_ID))
+                            .unwrap();
+                        assert_eq!(storage_balance, storage_balance_2);
 
                         // Assert account was registered
                         let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
@@ -893,6 +939,11 @@ mod tests_storage_management {
                             storage_balance.available,
                             service.storage_balance_bounds().min
                         );
+
+                        let storage_balance_2 = service
+                            .storage_balance_of(to_valid_account_id(PREDECESSOR_ACCOUNT_ID))
+                            .unwrap();
+                        assert_eq!(storage_balance, storage_balance_2);
                     },
                 );
             }
@@ -921,6 +972,12 @@ mod tests_storage_management {
                         storage_balance_bounds.min.value() + 1
                     );
                     assert_eq!(storage_balance.available, 1.into());
+
+                    // Assert account NEAR balance was persisted
+                    let storage_balance_2 = service
+                        .storage_balance_of(to_valid_account_id(PREDECESSOR_ACCOUNT_ID))
+                        .unwrap();
+                    assert_eq!(storage_balance, storage_balance_2);
                 });
             }
         }
@@ -1107,6 +1164,12 @@ mod tests_storage_management {
                     );
                     assert_eq!(storage_balance.available, storage_balance_min() / 2);
 
+                    // Assert account NEAR balance was persisted
+                    let storage_balance_2 = service
+                        .storage_balance_of(to_valid_account_id(PREDECESSOR_ACCOUNT_ID))
+                        .unwrap();
+                    assert_eq!(storage_balance, storage_balance_2);
+
                     // check refund was sent
                     let receipts = deserialize_receipts();
                     let receipt = &receipts[0];
@@ -1137,6 +1200,12 @@ mod tests_storage_management {
                     assert_eq!(storage_balance.total, storage_balance_min() * 2);
                     assert_eq!(storage_balance.available, storage_balance_min());
 
+                    // Assert account NEAR balance was persisted
+                    let storage_balance_2 = service
+                        .storage_balance_of(to_valid_account_id(PREDECESSOR_ACCOUNT_ID))
+                        .unwrap();
+                    assert_eq!(storage_balance, storage_balance_2);
+
                     // check refund was sent
                     let receipts = deserialize_receipts();
                     assert!(receipts.is_empty());
@@ -1156,7 +1225,7 @@ mod tests_storage_management {
                 storage_balance_min() * 2,
                 0.into(),
                 Some(0.into()),
-                |service, storage_balance| {},
+                |_service, _storage_balance| {},
             );
         }
 
@@ -1168,7 +1237,7 @@ mod tests_storage_management {
                 storage_balance_min() * 2,
                 2.into(),
                 Some(0.into()),
-                |service, storage_balance| {},
+                |_service, _storage_balance| {},
             );
         }
 
@@ -1180,7 +1249,7 @@ mod tests_storage_management {
                 storage_balance_min(),
                 1.into(),
                 Some(1.into()),
-                |service, storage_balance| {},
+                |_service, _storage_balance| {},
             );
         }
 
@@ -1192,7 +1261,7 @@ mod tests_storage_management {
                 0.into(),
                 1.into(),
                 Some(0.into()),
-                |service, storage_balance| {},
+                |_service, _storage_balance| {},
             );
         }
     }
