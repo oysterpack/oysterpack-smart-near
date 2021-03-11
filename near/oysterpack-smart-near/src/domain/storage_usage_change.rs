@@ -28,6 +28,12 @@ impl From<i64> for StorageUsageChange {
     }
 }
 
+impl From<u64> for StorageUsageChange {
+    fn from(value: u64) -> Self {
+        Self(value as i64)
+    }
+}
+
 impl Deref for StorageUsageChange {
     type Target = i64;
 
@@ -99,7 +105,7 @@ mod test {
 
     #[test]
     fn json_serialization() {
-        let amount = StorageUsageChange::from(100);
+        let amount = StorageUsageChange::from(100_u64);
         let amount_as_json = serde_json::to_string(&amount).unwrap();
         println!("{}", amount_as_json);
 

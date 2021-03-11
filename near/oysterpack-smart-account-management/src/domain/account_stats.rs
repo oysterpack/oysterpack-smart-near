@@ -67,7 +67,7 @@ impl AccountStats {
         let mut stats = AccountStats::load();
 
         match event {
-            AccountStorageEvent::Registered(storage_balance, storage_usage) => {
+            AccountStorageEvent::Registered(storage_balance) => {
                 stats.total_registered_accounts = stats
                     .total_registered_accounts
                     .checked_add(1)
@@ -78,12 +78,6 @@ impl AccountStats {
                     .total_near_balance
                     .checked_add(storage_balance.total.value())
                     .expect("total_near_balance overflow")
-                    .into();
-
-                stats.total_storage_usage = stats
-                    .total_storage_usage
-                    .checked_add(storage_usage.value())
-                    .expect("total_storage_usage overflow")
                     .into();
             }
 
@@ -117,7 +111,17 @@ impl AccountStats {
                 }
             }
 
-            AccountStorageEvent::Unregistered(account_near_balance, account_storage_usage) => {
+            AccountStorageEvent::Unregistered(account_near_balance) => {
+                println!(
+                    r#"AccountStorageEvent::Unregistered {} 
+                    {} {} {}
+                    "#,
+                    account_near_balance,
+                    stats.total_registered_accounts,
+                    stats.total_near_balance,
+                    stats.total_storage_usage
+                );
+
                 stats.total_registered_accounts = stats
                     .total_registered_accounts
                     .checked_sub(1)
@@ -128,12 +132,6 @@ impl AccountStats {
                     .total_near_balance
                     .checked_sub(account_near_balance.value())
                     .expect("total_near_balance overflow")
-                    .into();
-
-                stats.total_storage_usage = stats
-                    .total_storage_usage
-                    .checked_sub(account_storage_usage.value())
-                    .expect("total_storage_usage overflow")
                     .into();
             }
         }
@@ -169,16 +167,13 @@ mod test {
             total: YOCTO.into(),
             available: 0.into(),
         };
-        eventbus::post(&AccountStorageEvent::Registered(
-            storage_balance,
-            1000.into(),
-        ));
+        eventbus::post(&AccountStorageEvent::Registered(storage_balance));
 
         // Assert
         let stats = AccountStats::load();
         assert_eq!(stats.total_registered_accounts, 1.into());
         assert_eq!(stats.total_near_balance, YOCTO.into());
-        assert_eq!(stats.total_storage_usage, 1000.into());
+        assert_eq!(stats.total_storage_usage, 0.into());
 
         // Act - deposit
         eventbus::post(&AccountStorageEvent::Deposit(YOCTO.into()));
@@ -187,7 +182,7 @@ mod test {
         let stats = AccountStats::load();
         assert_eq!(stats.total_registered_accounts, 1.into());
         assert_eq!(stats.total_near_balance, (2 * YOCTO).into());
-        assert_eq!(stats.total_storage_usage, 1000.into());
+        assert_eq!(stats.total_storage_usage, 0.into());
 
         // Act - withdraw
         eventbus::post(&AccountStorageEvent::Withdrawal(YOCTO.into()));
@@ -196,16 +191,16 @@ mod test {
         let stats = AccountStats::load();
         assert_eq!(stats.total_registered_accounts, 1.into());
         assert_eq!(stats.total_near_balance, YOCTO.into());
-        assert_eq!(stats.total_storage_usage, 1000.into());
+        assert_eq!(stats.total_storage_usage, 0.into());
 
         // Act - storage usage increase
-        eventbus::post(&AccountStorageEvent::StorageUsageChanged(1000.into()));
+        eventbus::post(&AccountStorageEvent::StorageUsageChanged(1000_u64.into()));
 
         // Assert
         let stats = AccountStats::load();
         assert_eq!(stats.total_registered_accounts, 1.into());
         assert_eq!(stats.total_near_balance, YOCTO.into());
-        assert_eq!(stats.total_storage_usage, 2000.into());
+        assert_eq!(stats.total_storage_usage, 1000.into());
 
         // Act - storage usage decrease
         eventbus::post(&AccountStorageEvent::StorageUsageChanged(
@@ -216,13 +211,10 @@ mod test {
         let stats = AccountStats::load();
         assert_eq!(stats.total_registered_accounts, 1.into());
         assert_eq!(stats.total_near_balance, YOCTO.into());
-        assert_eq!(stats.total_storage_usage, 1000.into());
+        assert_eq!(stats.total_storage_usage, 0.into());
 
         // Act - account unregistered
-        eventbus::post(&AccountStorageEvent::Unregistered(
-            YOCTO.into(),
-            StorageUsage(1000),
-        ));
+        eventbus::post(&AccountStorageEvent::Unregistered(YOCTO.into()));
 
         // Assert
         let stats = AccountStats::load();

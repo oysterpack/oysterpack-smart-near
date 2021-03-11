@@ -6,7 +6,7 @@ use near_sdk::{
     json_types::ValidAccountId,
     serde::{Deserialize, Serialize},
 };
-use oysterpack_smart_near::domain::{StorageUsage, StorageUsageChange};
+use oysterpack_smart_near::domain::StorageUsageChange;
 use oysterpack_smart_near::{domain::YoctoNear, eventbus::*};
 use std::sync::Mutex;
 
@@ -165,7 +165,7 @@ impl From<StorageUsageBounds> for StorageBalanceBounds {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum AccountStorageEvent {
     /// an account was registered
-    Registered(StorageBalance, StorageUsage),
+    Registered(StorageBalance),
     // an account made a deposit
     Deposit(YoctoNear),
     /// an account made a withdrawal from its storage available balance
@@ -174,8 +174,7 @@ pub enum AccountStorageEvent {
     StorageUsageChanged(StorageUsageChange),
     /// an account was unregistered
     /// - its NEAR balance was refunded
-    /// - its storage usage is reclaimed
-    Unregistered(YoctoNear, StorageUsage),
+    Unregistered(YoctoNear),
 }
 
 // TODO: create macro to generate boilerplate code for event: #[event]

@@ -209,14 +209,11 @@ where
         match self.load_account(env::predecessor_account_id().as_str()) {
             None => false,
             Some(account) => {
-                let initial_storage_usage = env::storage_usage();
+                let account_near_balance = account.near_balance();
                 self.unregister.unregister_account(force.unwrap_or(false));
-                let storage_usage_deleted = env::storage_usage() - initial_storage_usage;
-                eventbus::post(&AccountStorageEvent::Unregistered(
-                    account.near_balance(),
-                    storage_usage_deleted.into(),
-                ));
-                send_refund(account.near_balance() + 1);
+                account.delete();
+                eventbus::post(&AccountStorageEvent::Unregistered(account_near_balance));
+                send_refund(account_near_balance + 1);
                 true
             }
         }
@@ -279,8 +276,8 @@ where
     ) -> Account<T> {
         eventbus::post(&AccountStorageEvent::Registered(
             account.storage_balance(storage_balance_bounds.min),
-            account.storage_usage(),
         ));
+        let mut account = account;
         account.save();
         account
     }
@@ -548,10 +545,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
                     },
                 );
             }
@@ -579,10 +572,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
 
                         // Assert overpayment was refunded
                         let receipts = deserialize_receipts();
@@ -703,10 +692,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
                     },
                 );
             }
@@ -734,10 +719,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
 
                         // Assert overpayment was refunded
                         let receipts = deserialize_receipts();
@@ -851,10 +832,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
                     },
                 );
             }
@@ -882,10 +859,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
 
                         // Assert overpayment was refunded
                         let receipts = deserialize_receipts();
@@ -1015,10 +988,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
                     },
                 );
             }
@@ -1050,10 +1019,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
                     },
                 );
             }
@@ -1088,10 +1053,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
 
                         let receipts = deserialize_receipts();
                         let receipt = &receipts[0];
@@ -1237,10 +1198,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
                     },
                 );
             }
@@ -1272,10 +1229,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
                     },
                 );
             }
@@ -1310,10 +1263,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
 
                         let receipts = deserialize_receipts();
                         let receipt = &receipts[0];
@@ -1444,10 +1393,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
                     },
                 );
             }
@@ -1479,10 +1424,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
                     },
                 );
             }
@@ -1517,10 +1458,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
 
                         let receipts = deserialize_receipts();
                         let receipt = &receipts[0];
@@ -1629,10 +1566,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
                     },
                 );
             }
@@ -1659,10 +1592,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
                     },
                 );
             }
@@ -1687,10 +1616,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
                     },
                 );
             }
@@ -1762,10 +1687,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
                     },
                 );
             }
@@ -1792,10 +1713,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
                     },
                 );
             }
@@ -1820,10 +1737,6 @@ mod tests_storage_management {
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
-                        assert_eq!(
-                            account_stats.total_storage_usage,
-                            account.serialized_byte_size().into()
-                        );
                     },
                 );
             }
@@ -2041,6 +1954,145 @@ mod tests_storage_management {
                 1.into(),
                 Some(0.into()),
                 |_service, _storage_balance| {},
+            );
+        }
+    }
+
+    #[cfg(test)]
+    mod test_storage_unregister_with_default_unregister_delegate {
+        use super::*;
+
+        fn run_test<F>(
+            storage_usage_bounds: StorageUsageBounds,
+            deposit: YoctoNear,
+            unregister_deposit: YoctoNear,
+            force: Option<bool>,
+            test: F,
+        ) where
+            F: FnOnce(AccountManagementComponent<()>, bool),
+        {
+            let mut ctx = new_context(PREDECESSOR_ACCOUNT_ID);
+            testing_env!(ctx.clone());
+
+            AccountStats::register_account_storage_event_handler();
+            AccountStats::reset();
+
+            AccountStorageUsageComponent::<()>::deploy(Some(storage_usage_bounds));
+
+            let mut service: AccountManagementComponent<()> = Default::default();
+
+            if deposit.value() > 0 {
+                ctx.attached_deposit = deposit.value();
+                testing_env!(ctx.clone());
+                service.storage_deposit(None, None);
+            }
+
+            ctx.attached_deposit = unregister_deposit.value();
+            testing_env!(ctx.clone());
+            let result = service.storage_unregister(force);
+            test(service, result);
+        }
+
+        #[test]
+        fn unregister_force_none_success() {
+            run_test(
+                STORAGE_USAGE_BOUNDS,
+                storage_balance_min() * 2,
+                1.into(),
+                None,
+                |service, unregistered| {
+                    assert!(unregistered);
+
+                    // Assert account NEAR balance was persisted
+                    let storage_balance =
+                        service.storage_balance_of(to_valid_account_id(PREDECESSOR_ACCOUNT_ID));
+                    assert!(storage_balance.is_none());
+
+                    // check refund was sent
+                    let receipts = deserialize_receipts();
+                    let receipt = &receipts[0];
+                    assert_eq!(&receipt.receiver_id, PREDECESSOR_ACCOUNT_ID);
+                    let action = &receipt.actions[0];
+                    match action {
+                        Action::Transfer(transfer) => {
+                            assert_eq!(transfer.deposit, storage_balance_min().value() * 2 + 1);
+                        }
+                        _ => panic!("expected TransferAction"),
+                    }
+
+                    // check account stats
+                    let stats = service.account_stats();
+                    assert_eq!(stats.total_near_balance, 0.into());
+                },
+            );
+        }
+
+        #[test]
+        fn unregister_force_success() {
+            run_test(
+                STORAGE_USAGE_BOUNDS,
+                storage_balance_min() * 2,
+                1.into(),
+                Some(true),
+                |service, unregistered| {
+                    assert!(unregistered);
+
+                    // Assert account NEAR balance was persisted
+                    let storage_balance =
+                        service.storage_balance_of(to_valid_account_id(PREDECESSOR_ACCOUNT_ID));
+                    assert!(storage_balance.is_none());
+
+                    // check refund was sent
+                    let receipts = deserialize_receipts();
+                    let receipt = &receipts[0];
+                    assert_eq!(&receipt.receiver_id, PREDECESSOR_ACCOUNT_ID);
+                    let action = &receipt.actions[0];
+                    match action {
+                        Action::Transfer(transfer) => {
+                            assert_eq!(transfer.deposit, storage_balance_min().value() * 2 + 1);
+                        }
+                        _ => panic!("expected TransferAction"),
+                    }
+
+                    // check account stats
+                    let stats = service.account_stats();
+                    assert_eq!(stats.total_near_balance, 0.into());
+                },
+            );
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [YOCTONEAR_DEPOSIT_REQUIRED]")]
+        fn no_attached_deposit() {
+            run_test(
+                STORAGE_USAGE_BOUNDS,
+                storage_balance_min() * 2,
+                0.into(),
+                None,
+                |_service, _storage_balance| {},
+            );
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [YOCTONEAR_DEPOSIT_REQUIRED]")]
+        fn two_yoctonear_attached() {
+            run_test(
+                STORAGE_USAGE_BOUNDS,
+                storage_balance_min() * 2,
+                2.into(),
+                None,
+                |_service, _storage_balance| {},
+            );
+        }
+
+        #[test]
+        fn account_not_registered() {
+            run_test(
+                STORAGE_USAGE_BOUNDS,
+                0.into(),
+                1.into(),
+                None,
+                |_service, unregistered| assert!(!unregistered),
             );
         }
     }

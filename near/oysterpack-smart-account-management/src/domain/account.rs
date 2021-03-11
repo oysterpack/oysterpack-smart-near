@@ -1,9 +1,12 @@
 use oysterpack_smart_near::data::Object;
-use oysterpack_smart_near::{ErrCode, ErrorConst, Hash};
+use oysterpack_smart_near::{eventbus, ErrCode, ErrorConst, Hash};
 
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use near_sdk::{
+    borsh::{self, BorshDeserialize, BorshSerialize},
+    env,
+};
 
-use crate::StorageBalance;
+use crate::{AccountStorageEvent, StorageBalance};
 use oysterpack_smart_near::domain::{StorageUsage, StorageUsageChange, YoctoNear};
 use std::convert::TryInto;
 use std::fmt::Debug;
@@ -18,6 +21,9 @@ pub const ERR_ACCOUNT_NOT_REGISTERED: ErrorConst = ErrorConst(
 pub type AccountObject<T> = Object<Hash, AccountData<T>>;
 
 /// Represents a persistent contract account that wraps [`AccountObject`]
+/// - keeps track of its own storage usage
+///
+/// NOTE: any account storage usage that is outside of this Account object must be tracked externally
 #[derive(Clone, Debug, PartialEq)]
 pub struct Account<T>(AccountObject<T>)
 where
@@ -28,16 +34,42 @@ where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     /// Creates a new in memory account object
-    /// - its storage usage will be initialized to the serialized object byte size
+    /// - its storage usage will be initialized to the serialized object byte size, but this won't
+    ///   match the actual storage usage when the object is saved because there is overhead
     pub fn new(account_id: &str, near_balance: YoctoNear, data: T) -> Self {
         let key = Hash::from(account_id);
-        let mut account = Self(AccountObject::<T>::new(
+        Self(AccountObject::<T>::new(
             key,
             AccountData::new(near_balance, 0.into(), data),
-        ));
-        let storage_usage = account.serialized_byte_size();
-        account.set_storage_usage(storage_usage.into());
-        account
+        ))
+    }
+
+    /// tracks storage usage changes - emits [`AccountStorageEvent::StorageUsageChanged`] event
+    ///
+    /// NOTE: tradeoff for tracking storage usage change is that the object is saved twice. The first
+    /// save measures the storage usage change. If there is a change, then the storage usage is updated
+    /// on the account and saved again.
+    pub fn save(&mut self) {
+        let storage_usage_before_save = env::storage_usage();
+        self.0.save();
+        let storage_usage_after_save = env::storage_usage();
+        if storage_usage_after_save > storage_usage_before_save {
+            let storage_usage_change = storage_usage_after_save - storage_usage_before_save;
+            self.incr_storage_usage(storage_usage_change.into());
+            eventbus::post(&AccountStorageEvent::StorageUsageChanged(
+                storage_usage_change.into(),
+            ));
+            self.0.save();
+        } else {
+            let storage_usage_change = storage_usage_after_save - storage_usage_before_save;
+            if storage_usage_change > 0 {
+                self.dec_storage_usage(storage_usage_change.into());
+                eventbus::post(&AccountStorageEvent::StorageUsageChanged(
+                    (storage_usage_change as i64 * -1).into(),
+                ));
+                self.0.save();
+            }
+        }
     }
 
     /// tries to load the account from storage
@@ -60,8 +92,17 @@ where
         AccountObject::<T>::exists(&key)
     }
 
+    /// tracks storage usage - emits [`AccountStorageEvent::StorageUsageChanged`] event
     pub fn delete(self) -> bool {
-        self.0.delete()
+        let storage_usage_before_save = env::storage_usage();
+        let result = self.0.delete();
+        let storage_usage_deleted = storage_usage_before_save - env::storage_usage();
+        if storage_usage_deleted > 0 {
+            eventbus::post(&AccountStorageEvent::StorageUsageChanged(
+                (storage_usage_deleted as i64 * -1).into(),
+            ))
+        }
+        result
     }
 
     pub fn storage_balance(&self, required_min_storage_balance: YoctoNear) -> StorageBalance {
@@ -198,7 +239,7 @@ mod tests {
         assert!(ContractAccount::load(account_id).is_none());
 
         // Act - create account
-        let account = ContractAccount::new(account_id, YOCTO.into(), "data".to_string());
+        let mut account = ContractAccount::new(account_id, YOCTO.into(), "data".to_string());
         account.save();
 
         // Act - load account from storage
@@ -267,6 +308,7 @@ mod tests {
         testing_env!(context);
 
         let mut account = ContractAccount::new(account_id, YOCTO.into(), "data".to_string());
+        account.save();
         let initial_storage_usage = account.storage_usage;
 
         // Act - incr near balance
@@ -297,7 +339,7 @@ mod tests {
         assert_eq!(account.storage_usage(), 2000.into());
 
         // Act - update near balance
-        account.update_storage_usage(1000.into());
+        account.update_storage_usage(1000_u64.into());
         account.save();
 
         // Assert
@@ -313,7 +355,7 @@ mod tests {
         assert_eq!(account.storage_usage(), 2000.into());
 
         // Act - update near balance
-        account.update_storage_usage(0.into());
+        account.update_storage_usage(0_u64.into());
         account.save();
 
         // Assert
