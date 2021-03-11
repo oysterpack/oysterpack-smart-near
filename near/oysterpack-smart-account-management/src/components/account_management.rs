@@ -28,24 +28,53 @@ pub const ERR_INSUFFICIENT_STORAGE_BALANCE: ErrorConst = ErrorConst(
 /// 2. [`StorageManagement`] - NEP-145
 /// 3. ['AccountReporting`]
 /// 4. ['AccountStorageUsage`]
-#[derive(Default)]
 pub struct AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     /// must be provided by the contract
-    unregister: Option<Box<dyn UnregisterAccount>>,
+    unregister: Box<dyn UnregisterAccount>,
 
     account_storage_usage: AccountStorageUsageComponent<T>,
+}
+
+impl<T> Default for AccountManagementComponent<T>
+where
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+{
+    fn default() -> Self {
+        Self {
+            unregister: Box::new(UnregisterAccountNOOP),
+            account_storage_usage: Default::default(),
+        }
+    }
 }
 
 /// Contract is required to provide implementation that applies contract specific business logic.
 /// - see [`StorageManagement::storage_unregister`]
 pub trait UnregisterAccount {
     /// [`AccountManagementComponent`] will be responsible for
-    ///  - sending account NEAR balance refund
-    ///  - publishing events
+    /// - sending account NEAR balance refund
+    /// - publishing events
+    /// - deleting the [`Account`] object
+    ///
+    /// The [`UnregisterAccount`] delegate is responsible for:
+    /// - if `force=false`, panic if the account cannot be deleted because of contract specific
+    ///   business logic, e.g., for FT, the account cannot unregister if it has a token balance
+    /// - delete any account data outside of the [`Account`] object
+    /// - apply any contract specific business logic
     fn unregister_account(&mut self, force: bool);
+}
+
+/// Default implementation that performs no contract specific operation, i.e., no-operation
+///
+/// USE CASE: contract stores all account data within [`Account`] object
+pub struct UnregisterAccountNOOP;
+
+impl UnregisterAccount for UnregisterAccountNOOP {
+    fn unregister_account(&mut self, _force: bool) {
+        // no action required
+    }
 }
 
 /// constructor
@@ -56,7 +85,7 @@ where
 {
     pub fn new(unregister: Box<dyn UnregisterAccount>) -> Self {
         Self {
-            unregister: Some(unregister),
+            unregister,
             account_storage_usage: Default::default(),
         }
     }
@@ -181,10 +210,7 @@ where
             None => false,
             Some(account) => {
                 let initial_storage_usage = env::storage_usage();
-                self.unregister
-                    .as_mut()
-                    .unwrap()
-                    .unregister_account(force.unwrap_or(false));
+                self.unregister.unregister_account(force.unwrap_or(false));
                 let storage_usage_deleted = env::storage_usage() - initial_storage_usage;
                 eventbus::post(&AccountStorageEvent::Unregistered(
                     account.near_balance(),
