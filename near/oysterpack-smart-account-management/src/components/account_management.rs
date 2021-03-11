@@ -2023,6 +2023,10 @@ mod tests_storage_management {
                     // check account stats
                     let stats = service.account_stats();
                     assert_eq!(stats.total_near_balance, 0.into());
+
+                    assert!(service
+                        .storage_balance_of(to_valid_account_id(PREDECESSOR_ACCOUNT_ID))
+                        .is_none());
                 },
             );
         }
