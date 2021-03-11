@@ -45,6 +45,34 @@ impl DerefMut for YoctoNear {
     }
 }
 
+impl Add<YoctoNear> for YoctoNear {
+    type Output = Self;
+
+    fn add(self, rhs: YoctoNear) -> Self::Output {
+        (self.0 + rhs.0).into()
+    }
+}
+
+impl AddAssign<YoctoNear> for YoctoNear {
+    fn add_assign(&mut self, rhs: YoctoNear) {
+        self.0 += rhs.0;
+    }
+}
+
+impl Sub<YoctoNear> for YoctoNear {
+    type Output = Self;
+
+    fn sub(self, rhs: YoctoNear) -> Self::Output {
+        (self.0 - rhs.0).into()
+    }
+}
+
+impl SubAssign<YoctoNear> for YoctoNear {
+    fn sub_assign(&mut self, rhs: YoctoNear) {
+        self.0 -= rhs.0;
+    }
+}
+
 impl Add<u128> for YoctoNear {
     type Output = Self;
 
