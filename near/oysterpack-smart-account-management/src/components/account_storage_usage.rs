@@ -5,7 +5,7 @@ use crate::{AccountNearDataObject, AccountStorageUsage, StorageUsageBounds};
 use oysterpack_smart_near::service::{Deploy, Service};
 
 #[derive(Default)]
-pub struct AccountStorageUsageComponent;
+pub(crate) struct AccountStorageUsageComponent;
 
 impl AccountStorageUsage for AccountStorageUsageComponent {
     fn storage_usage_bounds(&self) -> StorageUsageBounds {
@@ -27,7 +27,7 @@ impl Service for AccountStorageUsageComponent {
 }
 
 impl Deploy for AccountStorageUsageComponent {
-    type Config = Self::State;
+    type Config = StorageUsageBounds;
 
     fn deploy(config: Option<Self::Config>) {
         let state = config.expect("initial state must be provided");

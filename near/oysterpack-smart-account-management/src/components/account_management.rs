@@ -1,6 +1,7 @@
 use crate::{
     AccountReporting, AccountRepository, AccountStorageEvent, AccountStorageUsage,
     HasAccountStorageUsage, StorageBalance, StorageBalanceBounds, StorageManagement,
+    StorageUsageBounds,
 };
 use near_sdk::{
     borsh::{BorshDeserialize, BorshSerialize},
@@ -19,6 +20,7 @@ use teloc::*;
 use crate::components::account_storage_usage::AccountStorageUsageComponent;
 use crate::AccountNearDataObject;
 use oysterpack_smart_near::domain::ZERO_NEAR;
+use oysterpack_smart_near::service::Deploy;
 use std::marker::PhantomData;
 
 pub const ERR_INSUFFICIENT_STORAGE_BALANCE: ErrorConst = ErrorConst(
@@ -95,6 +97,17 @@ where
             account_storage_usage: Default::default(),
             _phantom_data: Default::default(),
         }
+    }
+}
+
+impl<T> Deploy for AccountManagementComponent<T>
+where
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+{
+    type Config = StorageUsageBounds;
+
+    fn deploy(config: Option<Self::Config>) {
+        AccountStorageUsageComponent::deploy(config)
     }
 }
 
@@ -334,7 +347,6 @@ impl Deref for MaxStorageBalance {
 mod tests_service {
     use super::*;
     use crate::StorageUsageBounds;
-    use oysterpack_smart_near::service::*;
     use oysterpack_smart_near_test::*;
 
     fn deploy_account_service() {
@@ -377,7 +389,6 @@ mod tests_service {
 mod tests_teloc {
     use super::*;
     use crate::StorageUsageBounds;
-    use oysterpack_smart_near::service::*;
     use oysterpack_smart_near_test::*;
 
     fn deploy_account_service() {
@@ -431,7 +442,6 @@ mod tests_storage_management {
     use super::*;
     use crate::{AccountStats, StorageUsageBounds};
     use oysterpack_smart_near::domain::StorageUsage;
-    use oysterpack_smart_near::service::*;
     use oysterpack_smart_near_test::*;
 
     struct UnregisterMock;

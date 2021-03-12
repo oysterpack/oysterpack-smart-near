@@ -42,7 +42,7 @@ pub type ServiceState<T> = Object<u128, T>;
 ///
 /// ## NOTES
 /// - components may not need to implement ['Deploy']
-pub trait Deploy: Service {
+pub trait Deploy {
     type Config;
 
     /// invoked when the contract is first deployed
