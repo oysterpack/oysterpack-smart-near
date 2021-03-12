@@ -36,6 +36,7 @@ pub type ComponentState<T> = Object<u128, T>;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::component::Deploy;
     use lazy_static::lazy_static;
     use oysterpack_smart_near_test::*;
     use std::ops::DerefMut;
