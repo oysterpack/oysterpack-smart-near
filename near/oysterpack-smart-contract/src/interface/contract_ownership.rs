@@ -1,6 +1,6 @@
 use crate::ContractOwner;
 use near_sdk::{env, json_types::ValidAccountId};
-use oysterpack_smart_near::domain::YoctoNear;
+use oysterpack_smart_near::domain::{AccountIdHash, YoctoNear};
 use oysterpack_smart_near::{ErrCode, ErrorConst, Hash};
 
 /// Contract ownership is kept private. The contract owner ID sha256 hash is stored instead of the
@@ -18,7 +18,7 @@ pub trait ContractOwnership {
     fn transfer_ownership(&mut self, new_owner: ValidAccountId) {
         let mut owner = ContractOwner::load();
         ERR_OWNER_ACCESS_REQUIRED.assert(|| {
-            owner.account_id_hash() == Hash::from(env::predecessor_account_id().as_str())
+            owner.account_id_hash() == AccountIdHash::from(env::predecessor_account_id().as_str())
         });
         ContractOwner::update(new_owner);
     }
@@ -37,5 +37,5 @@ pub fn assert_owner_access() {
 /// checks if the predecessor account ID is the current contract owner
 pub fn is_owner() -> bool {
     let owner = ContractOwner::load();
-    owner.account_id_hash() == Hash::from(env::predecessor_account_id().as_str())
+    owner.account_id_hash() == AccountIdHash::from(env::predecessor_account_id())
 }

@@ -17,8 +17,20 @@ impl From<&str> for AccountIdHash {
     }
 }
 
+impl From<String> for AccountIdHash {
+    fn from(account_id: String) -> Self {
+        Self(account_id.as_str().into())
+    }
+}
+
 impl From<&ValidAccountId> for AccountIdHash {
     fn from(account_id: &ValidAccountId) -> Self {
+        Self(account_id.as_ref().as_str().into())
+    }
+}
+
+impl From<ValidAccountId> for AccountIdHash {
+    fn from(account_id: ValidAccountId) -> Self {
         Self(account_id.as_ref().as_str().into())
     }
 }
