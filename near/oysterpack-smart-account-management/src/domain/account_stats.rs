@@ -1,7 +1,6 @@
 use crate::AccountStorageEvent;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    env,
     serde::{Deserialize, Serialize},
 };
 
@@ -62,7 +61,7 @@ impl AccountStats {
     }
 
     pub fn on_account_storage_event(event: &AccountStorageEvent) {
-        env::log(format!("{:?}", event).as_bytes());
+        event.log();
 
         let mut stats = AccountStats::load();
 

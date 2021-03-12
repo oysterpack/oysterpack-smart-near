@@ -1,11 +1,14 @@
+use crate::domain::YoctoNear;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
+    env,
     serde::{
         de::{self, Visitor},
         Deserialize, Deserializer, Serialize, Serializer,
     },
     serde_json,
 };
+use std::ops::{Add, AddAssign, Sub, SubAssign};
 use std::{
     fmt::{self, Display, Formatter},
     ops::{Deref, DerefMut},
@@ -19,6 +22,17 @@ pub struct StorageUsage(pub u64);
 impl StorageUsage {
     pub fn value(&self) -> u64 {
         self.0
+    }
+
+    /// returns storage usage staking costs
+    ///
+    /// ## Notes
+    /// the storage byte cost is retrieved from the NEAR runtime env
+    ///
+    /// ## Panics
+    /// if the NEAR runtime env is not available
+    pub fn cost(&self) -> YoctoNear {
+        (self.0 as u128 * env::storage_byte_cost()).into()
     }
 }
 
@@ -39,6 +53,34 @@ impl Deref for StorageUsage {
 impl DerefMut for StorageUsage {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl Add<StorageUsage> for StorageUsage {
+    type Output = Self;
+
+    fn add(self, rhs: StorageUsage) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+
+impl AddAssign<StorageUsage> for StorageUsage {
+    fn add_assign(&mut self, rhs: StorageUsage) {
+        self.0 += rhs.0
+    }
+}
+
+impl Sub<StorageUsage> for StorageUsage {
+    type Output = Self;
+
+    fn sub(self, rhs: StorageUsage) -> Self::Output {
+        Self(self.0 - rhs.0)
+    }
+}
+
+impl SubAssign<StorageUsage> for StorageUsage {
+    fn sub_assign(&mut self, rhs: StorageUsage) {
+        self.0 -= rhs.0
     }
 }
 
@@ -96,6 +138,7 @@ impl<'de> Visitor<'de> for YoctoNearVisitor {
 #[cfg(test)]
 mod test {
     use super::*;
+    use near_sdk::test_utils::test_env;
 
     #[test]
     fn json_serialization() {
@@ -105,5 +148,17 @@ mod test {
 
         let amount2: StorageUsage = serde_json::from_str(&amount_as_json).unwrap();
         assert_eq!(amount, amount2);
+    }
+
+    #[test]
+    fn cost() {
+        test_env::setup();
+
+        let storage_byte_cost = env::storage_byte_cost();
+        let storage_usage = StorageUsage::from(100);
+        assert_eq!(
+            storage_usage.cost().value(),
+            storage_byte_cost * storage_usage.value() as u128
+        );
     }
 }

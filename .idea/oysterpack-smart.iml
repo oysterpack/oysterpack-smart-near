@@ -9,6 +9,7 @@
       <sourceFolder url="file://$MODULE_DIR$/near/oysterpack-smart-stake/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/near/oysterpack-smart-tools/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/near/oysterpack-smart-account-management/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/near/oysterpack-smart-contract/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/near/target" />
       <excludeFolder url="file://$MODULE_DIR$/near-contract/target" />
     </content>

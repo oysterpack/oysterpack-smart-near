@@ -7,7 +7,8 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 use oysterpack_smart_near::domain::StorageUsageChange;
-use oysterpack_smart_near::{domain::YoctoNear, eventbus::*};
+use oysterpack_smart_near::{domain::YoctoNear, eventbus::*, Level, LogEvent};
+use std::fmt::{self, Display, Formatter};
 use std::sync::Mutex;
 
 /// # Account Storage API
@@ -175,6 +176,20 @@ pub enum AccountStorageEvent {
     /// an account was unregistered
     /// - its NEAR balance was refunded
     Unregistered(YoctoNear),
+}
+
+impl Display for AccountStorageEvent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+const ACCOUNT_STORAGE_EVENT: LogEvent = LogEvent(Level::INFO, "AccountStorageEvent");
+
+impl AccountStorageEvent {
+    pub fn log(&self) {
+        ACCOUNT_STORAGE_EVENT.log(self.to_string());
+    }
 }
 
 // TODO: create macro to generate boilerplate code for event: #[event]
