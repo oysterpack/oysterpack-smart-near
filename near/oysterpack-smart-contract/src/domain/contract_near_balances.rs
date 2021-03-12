@@ -2,7 +2,7 @@ use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
 };
-use oysterpack_smart_near::domain::{StorageUsage, YoctoNear, ZERO_NEAR};
+use oysterpack_smart_near::domain::{YoctoNear, ZERO_NEAR};
 use std::collections::HashMap;
 
 #[derive(
@@ -34,9 +34,28 @@ pub struct ContractNearBalances {
     total: YoctoNear,
     accounts: YoctoNear,
     balances: Option<NearBalances>,
+    owner: YoctoNear,
 }
 
 impl ContractNearBalances {
+    pub fn new(total: YoctoNear, accounts: YoctoNear, balances: Option<NearBalances>) -> Self {
+        let owner = total
+            - accounts
+            - balances.as_ref().map_or(ZERO_NEAR, |balances| {
+                balances
+                    .values()
+                    .map(|balance| balance.value())
+                    .sum::<u128>()
+                    .into()
+            });
+        Self {
+            total,
+            accounts,
+            balances,
+            owner,
+        }
+    }
+
     pub fn total(&self) -> YoctoNear {
         self.total
     }
@@ -56,14 +75,6 @@ impl ContractNearBalances {
     /// returns portion of total contract NEAR balance that is owned by the contract owner, which is
     /// computed as: `total - accounts - balances`
     pub fn owner(&self) -> YoctoNear {
-        self.total
-            - self.accounts
-            - self.balances.as_ref().map_or(ZERO_NEAR, |balances| {
-                balances
-                    .values()
-                    .map(|balance| balance.value())
-                    .sum::<u128>()
-                    .into()
-            })
+        self.owner
     }
 }

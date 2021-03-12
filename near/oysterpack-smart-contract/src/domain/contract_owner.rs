@@ -1,7 +1,7 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::ValidAccountId;
 use oysterpack_smart_near::domain::AccountIdHash;
-use oysterpack_smart_near::{data::Object, ErrCode, ErrorConst, Hash};
+use oysterpack_smart_near::{data::Object, ErrCode, ErrorConst};
 
 pub const ERR_CONTRACT_OWNER_ALREADY_INITIALIZED: ErrorConst = ErrorConst(
     ErrCode("CONTRACT_OWNER_ALREADY_INITIALIZED"),
