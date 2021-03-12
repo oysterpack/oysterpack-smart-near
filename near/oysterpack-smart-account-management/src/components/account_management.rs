@@ -1,4 +1,4 @@
-//! ## [`AccountManagementComponent`]
+//! [`AccountManagementComponent`]
 //! - constructor: [`AccountManagementComponent::new`]
 //!   - Box<dyn [`UnregisterAccount`]>
 //! - deployment: [`AccountManagementComponent::deploy`]

@@ -1,7 +1,7 @@
+use crate::Hash;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use oysterpack_smart_near::Hash;
+use near_sdk::json_types::ValidAccountId;
 
-/// Used as key to store account data
 #[derive(BorshSerialize, BorshDeserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct AccountIdHash(pub Hash);
 
@@ -14,5 +14,11 @@ impl AccountIdHash {
 impl From<&str> for AccountIdHash {
     fn from(account_id: &str) -> Self {
         Self(account_id.into())
+    }
+}
+
+impl From<&ValidAccountId> for AccountIdHash {
+    fn from(account_id: &ValidAccountId) -> Self {
+        Self(account_id.as_ref().as_str().into())
     }
 }
