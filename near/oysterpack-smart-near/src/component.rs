@@ -1,7 +1,7 @@
 //! Defines standard component related interfaces
 
+mod component;
 mod deploy;
-mod service;
 
+pub use component::*;
 pub use deploy::*;
-pub use service::*;
