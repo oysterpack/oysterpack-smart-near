@@ -4,6 +4,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
 };
 
+use crate::AccountNearDataObject;
 use lazy_static::lazy_static;
 use oysterpack_smart_near::{
     data::{numbers::U128, Object},
@@ -65,7 +66,7 @@ impl AccountStats {
 
         let mut stats = AccountStats::load();
 
-        match event {
+        match *event {
             AccountStorageEvent::Registered(storage_balance) => {
                 stats.total_registered_accounts = stats
                     .total_registered_accounts
@@ -94,33 +95,34 @@ impl AccountStats {
                     .expect("total_near_balance overflow")
                     .into();
             }
-            AccountStorageEvent::StorageUsageChanged(change) => {
-                if change.is_positive() {
-                    stats.total_storage_usage = stats
-                        .total_storage_usage
-                        .checked_add(change.value() as u64)
-                        .expect("total_storage_usage overflow")
-                        .into();
-                } else {
-                    stats.total_storage_usage = stats
-                        .total_storage_usage
-                        .checked_sub(change.value().abs() as u64)
-                        .expect("total_storage_usage overflow")
-                        .into();
+            AccountStorageEvent::StorageUsageChanged(account_id_hash, change) => {
+                if change.value() != 0 {
+                    if change.is_positive() {
+                        stats.total_storage_usage = stats
+                            .total_storage_usage
+                            .checked_add(change.value() as u64)
+                            .expect("total_storage_usage overflow")
+                            .into();
+                    } else {
+                        stats.total_storage_usage = stats
+                            .total_storage_usage
+                            .checked_sub(change.value().abs() as u64)
+                            .expect("total_storage_usage overflow")
+                            .into();
+                    }
+
+                    if let Some(mut account) = AccountNearDataObject::load(account_id_hash) {
+                        if change.is_positive() {
+                            account.incr_storage_usage((change.value() as u64).into())
+                        } else {
+                            account.dec_storage_usage((change.value().abs() as u64).into())
+                        }
+                        account.save();
+                    }
                 }
             }
 
             AccountStorageEvent::Unregistered(account_near_balance) => {
-                println!(
-                    r#"AccountStorageEvent::Unregistered {} 
-                    {} {} {}
-                    "#,
-                    account_near_balance,
-                    stats.total_registered_accounts,
-                    stats.total_near_balance,
-                    stats.total_storage_usage
-                );
-
                 stats.total_registered_accounts = stats
                     .total_registered_accounts
                     .checked_sub(1)
@@ -143,7 +145,7 @@ impl AccountStats {
 mod test {
     use super::*;
     use crate::StorageBalance;
-    use oysterpack_smart_near::domain::StorageUsageChange;
+    use oysterpack_smart_near::domain::{StorageUsageChange, ZERO_NEAR};
     use oysterpack_smart_near::*;
     use oysterpack_smart_near_test::*;
 
@@ -155,6 +157,9 @@ mod test {
         testing_env!(context);
 
         AccountStats::register_account_storage_event_handler();
+
+        let account = AccountNearDataObject::new(account_id, ZERO_NEAR);
+        account.save();
 
         let stats = AccountStats::load();
         assert_eq!(stats.total_registered_accounts, 0.into());
@@ -191,9 +196,13 @@ mod test {
         assert_eq!(stats.total_registered_accounts, 1.into());
         assert_eq!(stats.total_near_balance, YOCTO.into());
         assert_eq!(stats.total_storage_usage, 0.into());
+        let initial_account_storage_usage = account.storage_usage();
 
         // Act - storage usage increase
-        eventbus::post(&AccountStorageEvent::StorageUsageChanged(1000_u64.into()));
+        eventbus::post(&AccountStorageEvent::StorageUsageChanged(
+            account.key().account_id_hash(),
+            1000_u64.into(),
+        ));
 
         // Assert
         let stats = AccountStats::load();
@@ -201,8 +210,15 @@ mod test {
         assert_eq!(stats.total_near_balance, YOCTO.into());
         assert_eq!(stats.total_storage_usage, 1000.into());
 
+        let account = AccountNearDataObject::load(account_id).unwrap();
+        assert_eq!(
+            account.storage_usage(),
+            initial_account_storage_usage + 1000.into()
+        );
+
         // Act - storage usage decrease
         eventbus::post(&AccountStorageEvent::StorageUsageChanged(
+            account.key().account_id_hash(),
             StorageUsageChange(-1000),
         ));
 
@@ -211,6 +227,9 @@ mod test {
         assert_eq!(stats.total_registered_accounts, 1.into());
         assert_eq!(stats.total_near_balance, YOCTO.into());
         assert_eq!(stats.total_storage_usage, 0.into());
+
+        let account = AccountNearDataObject::load(account_id).unwrap();
+        assert_eq!(account.storage_usage(), initial_account_storage_usage);
 
         // Act - account unregistered
         eventbus::post(&AccountStorageEvent::Unregistered(YOCTO.into()));

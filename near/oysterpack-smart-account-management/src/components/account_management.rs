@@ -1,5 +1,5 @@
 use crate::{
-    Account, AccountReporting, AccountRepository, AccountStorageEvent, AccountStorageUsage,
+    AccountReporting, AccountRepository, AccountStorageEvent, AccountStorageUsage,
     HasAccountStorageUsage, StorageBalance, StorageBalanceBounds, StorageManagement,
 };
 use near_sdk::{
@@ -17,6 +17,9 @@ use std::{fmt::Debug, ops::Deref};
 use teloc::*;
 
 use crate::components::account_storage_usage::AccountStorageUsageComponent;
+use crate::AccountNearDataObject;
+use oysterpack_smart_near::domain::ZERO_NEAR;
+use std::marker::PhantomData;
 
 pub const ERR_INSUFFICIENT_STORAGE_BALANCE: ErrorConst = ErrorConst(
     ErrCode("INSUFFICIENT_STORAGE_BALANCE"),
@@ -35,7 +38,9 @@ where
     /// must be provided by the contract
     unregister: Box<dyn UnregisterAccount>,
 
-    account_storage_usage: AccountStorageUsageComponent<T>,
+    account_storage_usage: AccountStorageUsageComponent,
+
+    _phantom_data: PhantomData<T>,
 }
 
 impl<T> Default for AccountManagementComponent<T>
@@ -46,6 +51,7 @@ where
         Self {
             unregister: Box::new(UnregisterAccountNOOP),
             account_storage_usage: Default::default(),
+            _phantom_data: Default::default(),
         }
     }
 }
@@ -56,19 +62,19 @@ pub trait UnregisterAccount {
     /// [`AccountManagementComponent`] will be responsible for
     /// - sending account NEAR balance refund
     /// - publishing events
-    /// - deleting the [`Account`] object
+    /// - deleting [`AccountNearDataObject`] and [`crate::AccountDataObject`] objects from contract storage
     ///
     /// The [`UnregisterAccount`] delegate is responsible for:
     /// - if `force=false`, panic if the account cannot be deleted because of contract specific
     ///   business logic, e.g., for FT, the account cannot unregister if it has a token balance
-    /// - delete any account data outside of the [`Account`] object
+    /// - delete any account data outside of the [`AccountNearDataObject`] and [`crate::AccountDataObject`] objects
     /// - apply any contract specific business logic
     fn unregister_account(&mut self, force: bool);
 }
 
 /// Default implementation that performs no contract specific operation, i.e., no-operation
 ///
-/// USE CASE: contract stores all account data within [`Account`] object
+/// USE CASE: contract stores all account data within [`crate::AccountDataObject`] object
 pub struct UnregisterAccountNOOP;
 
 impl UnregisterAccount for UnregisterAccountNOOP {
@@ -87,6 +93,7 @@ where
         Self {
             unregister,
             account_storage_usage: Default::default(),
+            _phantom_data: Default::default(),
         }
     }
 }
@@ -101,6 +108,7 @@ impl<T> AccountReporting for AccountManagementComponent<T> where
 {
 }
 
+/// exposes [`AccountStorageUsage`] interface on the component
 impl<T> HasAccountStorageUsage for AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
@@ -114,18 +122,6 @@ impl<T> StorageManagement for AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + 'static,
 {
-    /// Payable method that receives an attached deposit of Ⓝ for a given account.
-    ///
-    /// If `account_id` is omitted, the deposit MUST go toward predecessor account.
-    /// If provided, deposit MUST go toward this account. If invalid, contract MUST panic.
-    ///
-    /// If `registration_only=true`:
-    /// - and if the account wasn't registered, then the contract MUST refund above the minimum balance  
-    /// - and if the account was registered, then the contract MUST refund full deposit if already registered.
-    ///
-    /// Any attached deposit in excess of `storage_balance_bounds.max` must be refunded to predecessor account.
-    ///
-    /// Returns the StorageBalance structure showing updated balances.
     fn storage_deposit(
         &mut self,
         account_id: Option<ValidAccountId>,
@@ -144,7 +140,7 @@ where
         }
         let deposit: YoctoNear = env::attached_deposit().into();
 
-        let account: Account<T> = match self.load_account(&account_id) {
+        let account: AccountNearDataObject = match self.load_account_near_data(&account_id) {
             Some(mut account) => {
                 if registration_only {
                     // refund the full deposit
@@ -162,12 +158,12 @@ where
                 }
                 account
             }
-            None => {
-                let deposit =
-                    self.initial_deposit(deposit, registration_only, storage_balance_bounds);
-                let account = self.new_account(&account_id, deposit, Default::default());
-                self.register(account, storage_balance_bounds)
-            }
+            None => self.register_account(
+                &account_id,
+                deposit,
+                registration_only,
+                storage_balance_bounds,
+            ),
         };
 
         account.storage_balance(storage_balance_bounds.min)
@@ -176,27 +172,25 @@ where
     fn storage_withdraw(&mut self, amount: Option<YoctoNear>) -> StorageBalance {
         assert_yocto_near_attached();
 
-        let mut account = self.registered_account(env::predecessor_account_id().as_str());
+        let mut account = self.registered_account_near_data(env::predecessor_account_id().as_str());
         let storage_balance_bounds = self.storage_balance_bounds();
         let account_available_balance = account
             .storage_balance(storage_balance_bounds.min)
             .available;
         match amount {
             Some(amount) => {
-                if amount.value() > 0 {
+                if amount > ZERO_NEAR {
                     ERR_INSUFFICIENT_STORAGE_BALANCE.assert(|| account_available_balance >= amount);
                     send_refund(amount + 1);
                     account.dec_near_balance(amount);
                     account.save();
-                    eventbus::post(&AccountStorageEvent::Withdrawal(amount));
                 }
             }
             None => {
-                if account_available_balance.value() > 0 {
+                if account_available_balance > ZERO_NEAR {
                     send_refund(account_available_balance + 1);
                     account.dec_near_balance(account_available_balance);
                     account.save();
-                    eventbus::post(&AccountStorageEvent::Withdrawal(account_available_balance));
                 }
             }
         }
@@ -206,17 +200,16 @@ where
 
     fn storage_unregister(&mut self, force: Option<bool>) -> bool {
         assert_yocto_near_attached();
-        match self.load_account(env::predecessor_account_id().as_str()) {
-            None => false,
-            Some(account) => {
+        let account_id = env::predecessor_account_id();
+        self.load_account_near_data(&account_id)
+            .map_or(false, |account| {
                 let account_near_balance = account.near_balance();
                 self.unregister.unregister_account(force.unwrap_or(false));
-                account.delete();
+                self.delete_account(&account_id);
                 eventbus::post(&AccountStorageEvent::Unregistered(account_near_balance));
                 send_refund(account_near_balance + 1);
                 true
-            }
-        }
+            })
     }
 
     fn storage_balance_bounds(&self) -> StorageBalanceBounds {
@@ -224,7 +217,7 @@ where
     }
 
     fn storage_balance_of(&self, account_id: ValidAccountId) -> Option<StorageBalance> {
-        self.load_account(account_id.as_ref())
+        self.load_account_near_data(account_id.as_ref())
             .map(|account| StorageBalance {
                 total: account.near_balance(),
                 available: (account.near_balance().value()
@@ -239,10 +232,25 @@ impl<T> AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
+    fn register_account(
+        &mut self,
+        account_id: &str,
+        deposit: YoctoNear,
+        registration_only: bool,
+        storage_balance_bounds: StorageBalanceBounds,
+    ) -> AccountNearDataObject {
+        let deposit = self.initial_deposit(deposit, registration_only, storage_balance_bounds);
+        let (account, _data) = self.create_account(account_id, deposit, None);
+        eventbus::post(&AccountStorageEvent::Registered(
+            account.storage_balance(storage_balance_bounds.min),
+        ));
+        account
+    }
+
     /// refunds deposit amount that is above the max allowed storage balance
     fn deposit_with_max_bound(
         &self,
-        account: &mut Account<T>,
+        account: &mut AccountNearDataObject,
         deposit: Deposit,
         max: MaxStorageBalance,
     ) {
@@ -251,35 +259,21 @@ where
             let deposit = if deposit.value() > max_allowed_deposit {
                 // refund amount over the upper bound
                 send_refund(deposit.value() - max_allowed_deposit);
-                Deposit(max_allowed_deposit.into())
+                max_allowed_deposit.into()
             } else {
-                deposit
+                *deposit
             };
 
-            self.deposit(account, *deposit);
+            self.deposit(account, deposit);
         } else {
             // account storage balance is already at max limit - thus refund the full deposit amount
             send_refund(deposit.value());
         }
     }
 
-    fn deposit(&self, account: &mut Account<T>, deposit: YoctoNear) {
-        eventbus::post(&AccountStorageEvent::Deposit(deposit));
+    fn deposit(&self, account: &mut AccountNearDataObject, deposit: YoctoNear) {
         account.incr_near_balance(deposit);
         account.save();
-    }
-
-    fn register(
-        &self,
-        account: Account<T>,
-        storage_balance_bounds: StorageBalanceBounds,
-    ) -> Account<T> {
-        eventbus::post(&AccountStorageEvent::Registered(
-            account.storage_balance(storage_balance_bounds.min),
-        ));
-        let mut account = account;
-        account.save();
-        account
     }
 
     fn initial_deposit(
@@ -344,7 +338,7 @@ mod tests_service {
     use oysterpack_smart_near_test::*;
 
     fn deploy_account_service() {
-        AccountStorageUsageComponent::<()>::deploy(Some(StorageUsageBounds {
+        AccountStorageUsageComponent::deploy(Some(StorageUsageBounds {
             min: 1000.into(),
             max: None,
         }));
@@ -387,7 +381,7 @@ mod tests_teloc {
     use oysterpack_smart_near_test::*;
 
     fn deploy_account_service() {
-        AccountStorageUsageComponent::<()>::deploy(Some(StorageUsageBounds {
+        AccountStorageUsageComponent::deploy(Some(StorageUsageBounds {
             min: 1000.into(),
             max: None,
         }));
@@ -473,7 +467,7 @@ mod tests_storage_management {
         AccountStats::register_account_storage_event_handler();
         AccountStats::reset();
 
-        AccountStorageUsageComponent::<()>::deploy(Some(storage_usage_bounds));
+        AccountStorageUsageComponent::deploy(Some(storage_usage_bounds));
 
         let mut service: AccountManagementComponent<()> =
             AccountManagementComponent::new(Box::new(UnregisterMock));
@@ -538,7 +532,7 @@ mod tests_storage_management {
                             .unwrap();
                         assert_eq!(storage_balance, storage_balance_2);
 
-                        let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
+                        let account = service.registered_account_near_data(PREDECESSOR_ACCOUNT_ID);
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
@@ -565,7 +559,7 @@ mod tests_storage_management {
                         assert_eq!(storage_balance, storage_balance_2);
 
                         // Assert account was registered
-                        let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
+                        let account = service.registered_account_near_data(PREDECESSOR_ACCOUNT_ID);
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
@@ -685,7 +679,7 @@ mod tests_storage_management {
                             .unwrap();
                         assert_eq!(storage_balance, storage_balance_2);
 
-                        let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
+                        let account = service.registered_account_near_data(PREDECESSOR_ACCOUNT_ID);
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
@@ -712,7 +706,7 @@ mod tests_storage_management {
                         assert_eq!(storage_balance, storage_balance_2);
 
                         // Assert account was registered
-                        let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
+                        let account = service.registered_account_near_data(PREDECESSOR_ACCOUNT_ID);
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
@@ -825,7 +819,7 @@ mod tests_storage_management {
                             .unwrap();
                         assert_eq!(storage_balance, storage_balance_2);
 
-                        let account = service.registered_account(ACCOUNT_ID);
+                        let account = service.registered_account_near_data(ACCOUNT_ID);
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
@@ -852,7 +846,7 @@ mod tests_storage_management {
                         assert_eq!(storage_balance, storage_balance_2);
 
                         // Assert account was registered
-                        let account = service.registered_account(ACCOUNT_ID);
+                        let account = service.registered_account_near_data(ACCOUNT_ID);
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
@@ -981,7 +975,7 @@ mod tests_storage_management {
                             .unwrap();
                         assert_eq!(storage_balance, storage_balance_2);
 
-                        let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
+                        let account = service.registered_account_near_data(PREDECESSOR_ACCOUNT_ID);
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
@@ -1012,7 +1006,7 @@ mod tests_storage_management {
                         assert_eq!(storage_balance, storage_balance_2);
 
                         // Assert account was registered
-                        let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
+                        let account = service.registered_account_near_data(PREDECESSOR_ACCOUNT_ID);
                         assert_eq!(account.near_balance(), deposit_amount);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
@@ -1046,7 +1040,7 @@ mod tests_storage_management {
                         assert_eq!(storage_balance, storage_balance_2);
 
                         // Assert account was registered
-                        let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
+                        let account = service.registered_account_near_data(PREDECESSOR_ACCOUNT_ID);
                         assert_eq!(account.near_balance(), storage_balance_bounds.max.unwrap());
 
                         // AccountStorageEvent:Registered event should have been published to update stats
@@ -1191,7 +1185,7 @@ mod tests_storage_management {
                             .unwrap();
                         assert_eq!(storage_balance, storage_balance_2);
 
-                        let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
+                        let account = service.registered_account_near_data(PREDECESSOR_ACCOUNT_ID);
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
@@ -1222,7 +1216,7 @@ mod tests_storage_management {
                         assert_eq!(storage_balance, storage_balance_2);
 
                         // Assert account was registered
-                        let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
+                        let account = service.registered_account_near_data(PREDECESSOR_ACCOUNT_ID);
                         assert_eq!(account.near_balance(), storage_balance_max());
 
                         // AccountStorageEvent:Registered event should have been published to update stats
@@ -1256,7 +1250,7 @@ mod tests_storage_management {
                         assert_eq!(storage_balance, storage_balance_2);
 
                         // Assert account was registered
-                        let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
+                        let account = service.registered_account_near_data(PREDECESSOR_ACCOUNT_ID);
                         assert_eq!(account.near_balance(), storage_balance_bounds.max.unwrap());
 
                         // AccountStorageEvent:Registered event should have been published to update stats
@@ -1386,7 +1380,7 @@ mod tests_storage_management {
                             .unwrap();
                         assert_eq!(storage_balance, storage_balance_2);
 
-                        let account = service.registered_account(ACCOUNT_ID);
+                        let account = service.registered_account_near_data(ACCOUNT_ID);
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
@@ -1417,7 +1411,7 @@ mod tests_storage_management {
                         assert_eq!(storage_balance, storage_balance_2);
 
                         // Assert account was registered
-                        let account = service.registered_account(ACCOUNT_ID);
+                        let account = service.registered_account_near_data(ACCOUNT_ID);
                         assert_eq!(account.near_balance(), deposit_amount);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
@@ -1451,7 +1445,7 @@ mod tests_storage_management {
                         assert_eq!(storage_balance, storage_balance_2);
 
                         // Assert account was registered
-                        let account = service.registered_account(ACCOUNT_ID);
+                        let account = service.registered_account_near_data(ACCOUNT_ID);
                         assert_eq!(account.near_balance(), storage_balance_bounds.max.unwrap());
 
                         // AccountStorageEvent:Registered event should have been published to update stats
@@ -1559,7 +1553,7 @@ mod tests_storage_management {
                         assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
                         assert_eq!(storage_balance.available, 0.into());
 
-                        let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
+                        let account = service.registered_account_near_data(PREDECESSOR_ACCOUNT_ID);
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
@@ -1585,7 +1579,7 @@ mod tests_storage_management {
                         );
 
                         // Assert account was registered
-                        let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
+                        let account = service.registered_account_near_data(PREDECESSOR_ACCOUNT_ID);
                         assert_eq!(account.near_balance(), deposit_amount);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
@@ -1611,7 +1605,7 @@ mod tests_storage_management {
                             service.storage_balance_bounds().min
                         );
 
-                        let account = service.registered_account(PREDECESSOR_ACCOUNT_ID);
+                        let account = service.registered_account_near_data(PREDECESSOR_ACCOUNT_ID);
                         // AccountStorageEvent:Registered event should have been published to update stats
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
@@ -1680,7 +1674,7 @@ mod tests_storage_management {
                         assert_eq!(storage_balance.total, service.storage_balance_bounds().min);
                         assert_eq!(storage_balance.available, 0.into());
 
-                        let account = service.registered_account(ACCOUNT_ID);
+                        let account = service.registered_account_near_data(ACCOUNT_ID);
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
@@ -1706,7 +1700,7 @@ mod tests_storage_management {
                         );
 
                         // Assert account was registered
-                        let account = service.registered_account(ACCOUNT_ID);
+                        let account = service.registered_account_near_data(ACCOUNT_ID);
                         assert_eq!(account.near_balance(), deposit_amount);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
@@ -1732,7 +1726,7 @@ mod tests_storage_management {
                             service.storage_balance_bounds().min
                         );
 
-                        let account = service.registered_account(ACCOUNT_ID);
+                        let account = service.registered_account_near_data(ACCOUNT_ID);
                         // AccountStorageEvent:Registered event should have been published to update stats
                         let account_stats = service.account_stats();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
@@ -1789,7 +1783,7 @@ mod tests_storage_management {
             AccountStats::register_account_storage_event_handler();
             AccountStats::reset();
 
-            AccountStorageUsageComponent::<()>::deploy(Some(storage_usage_bounds));
+            AccountStorageUsageComponent::deploy(Some(storage_usage_bounds));
 
             let mut service: AccountManagementComponent<()> =
                 AccountManagementComponent::new(Box::new(UnregisterMock));
@@ -1977,7 +1971,7 @@ mod tests_storage_management {
             AccountStats::register_account_storage_event_handler();
             AccountStats::reset();
 
-            AccountStorageUsageComponent::<()>::deploy(Some(storage_usage_bounds));
+            AccountStorageUsageComponent::deploy(Some(storage_usage_bounds));
 
             let mut service: AccountManagementComponent<()> = Default::default();
 

@@ -1,4 +1,4 @@
-use crate::StorageUsageBounds;
+use crate::{AccountIdHash, StorageUsageBounds};
 use lazy_static::lazy_static;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
@@ -172,7 +172,7 @@ pub enum AccountStorageEvent {
     /// an account made a withdrawal from its storage available balance
     Withdrawal(YoctoNear),
     /// account storage usage changed
-    StorageUsageChanged(StorageUsageChange),
+    StorageUsageChanged(AccountIdHash, StorageUsageChange),
     /// an account was unregistered
     /// - its NEAR balance was refunded
     Unregistered(YoctoNear),
@@ -180,7 +180,10 @@ pub enum AccountStorageEvent {
 
 impl Display for AccountStorageEvent {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        match self {
+            AccountStorageEvent::StorageUsageChanged(_, change) => write!(f, "{:?}", change),
+            _ => write!(f, "{:?}", self),
+        }
     }
 }
 

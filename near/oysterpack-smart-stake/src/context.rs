@@ -23,7 +23,7 @@ impl SmartContractContext for Context {
 
     fn deploy(_context: &mut Self) {
         assert!(!env::state_exists(), "contract is already initialized");
-        AccountStorageUsageComponent::<()>::deploy(Some(StorageUsageBounds {
+        AccountStorageUsageComponent::deploy(Some(StorageUsageBounds {
             min: 1000.into(),
             max: None,
         }));
