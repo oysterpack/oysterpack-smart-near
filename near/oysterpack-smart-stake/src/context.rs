@@ -2,7 +2,7 @@ use near_sdk::env;
 use teloc::*;
 
 use oysterpack_smart_account_management::{
-    components::account_management::*, AccountStats, StorageUsageBounds,
+    components::account_management::*, AccountMetrics, StorageUsageBounds,
 };
 use oysterpack_smart_near::{component::*, contract_context::SmartContractContext, eventbus};
 
@@ -19,7 +19,7 @@ impl SmartContractContext for Context {
     type Config = ();
 
     fn build(_config: Self::Config) -> Self {
-        eventbus::register(AccountStats::on_account_storage_event);
+        eventbus::register(AccountMetrics::on_account_storage_event);
         Self {
             account_management: create_account_management_component(),
         }

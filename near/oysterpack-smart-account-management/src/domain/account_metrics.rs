@@ -15,14 +15,14 @@ use std::sync::Mutex;
 
 const ACCOUNT_STATS_KEY: u128 = 1952364736129901845182088441739779955;
 
-type AccountStatsObject = Object<u128, AccountStats>;
+type DAO = Object<u128, AccountMetrics>;
 
-/// Account statistics
+/// Account metrics
 #[derive(
     BorshSerialize, BorshDeserialize, Deserialize, Serialize, Copy, Clone, Debug, PartialEq, Default,
 )]
 #[serde(crate = "near_sdk::serde")]
-pub struct AccountStats {
+pub struct AccountMetrics {
     pub total_registered_accounts: U128,
     pub total_near_balance: YoctoNear,
     pub total_storage_usage: StorageUsage,
@@ -32,20 +32,20 @@ lazy_static! {
     static ref ACCOUNT_STORAGE_EVENT_HANDLER_REGISTERED: Mutex<bool> = Mutex::new(false);
 }
 
-impl AccountStats {
-    pub fn load() -> AccountStats {
-        let stats = AccountStatsObject::load(&ACCOUNT_STATS_KEY)
-            .unwrap_or_else(|| AccountStatsObject::new(ACCOUNT_STATS_KEY, AccountStats::default()));
+impl AccountMetrics {
+    pub fn load() -> AccountMetrics {
+        let stats = DAO::load(&ACCOUNT_STATS_KEY)
+            .unwrap_or_else(|| DAO::new(ACCOUNT_STATS_KEY, AccountMetrics::default()));
         *stats
     }
 
     pub fn save(&self) {
-        AccountStatsObject::new(ACCOUNT_STATS_KEY, *self).save();
+        DAO::new(ACCOUNT_STATS_KEY, *self).save();
     }
 
     #[cfg(test)]
     pub(crate) fn reset() {
-        let mut stats = AccountStats::load();
+        let mut stats = AccountMetrics::load();
         stats.total_storage_usage = 0.into();
         stats.total_near_balance = 0.into();
         stats.total_registered_accounts = 0.into();
@@ -56,7 +56,7 @@ impl AccountStats {
     pub fn register_account_storage_event_handler() {
         let mut registered = ACCOUNT_STORAGE_EVENT_HANDLER_REGISTERED.lock().unwrap();
         if !*registered {
-            eventbus::register(AccountStats::on_account_storage_event);
+            eventbus::register(AccountMetrics::on_account_storage_event);
             *registered = true;
         }
     }
@@ -64,7 +64,7 @@ impl AccountStats {
     pub fn on_account_storage_event(event: &AccountStorageEvent) {
         event.log();
 
-        let mut stats = AccountStats::load();
+        let mut stats = AccountMetrics::load();
 
         match *event {
             AccountStorageEvent::Registered(storage_balance) => {
@@ -156,12 +156,12 @@ mod test {
         let context = new_context(account_id);
         testing_env!(context);
 
-        AccountStats::register_account_storage_event_handler();
+        AccountMetrics::register_account_storage_event_handler();
 
         let account = AccountNearDataObject::new(account_id, ZERO_NEAR);
         account.save();
 
-        let stats = AccountStats::load();
+        let stats = AccountMetrics::load();
         assert_eq!(stats.total_registered_accounts, 0.into());
         assert_eq!(stats.total_near_balance, 0.into());
         assert_eq!(stats.total_storage_usage, 0.into());
@@ -174,7 +174,7 @@ mod test {
         eventbus::post(&AccountStorageEvent::Registered(storage_balance));
 
         // Assert
-        let stats = AccountStats::load();
+        let stats = AccountMetrics::load();
         assert_eq!(stats.total_registered_accounts, 1.into());
         assert_eq!(stats.total_near_balance, YOCTO.into());
         assert_eq!(stats.total_storage_usage, 0.into());
@@ -183,7 +183,7 @@ mod test {
         eventbus::post(&AccountStorageEvent::Deposit(YOCTO.into()));
 
         // Assert
-        let stats = AccountStats::load();
+        let stats = AccountMetrics::load();
         assert_eq!(stats.total_registered_accounts, 1.into());
         assert_eq!(stats.total_near_balance, (2 * YOCTO).into());
         assert_eq!(stats.total_storage_usage, 0.into());
@@ -192,7 +192,7 @@ mod test {
         eventbus::post(&AccountStorageEvent::Withdrawal(YOCTO.into()));
 
         // Assert
-        let stats = AccountStats::load();
+        let stats = AccountMetrics::load();
         assert_eq!(stats.total_registered_accounts, 1.into());
         assert_eq!(stats.total_near_balance, YOCTO.into());
         assert_eq!(stats.total_storage_usage, 0.into());
@@ -205,7 +205,7 @@ mod test {
         ));
 
         // Assert
-        let stats = AccountStats::load();
+        let stats = AccountMetrics::load();
         assert_eq!(stats.total_registered_accounts, 1.into());
         assert_eq!(stats.total_near_balance, YOCTO.into());
         assert_eq!(stats.total_storage_usage, 1000.into());
@@ -223,7 +223,7 @@ mod test {
         ));
 
         // Assert
-        let stats = AccountStats::load();
+        let stats = AccountMetrics::load();
         assert_eq!(stats.total_registered_accounts, 1.into());
         assert_eq!(stats.total_near_balance, YOCTO.into());
         assert_eq!(stats.total_storage_usage, 0.into());
@@ -235,7 +235,7 @@ mod test {
         eventbus::post(&AccountStorageEvent::Unregistered(YOCTO.into()));
 
         // Assert
-        let stats = AccountStats::load();
+        let stats = AccountMetrics::load();
         assert_eq!(stats.total_registered_accounts, 0.into());
         assert_eq!(stats.total_near_balance, 0.into());
         assert_eq!(stats.total_storage_usage, 0.into());
