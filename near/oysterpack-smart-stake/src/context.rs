@@ -1,9 +1,11 @@
 use near_sdk::env;
+use teloc::*;
+
 use oysterpack_smart_account_management::{
     components::account_management::*, AccountStats, StorageUsageBounds,
 };
-use oysterpack_smart_near::{contract_context::SmartContractContext, eventbus, service::*};
-use teloc::*;
+use oysterpack_smart_near::component::*;
+use oysterpack_smart_near::{contract_context::SmartContractContext, eventbus};
 
 #[derive(Default)]
 pub struct Context {

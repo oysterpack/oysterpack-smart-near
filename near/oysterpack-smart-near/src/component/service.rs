@@ -1,21 +1,18 @@
 //! This package provides a standard for building reusable smart contract stateful components
 //!
-//! ## Service Design
-//! - Service declares it state type and defines a u128 based storage key
+//! ## Component Design
+//! - Component declares it state type and defines a u128 based storage key
 //!   - recommendation is to use ULID to generate the storage key
-//! - Each service is responsible for managing its own state. This means when the service state changes
-//!   it is the service's responsibility to save it to storage.
-//! - [`Deploy`] - defines a pattern to standardize service deployment
-//! - All components are lazily loaded. The pattern is to leverage lazy_static, i.e., define each service
-//!   as a lazy_static, which will only be initialized on demand.
+//! - Each component is responsible for managing its own state. This means when the component state
+//!   changes it is the component's responsibility to save it to storage.
+//! - [`crate::component::Deploy`] - defines a pattern to standardize component deployment
 
 use crate::data::Object;
 use near_sdk::borsh::{BorshDeserialize, BorshSerialize};
 use std::fmt::Debug;
 
-/// Defines abstraction for a stateful service.
-/// - state must support Borsh serialization
-pub trait Service {
+/// Defines abstraction for a stateful component
+pub trait Component {
     type State: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq;
 
     /// Used to to store the service state to blockchain storage
@@ -23,32 +20,18 @@ pub trait Service {
     fn state_key() -> u128;
 
     /// loads the service state from storage using the key defined by [`state_key`]()
-    fn load_state() -> Option<ServiceState<Self::State>> {
-        ServiceState::<Self::State>::load(&Self::state_key())
+    fn load_state() -> Option<ComponentState<Self::State>> {
+        ComponentState::<Self::State>::load(&Self::state_key())
     }
 
     /// creates new in-memory state, i.e., the state is not persisted to storage
-    fn new_state(state: Self::State) -> ServiceState<Self::State> {
-        ServiceState::<Self::State>::new(Self::state_key(), state)
+    fn new_state(state: Self::State) -> ComponentState<Self::State> {
+        ComponentState::<Self::State>::new(Self::state_key(), state)
     }
 }
 
 /// service state type
-pub type ServiceState<T> = Object<u128, T>;
-
-/// Provides standard interface pattern for contracts to use at deployment time to run service related
-/// deployment code.
-/// - for example, service may require config to initialize its persistent state
-///
-/// ## NOTES
-/// - components may not need to implement ['Deploy']
-pub trait Deploy {
-    type Config;
-
-    /// invoked when the contract is first deployed
-    /// - main use case is to initialize any service state
-    fn deploy(config: Option<Self::Config>);
-}
+pub type ComponentState<T> = Object<u128, T>;
 
 #[cfg(test)]
 mod tests {
@@ -62,12 +45,12 @@ mod tests {
         static ref FOO: Mutex<Foo> = Mutex::new(Foo::new());
     }
 
-    type FooState = ServiceState<u128>;
+    type FooState = ComponentState<u128>;
     struct Foo {
         state: FooState,
     }
 
-    impl Service for Foo {
+    impl Component for Foo {
         type State = u128;
 
         fn state_key() -> u128 {

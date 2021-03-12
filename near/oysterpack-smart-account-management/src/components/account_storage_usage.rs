@@ -2,7 +2,7 @@ use near_sdk::json_types::ValidAccountId;
 use oysterpack_smart_near::domain::StorageUsage;
 
 use crate::{AccountNearDataObject, AccountStorageUsage, StorageUsageBounds};
-use oysterpack_smart_near::service::{Deploy, Service};
+use oysterpack_smart_near::component::{Component, Deploy};
 
 #[derive(Default)]
 pub(crate) struct AccountStorageUsageComponent;
@@ -18,7 +18,7 @@ impl AccountStorageUsage for AccountStorageUsageComponent {
     }
 }
 
-impl Service for AccountStorageUsageComponent {
+impl Component for AccountStorageUsageComponent {
     type State = StorageUsageBounds;
 
     fn state_key() -> u128 {

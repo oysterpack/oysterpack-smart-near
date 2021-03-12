@@ -1,3 +1,10 @@
+//! ## [`AccountManagementComponent`]
+//! - constructor: [`AccountManagementComponent::new`]
+//!   - Box<dyn [`UnregisterAccount`]>
+//! - deployment: [`AccountManagementComponent::deploy`]
+//!   - config: [`StorageUsageBounds`]
+//!
+
 use crate::{
     AccountReporting, AccountRepository, AccountStorageEvent, AccountStorageUsage,
     HasAccountStorageUsage, StorageBalance, StorageBalanceBounds, StorageManagement,
@@ -19,8 +26,8 @@ use teloc::*;
 
 use crate::components::account_storage_usage::AccountStorageUsageComponent;
 use crate::AccountNearDataObject;
+use oysterpack_smart_near::component::Deploy;
 use oysterpack_smart_near::domain::ZERO_NEAR;
-use oysterpack_smart_near::service::Deploy;
 use std::marker::PhantomData;
 
 pub const ERR_INSUFFICIENT_STORAGE_BALANCE: ErrorConst = ErrorConst(
