@@ -29,8 +29,8 @@ pub const ERR_INSUFFICIENT_STORAGE_BALANCE: ErrorConst = ErrorConst(
 /// Core account management component implements the following interfaces:
 /// 1. [`AccountRepository`]
 /// 2. [`StorageManagement`] - NEP-145
-/// 3. ['AccountReporting`]
-/// 4. ['AccountStorageUsage`]
+/// 3. [`AccountReporting`]
+/// 4. [`AccountStorageUsage`]
 pub struct AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
