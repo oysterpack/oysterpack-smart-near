@@ -4,12 +4,15 @@ use teloc::*;
 use oysterpack_smart_account_management::{
     components::account_management::*, AccountStats, StorageUsageBounds,
 };
-use oysterpack_smart_near::component::*;
-use oysterpack_smart_near::{contract_context::SmartContractContext, eventbus};
+use oysterpack_smart_near::{component::*, contract_context::SmartContractContext, eventbus};
+
+pub type AccountData = ();
+
+pub type AccountManager = AccountManagementComponent<AccountData>;
 
 #[derive(Default)]
 pub struct Context {
-    pub account_management: AccountManagementComponent<()>,
+    pub account_management: AccountManager,
 }
 
 impl SmartContractContext for Context {
@@ -24,7 +27,7 @@ impl SmartContractContext for Context {
 
     fn deploy(_context: &mut Self) {
         assert!(!env::state_exists(), "contract is already initialized");
-        AccountManagementComponent::<()>::deploy(Some(StorageUsageBounds {
+        AccountManagementComponent::<AccountData>::deploy(Some(StorageUsageBounds {
             min: 1000.into(),
             max: None,
         }));
@@ -44,9 +47,9 @@ impl From<Box<UnregisterMock>> for Box<dyn UnregisterAccount> {
     }
 }
 
-fn create_account_management_component() -> AccountManagementComponent<()> {
+fn create_account_management_component() -> AccountManager {
     let container = ServiceProvider::new()
         .add_transient_c::<Box<dyn UnregisterAccount>, Box<UnregisterMock>>()
-        .add_transient::<AccountManagementComponent<()>>();
+        .add_transient::<AccountManager>();
     container.resolve()
 }
