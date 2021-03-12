@@ -5,6 +5,7 @@ use near_sdk::{
 };
 use oysterpack_smart_near::domain::StorageUsage;
 
+/// Used to lookup account storage usage info   
 pub trait AccountStorageUsage {
     fn storage_usage_bounds(&self) -> StorageUsageBounds;
 
@@ -14,6 +15,7 @@ pub trait AccountStorageUsage {
     fn storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage>;
 }
 
+/// Tracks account storage usage
 #[derive(
     BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, PartialEq, Clone, Copy,
 )]
@@ -25,6 +27,8 @@ pub struct StorageUsageBounds {
     pub max: Option<StorageUsage>,
 }
 
+/// Used to implement [`AccountStorageUsage`] on any type that implements this trait
+/// - used to expose [`AccountStorageUsage`] on components
 pub trait HasAccountStorageUsage {
     fn account_storage_usage(&self) -> &dyn AccountStorageUsage;
 }

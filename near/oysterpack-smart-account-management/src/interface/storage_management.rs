@@ -126,6 +126,7 @@ pub trait StorageManagement {
     fn storage_balance_of(&self, account_id: ValidAccountId) -> Option<StorageBalance>;
 }
 
+/// Tracks account storage balance
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
 #[serde(crate = "near_sdk::serde")]
 pub struct StorageBalance {
@@ -135,6 +136,7 @@ pub struct StorageBalance {
     pub available: YoctoNear,
 }
 
+/// Defines storage balance bounds for the contract
 #[derive(
     BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, PartialEq, Clone, Copy,
 )]
@@ -163,6 +165,7 @@ impl From<StorageUsageBounds> for StorageBalanceBounds {
     }
 }
 
+/// Account storage related events
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum AccountStorageEvent {
     /// an account was registered
@@ -197,7 +200,7 @@ impl AccountStorageEvent {
 
 // TODO: create macro to generate boilerplate code for event: #[event]
 lazy_static! {
-    pub static ref ACCOUNT_STORAGE_EVENTS: Mutex<EventHandlers<AccountStorageEvent>> =
+    static ref ACCOUNT_STORAGE_EVENTS: Mutex<EventHandlers<AccountStorageEvent>> =
         Mutex::new(EventHandlers::new());
 }
 

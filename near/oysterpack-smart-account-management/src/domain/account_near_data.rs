@@ -13,6 +13,7 @@ use std::ops::{Deref, DerefMut};
 
 type DAO = Object<AccountNearDataHash, AccountNearData>;
 
+/// Persistent account NEAR related data
 #[derive(Clone, Debug, PartialEq)]
 pub struct AccountNearDataObject(DAO);
 
@@ -85,6 +86,8 @@ impl DerefMut for AccountNearDataObject {
     }
 }
 
+/// All accounts must pay for their own storage. Thus, NEAR balance and storage usage must be tracked
+/// for all accounts.
 #[derive(BorshSerialize, BorshDeserialize, Clone, Copy, Debug, PartialEq)]
 pub struct AccountNearData {
     near_balance: YoctoNear,
@@ -161,6 +164,7 @@ impl AccountNearData {
 
 const ACCOUNT_NEAR_DATA_KEY: u128 = 1953035509579102406775126588391115273;
 
+/// Used as key to store [`AccountNearData`] - defined on [`AccountNearDataObject`]
 #[derive(BorshSerialize, BorshDeserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct AccountNearDataHash(
     AccountIdHash,

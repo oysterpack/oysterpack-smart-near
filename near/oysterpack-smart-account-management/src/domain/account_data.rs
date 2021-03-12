@@ -2,26 +2,21 @@ use oysterpack_smart_near::data::Object;
 use oysterpack_smart_near::{eventbus, Hash};
 
 use near_sdk::{
-    borsh::{self, BorshDeserialize, BorshSerialize},
+    borsh::{BorshDeserialize, BorshSerialize},
     env,
 };
 
-use crate::AccountStorageEvent;
+use crate::{AccountIdHash, AccountStorageEvent};
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 
 type DAO<T> = Object<AccountIdHash, T>;
 
-/// Represents a persistent contract account that wraps [`Object<AccountIdHash, T>`]
+/// Generic persistent account data
+///
+/// ## Notes
 /// - keeps track of its own storage usage
-///
-/// Account data that is stored on the blockchain
-///
-/// On the NEAR blockchain, all accounts are required to pay for their own storage. Thus, for each
-/// account we must track its storage usage and its NEAR balance to ensure the account has enough
-/// NEAR balance to pay for storage.
-///
-/// NOTE: any account storage usage that is outside of this Account object must be tracked externally
+/// - any account storage usage that is outside of this Account object must be tracked externally
 #[derive(Clone, Debug, PartialEq)]
 pub struct AccountDataObject<T>(DAO<T>)
 where
@@ -105,21 +100,6 @@ where
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
-    }
-}
-
-#[derive(BorshSerialize, BorshDeserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct AccountIdHash(pub Hash);
-
-impl AccountIdHash {
-    pub fn hash(&self) -> Hash {
-        self.0
-    }
-}
-
-impl From<&str> for AccountIdHash {
-    fn from(account_id: &str) -> Self {
-        Self(account_id.into())
     }
 }
 

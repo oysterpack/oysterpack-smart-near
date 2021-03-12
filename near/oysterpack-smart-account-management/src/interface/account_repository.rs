@@ -9,7 +9,7 @@ use std::fmt::Debug;
 
 pub type Account<T> = (AccountNearDataObject, Option<AccountDataObject<T>>);
 
-/// Provides default implementation for managing accounts on blockchain storage
+/// Used for account data access
 pub trait AccountRepository<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
