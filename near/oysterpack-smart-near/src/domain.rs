@@ -1,5 +1,5 @@
 //! NEAR typesafe domain domain
-//! - all domain objects should support Borsh and JSON serialization
+//! - all domain objects support Borsh and JSON serialization
 
 mod storage_usage;
 mod storage_usage_change;
