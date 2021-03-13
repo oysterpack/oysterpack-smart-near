@@ -42,6 +42,7 @@ impl Expiration {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use near_sdk::serde_json;
     use oysterpack_smart_near_test::*;
 
     #[test]
@@ -53,6 +54,11 @@ mod tests {
 
         assert!(!Expiration::Epoch(1000.into()).expired());
         assert!(Expiration::Epoch(999.into()).expired());
+
+        println!(
+            "{}",
+            serde_json::to_string(&Expiration::Epoch(1000.into())).unwrap()
+        );
     }
 
     #[test]
@@ -64,6 +70,11 @@ mod tests {
 
         assert!(!Expiration::Block(1000.into()).expired());
         assert!(Expiration::Block(999.into()).expired());
+
+        println!(
+            "{}",
+            serde_json::to_string(&Expiration::Block(1000.into())).unwrap()
+        );
     }
 
     #[test]
@@ -75,5 +86,10 @@ mod tests {
 
         assert!(!Expiration::Timestamp(1000.into()).expired());
         assert!(Expiration::Timestamp(999.into()).expired());
+
+        println!(
+            "{}",
+            serde_json::to_string(&Expiration::Timestamp(1000.into())).unwrap()
+        );
     }
 }

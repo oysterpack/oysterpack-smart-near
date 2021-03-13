@@ -15,6 +15,17 @@ impl ErrCode {
     pub fn error<Msg: Display>(&self, msg: Msg) -> Error<Msg> {
         Error(*self, msg)
     }
+
+    pub fn assert<F, Msg, MsgF>(&self, check: F, msg: MsgF)
+    where
+        F: FnOnce() -> bool,
+        Msg: Display,
+        MsgF: FnOnce() -> Msg,
+    {
+        if !check() {
+            self.error(msg()).panic();
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -37,15 +48,6 @@ where
 {
     pub fn panic(&self) {
         env::panic(self.to_string().as_bytes())
-    }
-
-    pub fn assert<F>(&self, check: F)
-    where
-        F: FnOnce() -> bool,
-    {
-        if !check() {
-            self.panic();
-        }
     }
 }
 
@@ -120,5 +122,16 @@ mod tests {
         const ERR_CODE: ErrCode = ErrCode("INVALID_ACCOUNT_ID");
         const ERR: ErrorConst = ErrorConst(ERR_CODE, "BOOM");
         ERR.panic();
+    }
+
+    #[test]
+    #[should_panic(expected = "BOOM")]
+    fn error_code_assert() {
+        let context = new_context("bob");
+        testing_env!(context);
+
+        const ERR: ErrCode = ErrCode("INVALID_ACCOUNT_ID");
+
+        ERR.assert(|| false, || "BOOM");
     }
 }

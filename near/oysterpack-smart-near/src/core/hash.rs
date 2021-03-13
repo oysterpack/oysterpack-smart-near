@@ -24,7 +24,7 @@ use std::convert::TryInto;
     PartialOrd,
     Default,
 )]
-pub struct Hash([u8; Hash::LENGTH]);
+pub struct Hash(pub [u8; Hash::LENGTH]);
 
 impl Hash {
     pub const LENGTH: usize = 32;
