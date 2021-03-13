@@ -57,16 +57,18 @@ pub trait ContractSale {
 }
 
 /// log event for [`ContractSale::sell_contract`]
-pub const CONTRACT_FOR_SALE: LogEvent = LogEvent(Level::INFO, "CONTRACT_FOR_SALE");
+pub const LOG_EVENT_CONTRACT_FOR_SALE: LogEvent = LogEvent(Level::INFO, "CONTRACT_FOR_SALE");
 
 /// log event for [`ContractSale::cancel_contract_sell_order`]
-pub const CONTRACT_SALE_CANCELLED: LogEvent = LogEvent(Level::INFO, "CONTRACT_SALE_CANCELLED");
+pub const LOG_EVENT_CONTRACT_SALE_CANCELLED: LogEvent =
+    LogEvent(Level::INFO, "CONTRACT_SALE_CANCELLED");
 
 /// log event for [`ContractSale::buy_contract`]
-pub const CONTRACT_BID_PLACED: LogEvent = LogEvent(Level::INFO, "CONTRACT_BID_PLACED");
+pub const LOG_EVENT_CONTRACT_BID_PLACED: LogEvent = LogEvent(Level::INFO, "CONTRACT_BID_PLACED");
 
 /// log event for [`ContractSale::cancel_contract_buy_order`]
-pub const CONTRACT_BID_CANCELLED: LogEvent = LogEvent(Level::INFO, "CONTRACT_BID_CANCELLED");
+pub const LOG_EVENT_CONTRACT_BID_CANCELLED: LogEvent =
+    LogEvent(Level::INFO, "CONTRACT_BID_CANCELLED");
 
 /// log event for contract sale transactions
-pub const CONTRACT_SOLD: LogEvent = LogEvent(Level::INFO, "CONTRACT_SOLD");
+pub const LOG_EVENT_CONTRACT_SOLD: LogEvent = LogEvent(Level::INFO, "CONTRACT_SOLD");

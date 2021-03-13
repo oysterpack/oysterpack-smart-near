@@ -91,15 +91,15 @@ pub trait ContractOwnership {
 }
 
 /// log event for [`ContractOwnership::transfer_ownership`]
-pub const CONTRACT_TRANSFER_INITIATED: LogEvent =
+pub const LOG_EVENT_CONTRACT_TRANSFER_INITIATED: LogEvent =
     LogEvent(Level::INFO, "CONTRACT_TRANSFER_INITIATED");
 
 /// log event for [`ContractOwnership::cancel_transfer_ownership`]
-pub const CONTRACT_TRANSFER_CANCELLED: LogEvent =
+pub const LOG_EVENT_CONTRACT_TRANSFER_CANCELLED: LogEvent =
     LogEvent(Level::INFO, "CONTRACT_TRANSFER_CANCELLED");
 
 /// log event for [`ContractOwnership::finalize_transfer_ownership`]
-pub const CONTRACT_TRANSFER_FINALIZED: LogEvent =
+pub const LOG_EVENT_CONTRACT_TRANSFER_FINALIZED: LogEvent =
     LogEvent(Level::INFO, "CONTRACT_TRANSFER_FINALIZED");
 
 /// Contract owner total and available balance

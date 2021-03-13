@@ -175,11 +175,12 @@ impl Display for NearBalanceChangeEvent {
     }
 }
 
-const NEAR_BALANCE_CHANGE_EVENT: LogEvent = LogEvent(Level::INFO, "NearBalanceChangeEvent");
+/// log event for [`NearBalanceChangeEvent`]
+pub const LOG_EVENT_NEAR_BALANCE_CHANGED: LogEvent = LogEvent(Level::INFO, "NEAR_BALANCE_CHANGED");
 
 impl NearBalanceChangeEvent {
     pub fn log(&self) {
-        NEAR_BALANCE_CHANGE_EVENT.log(self.to_string());
+        LOG_EVENT_NEAR_BALANCE_CHANGED.log(self.to_string());
     }
 }
 

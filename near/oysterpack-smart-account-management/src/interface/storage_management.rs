@@ -191,11 +191,12 @@ impl Display for AccountStorageEvent {
 }
 
 /// log event for [`AccountStorageEvent`]
-pub const ACCOUNT_STORAGE_EVENT: LogEvent = LogEvent(Level::INFO, "ACCOUNT_STORAGE_EVENT");
+pub const LOG_EVENT_ACCOUNT_STORAGE_CHANGED: LogEvent =
+    LogEvent(Level::INFO, "ACCOUNT_STORAGE_CHANGED");
 
 impl AccountStorageEvent {
     pub fn log(&self) {
-        ACCOUNT_STORAGE_EVENT.log(self.to_string());
+        LOG_EVENT_ACCOUNT_STORAGE_CHANGED.log(self.to_string());
     }
 }
 
