@@ -147,9 +147,19 @@ pub fn clear_balance(id: BalanceId) {
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum NearBalanceChangeEvent {
+    /// Increment the balance by the specified amount
+    ///
+    /// ## Panics
+    /// if overflow occurs
     Increment(BalanceId, YoctoNear),
+    /// Decrement the balance by the specified amount
+    ///
+    /// ## Panics
+    /// if overflow occurs
     Decrement(BalanceId, YoctoNear),
+    /// Sets the balance to the specified amount
     Update(BalanceId, YoctoNear),
+    /// Deletes the balance from storage - effectively setting it 0
     Clear(BalanceId),
 }
 
@@ -263,6 +273,71 @@ mod tests {
 
         let logs = test_utils::get_logs();
         assert_eq!(logs.len(), 4);
+        println!("{:#?}", logs);
+
+        // Act - decrement balances
+        eventbus::post(&NearBalanceChangeEvent::Decrement(
+            LIQUIDITY_BALANCE_ID,
+            YOCTO.into(),
+        ));
+        eventbus::post(&NearBalanceChangeEvent::Decrement(
+            EARNINGS_BALANCE_ID,
+            YOCTO.into(),
+        ));
+
+        // Assert
+        let balances = load_near_balances();
+        assert_eq!(balances.len(), 2);
+        assert_eq!(
+            balances.get(&LIQUIDITY_BALANCE_ID).unwrap().value(),
+            2 * YOCTO
+        );
+        assert_eq!(balances.get(&EARNINGS_BALANCE_ID).unwrap().value(), YOCTO);
+
+        let logs = test_utils::get_logs();
+        assert_eq!(logs.len(), 6);
+        println!("{:#?}", logs);
+
+        // Act - decrement balances
+        eventbus::post(&NearBalanceChangeEvent::Update(
+            LIQUIDITY_BALANCE_ID,
+            (10 * YOCTO).into(),
+        ));
+        eventbus::post(&NearBalanceChangeEvent::Update(
+            EARNINGS_BALANCE_ID,
+            (20 * YOCTO).into(),
+        ));
+
+        // Assert
+        let balances = load_near_balances();
+        assert_eq!(balances.len(), 2);
+        assert_eq!(
+            balances.get(&LIQUIDITY_BALANCE_ID).unwrap().value(),
+            10 * YOCTO
+        );
+        assert_eq!(
+            balances.get(&EARNINGS_BALANCE_ID).unwrap().value(),
+            20 * YOCTO
+        );
+
+        let logs = test_utils::get_logs();
+        assert_eq!(logs.len(), 8);
+        println!("{:#?}", logs);
+
+        // Act - decrement balances
+        eventbus::post(&NearBalanceChangeEvent::Clear(LIQUIDITY_BALANCE_ID));
+
+        // Assert
+        let balances = load_near_balances();
+        assert_eq!(balances.len(), 1);
+        assert!(!balances.contains_key(&LIQUIDITY_BALANCE_ID));
+        assert_eq!(
+            balances.get(&EARNINGS_BALANCE_ID).unwrap().value(),
+            20 * YOCTO
+        );
+
+        let logs = test_utils::get_logs();
+        assert_eq!(logs.len(), 9);
         println!("{:#?}", logs);
     }
 }
