@@ -44,6 +44,7 @@ pub trait ContractOwnership {
     fn owner_balance(&self) -> ContractOwnerNearBalance;
 }
 
+/// Contract owner total and available balance
 #[derive(
     BorshSerialize, BorshDeserialize, Deserialize, Serialize, Clone, Debug, PartialEq, Default,
 )]
@@ -53,6 +54,7 @@ pub struct ContractOwnerNearBalance {
     pub available: YoctoNear,
 }
 
+/// Indicates access was denied because owner access was required
 pub const ERR_OWNER_ACCESS_REQUIRED: ErrorConst = ErrorConst(
     ErrCode("OWNER_ACCESS_REQUIRED"),
     "action requires owner access",

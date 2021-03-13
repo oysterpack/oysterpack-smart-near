@@ -7,9 +7,8 @@ use oysterpack_smart_account_management::GetAccountMetrics;
 use oysterpack_smart_near::data::numbers::U128;
 use oysterpack_smart_near::domain::BlockTime;
 
-/// Contracts that support multiple account registration must track storage usage and NEAR balances
-/// because at the very least accounts are required to pay for their own storage.
-trait ContractMetrics: GetAccountMetrics {
+/// Provides metrics that track storage usage and NEAR balances
+pub trait ContractMetrics: GetAccountMetrics {
     fn total_registered_accounts(&self) -> U128 {
         self.account_metrics().total_registered_accounts
     }
@@ -34,6 +33,7 @@ trait ContractMetrics: GetAccountMetrics {
     }
 }
 
+/// Provides a point in time metrics snapshot
 #[derive(BorshSerialize, BorshDeserialize, Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct ContractMetricsSnapshot {

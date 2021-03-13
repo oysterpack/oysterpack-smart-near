@@ -5,6 +5,7 @@ use near_sdk::{
 };
 use oysterpack_smart_near::domain::StorageUsage;
 
+/// Reports a breakdown of contract storage usage
 #[derive(
     BorshSerialize, BorshDeserialize, Deserialize, Serialize, Copy, Clone, Debug, PartialEq, Default,
 )]

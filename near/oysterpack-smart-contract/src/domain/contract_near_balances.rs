@@ -16,6 +16,7 @@ use std::{
     sync::Mutex,
 };
 
+/// Balance ID is used to track separate NEAR balances
 #[derive(
     BorshSerialize,
     BorshDeserialize,
@@ -38,6 +39,7 @@ pub struct BalanceId(pub u8);
 /// - profit sharing fund
 pub type NearBalances = HashMap<BalanceId, YoctoNear>;
 
+/// Provides a breakdown of the contract's NEAR balances
 #[derive(
     BorshSerialize, BorshDeserialize, Deserialize, Serialize, Clone, Debug, PartialEq, Default,
 )]
@@ -148,6 +150,7 @@ impl ContractNearBalances {
     }
 }
 
+/// [`ContractNearBalances`] are are tracked with these events
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum NearBalanceChangeEvent {
     /// Increment the balance by the specified amount

@@ -7,6 +7,11 @@ use near_sdk::{
 use oysterpack_smart_near::domain::AccountIdHash;
 use oysterpack_smart_near::{data::Object, ErrCode, ErrorConst};
 
+/// Indicates that an attempt was made to initialize the contract with a different owner.
+///
+/// A contract can only be initialized, i.e., seeded, with the contract owner once after the contract
+/// is deployed.
+/// - see [`ContractOwner::initialize_contract`]
 pub const ERR_CONTRACT_OWNER_ALREADY_INITIALIZED: ErrorConst = ErrorConst(
     ErrCode("CONTRACT_OWNER_ALREADY_INITIALIZED"),
     "contract owner is already initialized with a different owner",
@@ -16,6 +21,7 @@ const CONTRACT_OWNER_KEY: u128 = 1952995667402400813184690843862547707;
 
 type DAO = Object<u128, ContractOwner>;
 
+/// Every contract has an owner
 #[derive(BorshSerialize, BorshDeserialize, Clone, Copy, Debug, PartialEq)]
 pub struct ContractOwner(AccountIdHash);
 

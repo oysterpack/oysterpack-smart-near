@@ -6,6 +6,7 @@ use near_sdk::{
 };
 use oysterpack_smart_near::domain::YoctoNear;
 
+/// Reports a breakdown of contract storage usage staking costs
 #[derive(
     BorshSerialize, BorshDeserialize, Deserialize, Serialize, Copy, Clone, Debug, PartialEq, Default,
 )]
