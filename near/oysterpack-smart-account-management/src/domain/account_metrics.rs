@@ -53,7 +53,7 @@ impl AccountMetrics {
     }
 
     /// can be safely called multiple times and will only register the event handler once
-    pub fn register_account_storage_event_handler() {
+    pub(crate) fn register_account_storage_event_handler() {
         let mut registered = ACCOUNT_STORAGE_EVENT_HANDLER_REGISTERED.lock().unwrap();
         if !*registered {
             eventbus::register(AccountMetrics::on_account_storage_event);
@@ -61,7 +61,7 @@ impl AccountMetrics {
         }
     }
 
-    pub fn on_account_storage_event(event: &AccountStorageEvent) {
+    fn on_account_storage_event(event: &AccountStorageEvent) {
         event.log();
 
         let mut stats = AccountMetrics::load();

@@ -200,6 +200,7 @@ pub(crate) fn register_event_handler() {
 }
 
 fn on_near_balance_change_event(event: &NearBalanceChangeEvent) {
+    event.log();
     match *event {
         NearBalanceChangeEvent::Increment(id, amount) => {
             incr_balance(id, amount);
@@ -209,5 +210,20 @@ fn on_near_balance_change_event(event: &NearBalanceChangeEvent) {
         }
         NearBalanceChangeEvent::Update(id, amount) => set_balance(id, amount),
         NearBalanceChangeEvent::Clear(id) => clear_balance(id),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use near_sdk::test_utils::test_env;
+    use oysterpack_smart_near_test::*;
+
+    const LIQUIDITY_BALANCE_ID: u8 = 0;
+    const EARNINGS_BALANCE_ID: u8 = 1;
+
+    #[test]
+    fn near_balance_change_event_handling() {
+        test_env::setup();
     }
 }
