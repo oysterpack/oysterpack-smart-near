@@ -84,11 +84,18 @@ pub trait UnregisterAccount {
 /// Default implementation that performs no contract specific operation, i.e., no-operation
 ///
 /// USE CASE: contract stores all account data within [`crate::AccountDataObject`] object
+#[derive(Dependency)]
 pub struct UnregisterAccountNOOP;
 
 impl UnregisterAccount for UnregisterAccountNOOP {
     fn unregister_account(&mut self, _force: bool) {
         // no action required
+    }
+}
+
+impl From<Box<UnregisterAccountNOOP>> for Box<dyn UnregisterAccount> {
+    fn from(x: Box<UnregisterAccountNOOP>) -> Self {
+        x
     }
 }
 
@@ -364,12 +371,6 @@ mod tests_service {
         }));
     }
 
-    struct UnregisterMock;
-
-    impl UnregisterAccount for UnregisterMock {
-        fn unregister_account(&mut self, _force: bool) {}
-    }
-
     #[test]
     fn deploy_and_use_module() {
         // Arrange
@@ -381,7 +382,7 @@ mod tests_service {
         deploy_account_service();
 
         let service: AccountManagementComponent<()> =
-            AccountManagementComponent::new(Box::new(UnregisterMock));
+            AccountManagementComponent::new(Box::new(UnregisterAccountNOOP));
         let storage_balance_bounds = service.storage_balance_bounds();
         assert_eq!(
             storage_balance_bounds.min,
@@ -399,24 +400,13 @@ mod tests_teloc {
     use crate::StorageUsageBounds;
     use oysterpack_smart_near_test::*;
 
+    pub type AccountManager = AccountManagementComponent<()>;
+
     fn deploy_account_service() {
-        AccountStorageUsageComponent::deploy(Some(StorageUsageBounds {
+        AccountManager::deploy(Some(StorageUsageBounds {
             min: 1000.into(),
             max: None,
         }));
-    }
-
-    #[derive(Dependency)]
-    struct UnregisterMock;
-
-    impl UnregisterAccount for UnregisterMock {
-        fn unregister_account(&mut self, _force: bool) {}
-    }
-
-    impl From<Box<UnregisterMock>> for Box<dyn UnregisterAccount> {
-        fn from(x: Box<UnregisterMock>) -> Self {
-            x
-        }
     }
 
     #[test]
@@ -430,10 +420,10 @@ mod tests_teloc {
         deploy_account_service();
 
         let container = ServiceProvider::new()
-            .add_transient_c::<Box<dyn UnregisterAccount>, Box<UnregisterMock>>()
-            .add_transient::<AccountManagementComponent<()>>();
+            .add_transient_c::<Box<dyn UnregisterAccount>, Box<UnregisterAccountNOOP>>()
+            .add_transient::<AccountManager>();
 
-        let service: AccountManagementComponent<()> = container.resolve();
+        let service: AccountManager = container.resolve();
         let storage_balance_bounds = service.storage_balance_bounds();
         assert_eq!(
             storage_balance_bounds.min,
@@ -451,12 +441,6 @@ mod tests_storage_management {
     use crate::{AccountMetrics, StorageUsageBounds};
     use oysterpack_smart_near::domain::StorageUsage;
     use oysterpack_smart_near_test::*;
-
-    struct UnregisterMock;
-
-    impl UnregisterAccount for UnregisterMock {
-        fn unregister_account(&mut self, _force: bool) {}
-    }
 
     const STORAGE_USAGE_BOUNDS: StorageUsageBounds = StorageUsageBounds {
         min: StorageUsage(1000),
@@ -488,7 +472,7 @@ mod tests_storage_management {
         AccountStorageUsageComponent::deploy(Some(storage_usage_bounds));
 
         let mut service: AccountManagementComponent<()> =
-            AccountManagementComponent::new(Box::new(UnregisterMock));
+            AccountManagementComponent::new(Box::new(UnregisterAccountNOOP));
         let storage_balance_bounds = service.storage_balance_bounds();
 
         if already_registered {
@@ -1804,7 +1788,7 @@ mod tests_storage_management {
             AccountStorageUsageComponent::deploy(Some(storage_usage_bounds));
 
             let mut service: AccountManagementComponent<()> =
-                AccountManagementComponent::new(Box::new(UnregisterMock));
+                AccountManagementComponent::new(Box::new(UnregisterAccountNOOP));
 
             if deposit.value() > 0 {
                 ctx.attached_deposit = deposit.value();

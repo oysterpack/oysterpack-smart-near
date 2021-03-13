@@ -16,6 +16,13 @@ pub struct ContractStorageUsage {
 }
 
 impl ContractStorageUsage {
+    pub fn new(accounts: StorageUsage) -> Self {
+        Self {
+            total: StorageUsage::from_env(),
+            accounts,
+        }
+    }
+
     /// total contract storage usage
     pub fn total(&self) -> StorageUsage {
         self.total

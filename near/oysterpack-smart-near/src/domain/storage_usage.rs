@@ -34,6 +34,10 @@ impl StorageUsage {
     pub fn cost(&self) -> YoctoNear {
         (self.0 as u128 * env::storage_byte_cost()).into()
     }
+
+    pub fn from_env() -> Self {
+        Self(env::storage_usage())
+    }
 }
 
 impl From<u64> for StorageUsage {

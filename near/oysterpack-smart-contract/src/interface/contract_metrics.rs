@@ -1,6 +1,7 @@
 use crate::{ContractNearBalances, ContractStorageUsage, ContractStorageUsageCosts};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
+    env,
     serde::{Deserialize, Serialize},
 };
 use oysterpack_smart_account_management::GetAccountMetrics;
@@ -13,9 +14,25 @@ pub trait ContractMetrics: GetAccountMetrics {
         self.account_metrics().total_registered_accounts
     }
 
-    fn storage_usage(&self) -> ContractStorageUsage;
+    fn storage_usage(&self) -> ContractStorageUsage {
+        let account_metrics = self.account_metrics();
+        ContractStorageUsage::new(account_metrics.total_storage_usage)
+    }
 
-    fn near_balances(&self) -> ContractNearBalances;
+    fn near_balances(&self) -> ContractNearBalances {
+        let account_metrics = self.account_metrics();
+        let near_balances = ContractNearBalances::load_near_balances();
+        let near_balances = if near_balances.is_empty() {
+            None
+        } else {
+            Some(near_balances)
+        };
+        ContractNearBalances::new(
+            env::account_balance().into(),
+            account_metrics.total_near_balance,
+            near_balances,
+        )
+    }
 
     fn storage_usage_costs(&self) -> ContractStorageUsageCosts {
         self.storage_usage().into()
