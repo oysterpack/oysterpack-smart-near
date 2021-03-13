@@ -6,7 +6,7 @@
 //!
 
 use crate::{
-    AccountRepository, AccountStorageEvent, AccountStorageUsage, GetAccountMetrics,
+    AccountMetrics, AccountRepository, AccountStorageEvent, AccountStorageUsage, GetAccountMetrics,
     HasAccountStorageUsage, StorageBalance, StorageBalanceBounds, StorageManagement,
     StorageUsageBounds,
 };
@@ -99,6 +99,7 @@ where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     pub fn new(unregister: Box<dyn UnregisterAccount>) -> Self {
+        AccountMetrics::register_account_storage_event_handler();
         Self {
             unregister,
             account_storage_usage: Default::default(),
