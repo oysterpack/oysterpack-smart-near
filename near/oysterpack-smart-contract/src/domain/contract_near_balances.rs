@@ -95,54 +95,57 @@ const NEAR_BALANCES_KEY: u128 = 1953121181530803691069739592144632957;
 
 type DAO = Object<u128, NearBalances>;
 
-pub fn load_near_balances() -> NearBalances {
-    DAO::load(&NEAR_BALANCES_KEY).map_or_else(NearBalances::new, |object| object.deref().clone())
-}
+impl ContractNearBalances {
+    pub fn load_near_balances() -> NearBalances {
+        DAO::load(&NEAR_BALANCES_KEY)
+            .map_or_else(NearBalances::new, |object| object.deref().clone())
+    }
 
-/// Increments the balance by the specified amount and returns the updated balance
-pub fn incr_balance(id: BalanceId, amount: YoctoNear) -> YoctoNear {
-    let mut balances = DAO::load(&NEAR_BALANCES_KEY)
-        .unwrap_or_else(|| DAO::new(NEAR_BALANCES_KEY, NearBalances::new()));
-    let mut balance = balances.get(&id).cloned().unwrap_or(ZERO_NEAR);
-    balance += amount;
-    balances.insert(id, balance);
-    balances.save();
-    balance
-}
-
-/// Decrements the balance by the specified amount and returns the updated balance
-pub fn decr_balance(id: BalanceId, amount: YoctoNear) -> YoctoNear {
-    let mut balances = DAO::load(&NEAR_BALANCES_KEY)
-        .unwrap_or_else(|| DAO::new(NEAR_BALANCES_KEY, NearBalances::new()));
-    let mut balance = balances.get(&id).cloned().unwrap_or(ZERO_NEAR);
-    balance -= amount;
-    if balance == ZERO_NEAR {
-        balances.remove(&id);
-    } else {
+    /// Increments the balance by the specified amount and returns the updated balance
+    pub fn incr_balance(id: BalanceId, amount: YoctoNear) -> YoctoNear {
+        let mut balances = DAO::load(&NEAR_BALANCES_KEY)
+            .unwrap_or_else(|| DAO::new(NEAR_BALANCES_KEY, NearBalances::new()));
+        let mut balance = balances.get(&id).cloned().unwrap_or(ZERO_NEAR);
+        balance += amount;
         balances.insert(id, balance);
+        balances.save();
+        balance
     }
-    balances.save();
-    balance
-}
 
-/// Sets the balance to the specified amount and returns the updated balance
-pub fn set_balance(id: BalanceId, amount: YoctoNear) {
-    let mut balances = DAO::load(&NEAR_BALANCES_KEY)
-        .unwrap_or_else(|| DAO::new(NEAR_BALANCES_KEY, NearBalances::new()));
-    if amount == ZERO_NEAR {
+    /// Decrements the balance by the specified amount and returns the updated balance
+    pub fn decr_balance(id: BalanceId, amount: YoctoNear) -> YoctoNear {
+        let mut balances = DAO::load(&NEAR_BALANCES_KEY)
+            .unwrap_or_else(|| DAO::new(NEAR_BALANCES_KEY, NearBalances::new()));
+        let mut balance = balances.get(&id).cloned().unwrap_or(ZERO_NEAR);
+        balance -= amount;
+        if balance == ZERO_NEAR {
+            balances.remove(&id);
+        } else {
+            balances.insert(id, balance);
+        }
+        balances.save();
+        balance
+    }
+
+    /// Sets the balance to the specified amount and returns the updated balance
+    pub fn set_balance(id: BalanceId, amount: YoctoNear) {
+        let mut balances = DAO::load(&NEAR_BALANCES_KEY)
+            .unwrap_or_else(|| DAO::new(NEAR_BALANCES_KEY, NearBalances::new()));
+        if amount == ZERO_NEAR {
+            balances.remove(&id);
+        } else {
+            balances.insert(id, amount);
+        }
+        balances.save();
+    }
+
+    /// Clears the balance and removes the record from storage
+    pub fn clear_balance(id: BalanceId) {
+        let mut balances = DAO::load(&NEAR_BALANCES_KEY)
+            .unwrap_or_else(|| DAO::new(NEAR_BALANCES_KEY, NearBalances::new()));
         balances.remove(&id);
-    } else {
-        balances.insert(id, amount);
+        balances.save();
     }
-    balances.save();
-}
-
-/// Clears the balance and removes the record from storage
-pub fn clear_balance(id: BalanceId) {
-    let mut balances = DAO::load(&NEAR_BALANCES_KEY)
-        .unwrap_or_else(|| DAO::new(NEAR_BALANCES_KEY, NearBalances::new()));
-    balances.remove(&id);
-    balances.save();
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -213,13 +216,13 @@ fn on_near_balance_change_event(event: &NearBalanceChangeEvent) {
     event.log();
     match *event {
         NearBalanceChangeEvent::Increment(id, amount) => {
-            incr_balance(id, amount);
+            ContractNearBalances::incr_balance(id, amount);
         }
         NearBalanceChangeEvent::Decrement(id, amount) => {
-            decr_balance(id, amount);
+            ContractNearBalances::decr_balance(id, amount);
         }
-        NearBalanceChangeEvent::Update(id, amount) => set_balance(id, amount),
-        NearBalanceChangeEvent::Clear(id) => clear_balance(id),
+        NearBalanceChangeEvent::Update(id, amount) => ContractNearBalances::set_balance(id, amount),
+        NearBalanceChangeEvent::Clear(id) => ContractNearBalances::clear_balance(id),
     }
 }
 
@@ -238,7 +241,7 @@ mod tests {
         test_env::setup();
         register_event_handler();
 
-        let balances = load_near_balances();
+        let balances = ContractNearBalances::load_near_balances();
         assert!(balances.is_empty());
 
         // Act - increment balances
@@ -260,7 +263,7 @@ mod tests {
         ));
 
         // Assert
-        let balances = load_near_balances();
+        let balances = ContractNearBalances::load_near_balances();
         assert_eq!(balances.len(), 2);
         assert_eq!(
             balances.get(&LIQUIDITY_BALANCE_ID).unwrap().value(),
@@ -286,7 +289,7 @@ mod tests {
         ));
 
         // Assert
-        let balances = load_near_balances();
+        let balances = ContractNearBalances::load_near_balances();
         assert_eq!(balances.len(), 2);
         assert_eq!(
             balances.get(&LIQUIDITY_BALANCE_ID).unwrap().value(),
@@ -309,7 +312,7 @@ mod tests {
         ));
 
         // Assert
-        let balances = load_near_balances();
+        let balances = ContractNearBalances::load_near_balances();
         assert_eq!(balances.len(), 2);
         assert_eq!(
             balances.get(&LIQUIDITY_BALANCE_ID).unwrap().value(),
@@ -328,7 +331,7 @@ mod tests {
         eventbus::post(&NearBalanceChangeEvent::Clear(LIQUIDITY_BALANCE_ID));
 
         // Assert
-        let balances = load_near_balances();
+        let balances = ContractNearBalances::load_near_balances();
         assert_eq!(balances.len(), 1);
         assert!(!balances.contains_key(&LIQUIDITY_BALANCE_ID));
         assert_eq!(
