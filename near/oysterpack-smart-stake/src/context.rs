@@ -17,8 +17,12 @@ impl SmartContractContext for Context {
     type Config = ();
 
     fn build(_config: Self::Config) -> Self {
+        let container = ServiceProvider::new()
+            .add_transient_c::<Box<dyn UnregisterAccount>, Box<UnregisterMock>>()
+            .add_transient::<AccountManager>();
+
         Self {
-            account_management: create_account_management_component(),
+            account_management: container.resolve(),
         }
     }
 
@@ -42,11 +46,4 @@ impl From<Box<UnregisterMock>> for Box<dyn UnregisterAccount> {
     fn from(x: Box<UnregisterMock>) -> Self {
         x
     }
-}
-
-fn create_account_management_component() -> AccountManager {
-    let container = ServiceProvider::new()
-        .add_transient_c::<Box<dyn UnregisterAccount>, Box<UnregisterMock>>()
-        .add_transient::<AccountManager>();
-    container.resolve()
 }

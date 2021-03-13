@@ -216,14 +216,53 @@ fn on_near_balance_change_event(event: &NearBalanceChangeEvent) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use near_sdk::test_utils::test_env;
-    use oysterpack_smart_near_test::*;
+    use near_sdk::test_utils::{self, test_env};
+    use oysterpack_smart_near::YOCTO;
 
-    const LIQUIDITY_BALANCE_ID: u8 = 0;
-    const EARNINGS_BALANCE_ID: u8 = 1;
+    const LIQUIDITY_BALANCE_ID: BalanceId = BalanceId(0);
+    const EARNINGS_BALANCE_ID: BalanceId = BalanceId(1);
 
     #[test]
     fn near_balance_change_event_handling() {
+        // Arrange
         test_env::setup();
+        register_event_handler();
+
+        let balances = load_near_balances();
+        assert!(balances.is_empty());
+
+        // Act - increment balances
+        eventbus::post(&NearBalanceChangeEvent::Increment(
+            LIQUIDITY_BALANCE_ID,
+            YOCTO.into(),
+        ));
+        eventbus::post(&NearBalanceChangeEvent::Increment(
+            LIQUIDITY_BALANCE_ID,
+            YOCTO.into(),
+        ));
+        eventbus::post(&NearBalanceChangeEvent::Increment(
+            LIQUIDITY_BALANCE_ID,
+            YOCTO.into(),
+        ));
+        eventbus::post(&NearBalanceChangeEvent::Increment(
+            EARNINGS_BALANCE_ID,
+            (2 * YOCTO).into(),
+        ));
+
+        // Assert
+        let balances = load_near_balances();
+        assert_eq!(balances.len(), 2);
+        assert_eq!(
+            balances.get(&LIQUIDITY_BALANCE_ID).unwrap().value(),
+            3 * YOCTO
+        );
+        assert_eq!(
+            balances.get(&EARNINGS_BALANCE_ID).unwrap().value(),
+            2 * YOCTO
+        );
+
+        let logs = test_utils::get_logs();
+        assert_eq!(logs.len(), 4);
+        println!("{:#?}", logs);
     }
 }
