@@ -6,7 +6,7 @@ use near_sdk::{
 };
 use oysterpack_smart_near::asserts::assert_yocto_near_attached;
 use oysterpack_smart_near::domain::YoctoNear;
-use oysterpack_smart_near::{ErrCode, ErrorConst};
+use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 
 /// Every contract has an owner
 pub trait ContractOwnership {
@@ -60,7 +60,7 @@ pub trait ContractOwnership {
             })
     }
 
-    /// Used to finalize the contract transfer to the new [`ContractOwnership::prospective_owner`].
+    /// Used to finalize the contract transfer to the new prospective owner
     ///
     /// When the transfer is finalized, any current owner balance is transferred to the previous
     /// owner account.
@@ -89,6 +89,18 @@ pub trait ContractOwnership {
 
     fn owner_balance(&self) -> ContractOwnerNearBalance;
 }
+
+/// log event for [`ContractOwnership::transfer_ownership`]
+pub const CONTRACT_TRANSFER_INITIATED: LogEvent =
+    LogEvent(Level::INFO, "CONTRACT_TRANSFER_INITIATED");
+
+/// log event for [`ContractOwnership::cancel_transfer_ownership`]
+pub const CONTRACT_TRANSFER_CANCELLED: LogEvent =
+    LogEvent(Level::INFO, "CONTRACT_TRANSFER_CANCELLED");
+
+/// log event for [`ContractOwnership::finalize_transfer_ownership`]
+pub const CONTRACT_TRANSFER_FINALIZED: LogEvent =
+    LogEvent(Level::INFO, "CONTRACT_TRANSFER_FINALIZED");
 
 /// Contract owner total and available balance
 #[derive(

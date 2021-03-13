@@ -145,6 +145,7 @@ impl AccountMetrics {
 mod test {
     use super::*;
     use crate::StorageBalance;
+    use near_sdk::test_utils;
     use oysterpack_smart_near::domain::{StorageUsageChange, ZERO_NEAR};
     use oysterpack_smart_near::*;
     use oysterpack_smart_near_test::*;
@@ -239,5 +240,9 @@ mod test {
         assert_eq!(stats.total_registered_accounts, 0.into());
         assert_eq!(stats.total_near_balance, 0.into());
         assert_eq!(stats.total_storage_usage, 0.into());
+
+        let logs = test_utils::get_logs();
+        assert_eq!(logs.len(), 6);
+        println!("{:#?}", logs);
     }
 }
