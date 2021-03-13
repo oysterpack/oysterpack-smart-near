@@ -26,7 +26,6 @@ impl ContractOwner {
 
     /// Used to initialize the contract with the specified owner.
     ///
-    ///
     /// ## Panics
     /// if the contract owner has already been initialized with a different owner
     pub fn initialize_contract(account_id: ValidAccountId) {
