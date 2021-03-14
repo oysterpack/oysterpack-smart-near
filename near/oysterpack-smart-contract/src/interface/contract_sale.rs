@@ -3,7 +3,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
     AccountId,
 };
-use oysterpack_smart_near::domain::{Expiration, YoctoNear};
+use oysterpack_smart_near::domain::{ExpirationSetting, YoctoNear};
 use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 
 /// Enables the contract to be transferred to a new owner via a sale.
@@ -55,12 +55,34 @@ pub trait ContractSale {
     ///   cancelled and the funds will be transferred back to the buyer's registered contract account.
     ///
     /// ## Panics
-    /// - if the predecessor account is the owner account
     /// - if no deposit is attached - at lease 1 yoctoNEAR must be attached
     /// - if the submitted bid price is not higher than the current bid price
     ///
     /// `#[payable]`
-    fn buy_contract(&mut self, expiration: Option<Expiration>);
+    fn buy_contract(&mut self, expiration: Option<ExpirationSetting>);
+
+    /// Enables the buyer to raise the contract bid and update the expiration.
+    ///
+    /// ## Panics
+    /// - if there is no current bid
+    /// - if predecessor ID is not the current buyer
+    /// - if no deposit is attached - at lease 1 yoctoNEAR must be attached
+    ///
+    /// `#[payable]`
+    fn raise_contract_bid(&mut self, expiration: Option<ExpirationSetting>);
+
+    /// Enables the buyer to lower the contract bid by the specified amount and update the expiration.
+    ///
+    /// The amount will be refunded back to the buyer + the 1 yoctoNEAR attached deposit
+    ///
+    /// ## Panics
+    /// - if there is no current bid
+    /// - if predecessor ID is not the current buyer
+    /// - if the current bid is <= amount
+    /// - if 1 yoctoNEAR deposit is not attached
+    ///
+    /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
+    fn lower_contract_bid(&mut self, amount: YoctoNear, expiration: Option<ExpirationSetting>);
 
     /// Cancels the buy order and withdraws the bid amount.
     ///
@@ -109,12 +131,6 @@ pub const ERR_CONTRACT_SALE_PRICE_MUST_NOT_BE_ZERO: ErrorConst = ErrorConst(
     "contract sale price must not be zero",
 );
 
-/// Indicates a bid request was submitted without an attached deposit
-pub const ERR_CONTRACT_BID_NOT_ATTACHED: ErrorConst = ErrorConst(
-    ErrCode("CONTRACT_BID_NOT_ATTACHED"),
-    "contract bid requires attached NEAR deposit",
-);
-
 /// Indicates the bid was too low, i.e., a higher bid has already been placed
 pub const ERR_CONTRACT_BID_TOO_LOW: ErrorConst = ErrorConst(
     ErrCode("CONTRACT_BID_NOT_ATTACHED"),
@@ -124,8 +140,21 @@ pub const ERR_CONTRACT_BID_TOO_LOW: ErrorConst = ErrorConst(
 /// Indicates access was denied because owner access was required
 pub const ERR_CONTRACT_SALE_NOT_ALLOWED: ErrCode = ErrCode("CONTRACT_SALE_NOT_ALLOWED");
 
-/// Only the bidder can cancel the bid
-pub const ERR_CONTRACT_BID_CANCEL_ACCESS_DENIED: ErrorConst = ErrorConst(
-    ErrCode("CONTRACT_BID_CANCEL_ACCESS_DENIED"),
-    "contract bid can only be cancelled by the buyer",
+/// The owner cannot submit a bid to buy the contract
+pub const ERR_OWNER_CANNOT_BUY_CONTRACT: ErrorConst = ErrorConst(
+    ErrCode("OWNER_CANNOT_BUY_CONTRACT"),
+    "owner cannot submit a bid to buy the contract",
+);
+
+pub const ERR_NO_ACTIVE_BID: ErrorConst =
+    ErrorConst(ErrCode("NO_ACTIVE_BID"), "there is no current active bid");
+
+pub const ERR_ACCESS_DENIED_MUST_BE_BUYER: ErrorConst = ErrorConst(
+    ErrCode("ACCESS_DENIED_MUST_BE_BUYER"),
+    "action is restricted to current buyer",
+);
+
+pub const ERR_EXPIRATION_IS_ALREADY_EXPIRED: ErrorConst = ErrorConst(
+    ErrCode("EXPIRATION_IS_ALREADY_EXPIRED"),
+    "expiration is already expired",
 );

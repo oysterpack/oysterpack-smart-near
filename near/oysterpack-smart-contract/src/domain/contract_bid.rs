@@ -1,9 +1,9 @@
-use crate::{BalanceId, ContractNearBalances};
+use crate::{BalanceId, ContractNearBalances, ERR_EXPIRATION_IS_ALREADY_EXPIRED};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
 };
-use oysterpack_smart_near::domain::{Expiration, YoctoNear};
+use oysterpack_smart_near::domain::{Expiration, ExpirationSetting, YoctoNear};
 
 #[derive(
     BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Copy, Debug, PartialEq,
@@ -20,6 +20,14 @@ impl ContractBid {
             .map_or(false, |expiration| expiration.expired())
     }
 
+    pub(crate) fn update_expiration(&mut self, expiration: Option<ExpirationSetting>) {
+        if let Some(expiration) = expiration {
+            let expiration: Expiration = expiration.into();
+            ERR_EXPIRATION_IS_ALREADY_EXPIRED.assert(|| !expiration.expired());
+            self.expiration = Some(expiration);
+        }
+    }
+
     /// Used to track the contract bid on the contract NEAR balance
     pub const CONTRACT_BID_BALANCE_ID: BalanceId = BalanceId(255);
 
@@ -29,6 +37,14 @@ impl ContractBid {
 
     pub(crate) fn set_near_balance(bid: YoctoNear) {
         ContractNearBalances::set_balance(Self::CONTRACT_BID_BALANCE_ID, bid);
+    }
+
+    pub(crate) fn incr_near_balance(amount: YoctoNear) {
+        ContractNearBalances::incr_balance(Self::CONTRACT_BID_BALANCE_ID, amount);
+    }
+
+    pub(crate) fn decr_near_balance(amount: YoctoNear) {
+        ContractNearBalances::decr_balance(Self::CONTRACT_BID_BALANCE_ID, amount);
     }
 
     pub(crate) fn clear_near_balance() {

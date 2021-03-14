@@ -39,6 +39,70 @@ impl Expiration {
     }
 }
 
+impl From<ExpirationDuration> for Expiration {
+    fn from(duration: ExpirationDuration) -> Self {
+        match duration {
+            ExpirationDuration::Epochs(duration) => {
+                Expiration::Epoch((env::epoch_height() + duration as u64).into())
+            }
+            ExpirationDuration::Blocks(duration) => {
+                Expiration::Block((env::block_index() + duration as u64).into())
+            }
+            ExpirationDuration::Seconds(duration) => Expiration::Timestamp(
+                (env::block_timestamp() + (1_000_000_000 * duration as u64)).into(),
+            ),
+        }
+    }
+}
+
+impl From<ExpirationSetting> for Expiration {
+    fn from(settings: ExpirationSetting) -> Self {
+        match settings {
+            ExpirationSetting::Absolute(settings) => settings,
+            ExpirationSetting::Relative(settings) => settings.into(),
+        }
+    }
+}
+
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+)]
+#[serde(crate = "near_sdk::serde")]
+pub enum ExpirationDuration {
+    Epochs(u32),
+    Blocks(u32),
+    Seconds(u32),
+}
+
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+)]
+#[serde(crate = "near_sdk::serde")]
+pub enum ExpirationSetting {
+    Absolute(Expiration),
+    Relative(ExpirationDuration),
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

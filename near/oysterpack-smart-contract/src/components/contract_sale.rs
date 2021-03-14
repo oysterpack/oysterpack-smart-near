@@ -1,13 +1,15 @@
 use crate::{
     components::contract_metrics::ContractMetricsComponent, interface::ContractMetrics,
     ContractBuyerBid, ContractOwner, ContractOwnerObject, ContractOwnershipAccountIdsObject,
-    ERR_CONTRACT_BID_CANCEL_ACCESS_DENIED, ERR_CONTRACT_BID_NOT_ATTACHED, ERR_CONTRACT_BID_TOO_LOW,
-    ERR_CONTRACT_SALE_NOT_ALLOWED, ERR_CONTRACT_SALE_PRICE_MUST_NOT_BE_ZERO,
-    LOG_EVENT_CONTRACT_BID_EXPIRED, LOG_EVENT_CONTRACT_BID_LOST, LOG_EVENT_CONTRACT_FOR_SALE,
-    LOG_EVENT_CONTRACT_SOLD,
+    ERR_ACCESS_DENIED_MUST_BE_BUYER, ERR_CONTRACT_BID_TOO_LOW, ERR_CONTRACT_SALE_NOT_ALLOWED,
+    ERR_CONTRACT_SALE_PRICE_MUST_NOT_BE_ZERO, ERR_EXPIRATION_IS_ALREADY_EXPIRED, ERR_NO_ACTIVE_BID,
+    ERR_OWNER_CANNOT_BUY_CONTRACT, LOG_EVENT_CONTRACT_BID_EXPIRED, LOG_EVENT_CONTRACT_BID_LOST,
+    LOG_EVENT_CONTRACT_FOR_SALE, LOG_EVENT_CONTRACT_SOLD,
 };
 use crate::{ContractBid, ContractSale};
 use near_sdk::{env, Promise};
+use oysterpack_smart_near::asserts::assert_near_attached;
+use oysterpack_smart_near::domain::ExpirationSetting;
 use oysterpack_smart_near::{
     asserts::assert_yocto_near_attached,
     domain::{Expiration, YoctoNear, ZERO_NEAR},
@@ -73,13 +75,19 @@ impl ContractSale for ContractSaleComponent {
         }
     }
 
-    fn buy_contract(&mut self, expiration: Option<Expiration>) {
-        let bid = YoctoNear(env::attached_deposit());
-        ERR_CONTRACT_BID_NOT_ATTACHED.assert(|| bid > ZERO_NEAR);
+    fn buy_contract(&mut self, expiration: Option<ExpirationSetting>) {
+        assert_near_attached("contract bid requires attached NEAR deposit");
+        let expiration = expiration.map(|expiration| {
+            let expiration: Expiration = expiration.into();
+            ERR_EXPIRATION_IS_ALREADY_EXPIRED.assert(|| !expiration.expired());
+            expiration
+        });
 
-        let mut owner = ContractOwnerObject::load();
         let mut account_ids = ContractOwnershipAccountIdsObject::load();
+        ERR_OWNER_CANNOT_BUY_CONTRACT.assert(|| env::predecessor_account_id() != account_ids.owner);
+        let mut owner = ContractOwnerObject::load();
 
+        let bid = YoctoNear(env::attached_deposit());
         match owner.bid.map(|(_, bid)| bid) {
             None => Self::place_bid(&mut owner, &mut account_ids, bid, expiration),
             Some(current_bid) => {
@@ -94,6 +102,52 @@ impl ContractSale for ContractSaleComponent {
         account_ids.save();
     }
 
+    fn raise_contract_bid(&mut self, expiration: Option<ExpirationSetting>) {
+        assert_near_attached("NEAR attached deposit is required");
+
+        let mut owner = ContractOwnerObject::load();
+        match owner.bid {
+            None => ERR_NO_ACTIVE_BID.panic(),
+            Some((buyer_account_id_hash, mut bid)) => {
+                ERR_ACCESS_DENIED_MUST_BE_BUYER
+                    .assert(|| buyer_account_id_hash == env::predecessor_account_id().into());
+
+                let amount = env::attached_deposit().into();
+                ContractBid::incr_near_balance(amount);
+
+                bid.amount += amount;
+                bid.update_expiration(expiration);
+
+                owner.bid = Some((buyer_account_id_hash, bid));
+            }
+        }
+
+        owner.save();
+    }
+
+    fn lower_contract_bid(&mut self, amount: YoctoNear, expiration: Option<ExpirationSetting>) {
+        assert_yocto_near_attached();
+
+        let mut owner = ContractOwnerObject::load();
+        match owner.bid {
+            None => ERR_NO_ACTIVE_BID.panic(),
+            Some((buyer_account_id_hash, mut bid)) => {
+                ERR_ACCESS_DENIED_MUST_BE_BUYER
+                    .assert(|| buyer_account_id_hash == env::predecessor_account_id().into());
+
+                ContractBid::decr_near_balance(amount);
+
+                bid.amount -= amount;
+                bid.update_expiration(expiration);
+
+                owner.bid = Some((buyer_account_id_hash, bid));
+            }
+        }
+
+        owner.save();
+        Promise::new(env::predecessor_account_id()).transfer(amount.value() + 1);
+    }
+
     fn cancel_contract_bid(&mut self) {
         assert_yocto_near_attached();
 
@@ -103,7 +157,7 @@ impl ContractSale for ContractSaleComponent {
         }
 
         let mut account_ids = ContractOwnershipAccountIdsObject::load();
-        ERR_CONTRACT_BID_CANCEL_ACCESS_DENIED
+        ERR_ACCESS_DENIED_MUST_BE_BUYER
             .assert(|| account_ids.buyer == Some(env::predecessor_account_id()));
 
         Self::cancel_bid(&mut owner, &mut account_ids);
@@ -220,17 +274,33 @@ mod tests {
     use oysterpack_smart_near_test::*;
 
     #[test]
-    fn contract_sale() {
+    fn contract_sale_basic_workflow() {
         let alfio = "alfio";
         let bob = "bob";
-        let alice = "alice";
-        let joe = "joe";
 
-        let mut ctx = new_context(bob);
+        let mut ctx = new_context(alfio);
+        ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
 
         ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
 
-        let service = ContractSaleComponent;
+        let mut service = ContractSaleComponent;
+        assert!(service.contract_sale_price().is_none());
+        // should be harmless to call by the owner - should have no effect
+        service.cancel_contract_sale();
+        assert!(service.contract_bid().is_none());
+        // should have no effect and should be harmless to call when there is no bid
+        service.cancel_contract_bid();
+
+        // Bob will submit a bid to buy the contract
+        ctx.predecessor_account_id = bob.to_string();
+        ctx.attached_deposit = 1000;
+        testing_env!(ctx.clone());
+        service.buy_contract(None);
+
+        let bid = service.contract_bid().unwrap();
+        assert_eq!(bid.buyer.as_str(), bob);
+        assert_eq!(bid.bid.amount.value(), ctx.attached_deposit);
+        assert!(bid.bid.expiration.is_none());
     }
 }

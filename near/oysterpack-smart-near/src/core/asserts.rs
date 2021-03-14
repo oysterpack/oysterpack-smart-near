@@ -1,6 +1,7 @@
 use crate::domain::YoctoNear;
 use crate::{ErrCode, ErrorConst};
 use near_sdk::env;
+use std::fmt::Display;
 
 const ERR_YOCTONEAR_DEPOSIT_REQUIRED: ErrorConst = ErrorConst(
     ErrCode("YOCTONEAR_DEPOSIT_REQUIRED"),
@@ -23,6 +24,15 @@ pub fn assert_min_near_attached(min: YoctoNear) {
         "{} attached NEAR amount is insufficient - minimum required amount is: {} yoctoNEAR",
         ERR_INSUFFICIENT_NEAR_DEPOSIT,
         min
+    )
+}
+
+pub fn assert_near_attached<Msg: Display>(msg: Msg) {
+    assert!(
+        env::attached_deposit() > 0,
+        "{} {}",
+        ERR_INSUFFICIENT_NEAR_DEPOSIT,
+        msg
     )
 }
 
