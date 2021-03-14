@@ -1,5 +1,8 @@
-use crate::{ContractBid, ContractOwner, ContractOwnerObject};
-use near_sdk::{env, json_types::ValidAccountId};
+use crate::{ContractBid, ContractOwnerObject, ContractOwnershipAccountIdsObject};
+use near_sdk::{
+    serde::{Deserialize, Serialize},
+    AccountId,
+};
 use oysterpack_smart_near::domain::{Expiration, YoctoNear};
 use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 
@@ -12,27 +15,10 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 ///   interface (NEP-145). Thus, in order to transact the accounts must be registered with the contract.
 pub trait ContractSale {
     /// Returns None if the contract is not listed for sale
-    fn contract_sale_price(&self) -> Option<YoctoNear> {
-        ContractOwnerObject::load().contract_sale_price()
-    }
+    fn contract_sale_price(&self) -> Option<YoctoNear>;
 
     /// Returns None if there is no current bid on the contract
-    fn contract_bid(&self) -> Option<ContractBid> {
-        ContractOwnerObject::load().bid().map(|bid| bid.1)
-    }
-
-    /// Checks if the specified account ID has the current highest bid
-    /// - if account ID is not specified, then the predecessor ID is used
-    /// - if there is no current bid, then None is returned
-    fn is_highest_bidder(&self, account_id: Option<ValidAccountId>) -> Option<bool> {
-        ContractOwnerObject::load()
-            .bid()
-            .map(|bid| bid.0)
-            .map(|bidder| match account_id {
-                None => bidder == env::predecessor_account_id().into(),
-                Some(account_id) => bidder == account_id.into(),
-            })
-    }
+    fn contract_bid(&self) -> Option<ContractBuyerBid>;
 
     /// Puts up the contract for sale for the specified sale price.
     ///
@@ -59,8 +45,7 @@ pub trait ContractSale {
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
     fn cancel_contract_sell_order(&mut self);
 
-    /// Places an order to buy the contract for the specified bid. The bid is the sum of the attached
-    /// amount plus the specified amount from the bidder's contract account.
+    /// Places an order to buy the contract for the specified bid.
     ///
     /// - If there is no current sale price set, then this places a bid on the contract.
     /// - If the bid is greater than or equal to the sale price, then the contract is sold at the
@@ -75,11 +60,7 @@ pub trait ContractSale {
     /// - if the submitted bid price is not higher than the current bid price
     ///
     /// `#[payable]`
-    fn buy_contract(
-        &mut self,
-        expiration: Option<Expiration>,
-        from_contract_balance: Option<YoctoNear>,
-    );
+    fn buy_contract(&mut self, expiration: Option<Expiration>);
 
     /// Cancels the buy order and withdraws the bid amount.
     ///
@@ -89,6 +70,13 @@ pub trait ContractSale {
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
     fn cancel_contract_buy_order(&mut self);
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+pub struct ContractBuyerBid {
+    pub buyer: AccountId,
+    pub bid: ContractBid,
 }
 
 /// log event for [`ContractSale::sell_contract`]
@@ -109,6 +97,9 @@ pub const LOG_EVENT_CONTRACT_BID_CANCELLED: LogEvent =
 /// log event for expired bids which are automatically cancelled
 pub const LOG_EVENT_CONTRACT_BID_EXPIRED: LogEvent = LogEvent(Level::INFO, "CONTRACT_BID_EXPIRED");
 
+/// log event for lost bids, which means a higher bid was placed
+pub const LOG_EVENT_CONTRACT_BID_LOST: LogEvent = LogEvent(Level::INFO, "CONTRACT_BID_LOST");
+
 /// log event for contract sale transactions
 pub const LOG_EVENT_CONTRACT_SOLD: LogEvent = LogEvent(Level::INFO, "CONTRACT_SOLD");
 
@@ -118,11 +109,23 @@ pub const ERR_CONTRACT_SALE_PRICE_MUST_NOT_BE_ZERO: ErrorConst = ErrorConst(
     "contract sale price must not be zero",
 );
 
-/// Indicates access was denied because owner access was required
-pub const ERR_CONTRACT_BID_BALANCE_MISMATCH: ErrorConst = ErrorConst(
-    ErrCode("CONTRACT_BID_BALANCE_MISMATCH"),
-    "contract bid price did not match the NEAR balance",
+/// Indicates a bid request was submitted without an attached deposit
+pub const ERR_CONTRACT_BID_NOT_ATTACHED: ErrorConst = ErrorConst(
+    ErrCode("CONTRACT_BID_NOT_ATTACHED"),
+    "contract bid requires attached NEAR deposit",
+);
+
+/// Indicates the bid was too low, i.e., a higher bid has already been placed
+pub const ERR_CONTRACT_BID_TOO_LOW: ErrorConst = ErrorConst(
+    ErrCode("CONTRACT_BID_NOT_ATTACHED"),
+    "contract bid is too low - for your bid to be accepted, you must submit a bid that is higher than the current bid",
 );
 
 /// Indicates access was denied because owner access was required
 pub const ERR_CONTRACT_SALE_NOT_ALLOWED: ErrCode = ErrCode("CONTRACT_SALE_NOT_ALLOWED");
+
+/// Only the bidder can cancel the bid
+pub const ERR_CONTRACT_BID_CANCEL_ACCESS_DENIED: ErrorConst = ErrorConst(
+    ErrCode("CONTRACT_BID_CANCEL_ACCESS_DENIED"),
+    "contract bid can only be cancelled by the buyer",
+);

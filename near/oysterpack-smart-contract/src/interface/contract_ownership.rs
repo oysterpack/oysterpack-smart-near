@@ -1,9 +1,9 @@
-use crate::{ContractOwner, ContractOwnerObject};
+use crate::{ContractOwnerObject, ContractOwnershipAccountIdsObject};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    env,
     json_types::ValidAccountId,
     serde::{Deserialize, Serialize},
+    AccountId,
 };
 use oysterpack_smart_near::asserts::assert_yocto_near_attached;
 use oysterpack_smart_near::domain::YoctoNear;
@@ -13,14 +13,9 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 pub trait ContractOwnership {
     /// checks if the account ID is the current contract owner
     /// - account ID is not specified, then the predecessor ID is used
-    fn is_owner(&self, account_id: Option<ValidAccountId>) -> bool {
-        match account_id {
-            None => {
-                ContractOwnerObject::load().account_id_hash()
-                    == env::predecessor_account_id().into()
-            }
-            Some(account_id) => ContractOwnerObject::load().account_id_hash() == account_id.into(),
-        }
+    fn owner(&self) -> AccountId {
+        let account_ids = ContractOwnershipAccountIdsObject::load();
+        account_ids.owner.clone()
     }
 
     /// Initiates the workflow to transfer contract ownership.

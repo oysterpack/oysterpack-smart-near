@@ -5,7 +5,7 @@ use crate::{
 use near_sdk::json_types::ValidAccountId;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    env,
+    env, AccountId,
 };
 use oysterpack_smart_near::domain::{AccountIdHash, YoctoNear};
 use oysterpack_smart_near::{data::Object, ErrCode, ErrorConst};
@@ -15,7 +15,7 @@ use std::ops::{Deref, DerefMut};
 ///
 /// A contract can only be initialized, i.e., seeded, with the contract owner once after the contract
 /// is deployed.
-/// - see [`ContractOwner::initialize_contract`]
+/// - see [`ContractOwnerObject::initialize_contract`]
 pub const ERR_CONTRACT_OWNER_ALREADY_INITIALIZED: ErrorConst = ErrorConst(
     ErrCode("CONTRACT_OWNER_ALREADY_INITIALIZED"),
     "contract owner is already initialized with a different owner",
@@ -45,7 +45,7 @@ impl ContractOwnerObject {
             None => {
                 owner.save();
                 let account_ids = ContractOwnershipAccountIds {
-                    owner: account_id.as_ref().as_bytes().to_vec(),
+                    owner: account_id.as_ref().clone(),
                     prospective_owner: None,
                     buyer: None,
                 };
@@ -168,43 +168,27 @@ impl ContractOwnershipAccountIdsObject {
     }
 }
 
+impl Deref for ContractOwnershipAccountIdsObject {
+    type Target = ContractOwnershipAccountIdsDAO;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ContractOwnershipAccountIdsObject {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 /// The contract ownership account IDs are being stored separately to avoid heap allocations when
 /// using [`ContractOwner`], which enables it to be used by value vs by ref.
 ///
 /// We need the account IDs to be able to transfer NEAR funds to the accounts
 #[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Debug)]
 pub(crate) struct ContractOwnershipAccountIds {
-    pub owner: Vec<u8>,
-    pub prospective_owner: Option<Vec<u8>>,
-    pub buyer: Option<Vec<u8>>,
-}
-
-impl ContractOwnershipAccountIds {
-    pub fn owner(&self) -> String {
-        String::try_from_slice(&self.owner).unwrap()
-    }
-
-    pub fn set_owner(&mut self, account_id: &str) {
-        self.owner = account_id.as_bytes().to_vec();
-    }
-
-    pub fn prospective_owner(&self) -> Option<String> {
-        self.prospective_owner
-            .as_ref()
-            .map(|account_id| String::try_from_slice(&account_id).unwrap())
-    }
-
-    pub fn set_prospective_owner(&mut self, account_id: &str) {
-        self.prospective_owner = Some(account_id.as_bytes().to_vec());
-    }
-
-    pub fn buyer(&self) -> Option<String> {
-        self.buyer
-            .as_ref()
-            .map(|account_id| String::try_from_slice(&account_id).unwrap())
-    }
-
-    pub fn set_buyer(&mut self, account_id: &str) {
-        self.buyer = Some(account_id.as_bytes().to_vec());
-    }
+    pub owner: AccountId,
+    pub prospective_owner: Option<AccountId>,
+    pub buyer: Option<AccountId>,
 }
