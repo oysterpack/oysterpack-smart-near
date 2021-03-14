@@ -4,6 +4,7 @@ use near_sdk::{
     env,
     serde::{Deserialize, Serialize},
 };
+use std::fmt::{self, Display, Formatter};
 
 /// Expiration can be set on the epoch, block, or timestamp.
 ///
@@ -35,6 +36,16 @@ impl Expiration {
             Expiration::Epoch(epoch) => env::epoch_height() > epoch.value(),
             Expiration::Block(block) => env::block_index() > block.value(),
             Expiration::Timestamp(timestamp) => env::block_timestamp() > timestamp.value(),
+        }
+    }
+}
+
+impl Display for Expiration {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match *self {
+            Expiration::Epoch(expiration) => write!(f, "{:?}", expiration),
+            Expiration::Block(expiration) => write!(f, "{:?}", expiration),
+            Expiration::Timestamp(expiration) => write!(f, "{:?}", expiration),
         }
     }
 }

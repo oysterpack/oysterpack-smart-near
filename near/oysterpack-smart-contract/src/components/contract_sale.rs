@@ -3,8 +3,11 @@ use crate::{
     ContractBuyerBid, ContractOwner, ContractOwnerObject, ContractOwnershipAccountIdsObject,
     ERR_ACCESS_DENIED_MUST_BE_BUYER, ERR_CONTRACT_BID_TOO_LOW, ERR_CONTRACT_SALE_NOT_ALLOWED,
     ERR_CONTRACT_SALE_PRICE_MUST_NOT_BE_ZERO, ERR_EXPIRATION_IS_ALREADY_EXPIRED, ERR_NO_ACTIVE_BID,
-    ERR_OWNER_CANNOT_BUY_CONTRACT, LOG_EVENT_CONTRACT_BID_EXPIRED, LOG_EVENT_CONTRACT_BID_LOST,
-    LOG_EVENT_CONTRACT_FOR_SALE, LOG_EVENT_CONTRACT_SOLD,
+    ERR_OWNER_CANNOT_BUY_CONTRACT, LOG_EVENT_CONTRACT_BID_CANCELLED,
+    LOG_EVENT_CONTRACT_BID_EXPIRATION_CHANGE, LOG_EVENT_CONTRACT_BID_EXPIRED,
+    LOG_EVENT_CONTRACT_BID_LOST, LOG_EVENT_CONTRACT_BID_LOWERED, LOG_EVENT_CONTRACT_BID_PLACED,
+    LOG_EVENT_CONTRACT_BID_RAISED, LOG_EVENT_CONTRACT_FOR_SALE, LOG_EVENT_CONTRACT_SALE_CANCELLED,
+    LOG_EVENT_CONTRACT_SOLD,
 };
 use crate::{ContractBid, ContractSale};
 use near_sdk::{env, Promise};
@@ -13,6 +16,7 @@ use oysterpack_smart_near::domain::ExpirationSetting;
 use oysterpack_smart_near::{
     asserts::assert_yocto_near_attached,
     domain::{Expiration, YoctoNear, ZERO_NEAR},
+    LogEvent,
 };
 
 pub struct ContractSaleComponent;
@@ -73,6 +77,7 @@ impl ContractSale for ContractSaleComponent {
         if contract_owner.sale_price.take().is_some() {
             contract_owner.save();
         }
+        LOG_EVENT_CONTRACT_SALE_CANCELLED.log("");
     }
 
     fn buy_contract(&mut self, expiration: Option<ExpirationSetting>) {
@@ -117,8 +122,19 @@ impl ContractSale for ContractSaleComponent {
 
                 bid.amount += amount;
                 bid.update_expiration(expiration);
-
                 owner.bid = Some((buyer_account_id_hash, bid));
+
+                if let Some(contract_sale_price) = owner.sale_price {
+                    if bid.amount >= contract_sale_price {
+                        let mut account_ids = ContractOwnershipAccountIdsObject::load();
+                        Self::execute_contract_sale(&mut owner, &mut account_ids);
+                        account_ids.save();
+                    } else {
+                        Self::log_bid_raised(bid);
+                    }
+                } else {
+                    Self::log_bid_raised(bid);
+                }
             }
         }
 
@@ -139,6 +155,7 @@ impl ContractSale for ContractSaleComponent {
 
                 bid.amount -= amount;
                 bid.update_expiration(expiration);
+                Self::log_bid_lowered(bid);
 
                 owner.bid = Some((buyer_account_id_hash, bid));
             }
@@ -160,6 +177,7 @@ impl ContractSale for ContractSaleComponent {
 
                 bid.expiration = expiration.map(Into::into);
                 owner.bid = Some((buyer_account_id_hash, bid));
+                Self::log_bid_event(LOG_EVENT_CONTRACT_BID_EXPIRATION_CHANGE, bid);
             }
         }
 
@@ -186,6 +204,26 @@ impl ContractSale for ContractSaleComponent {
 }
 
 impl ContractSaleComponent {
+    fn log_bid_event(event: LogEvent, bid: ContractBid) {
+        match bid.expiration {
+            None => event.log(format!("bid: {}", bid.amount)),
+            Some(expiration) => LOG_EVENT_CONTRACT_BID_PLACED
+                .log(format!("bid: {} | expiration: {}", bid.amount, expiration)),
+        }
+    }
+
+    fn log_bid_placed(bid: ContractBid) {
+        Self::log_bid_event(LOG_EVENT_CONTRACT_BID_PLACED, bid);
+    }
+
+    fn log_bid_raised(bid: ContractBid) {
+        Self::log_bid_event(LOG_EVENT_CONTRACT_BID_RAISED, bid);
+    }
+
+    fn log_bid_lowered(bid: ContractBid) {
+        Self::log_bid_event(LOG_EVENT_CONTRACT_BID_LOWERED, bid);
+    }
+
     /// 1. clears the current bid
     /// 2. refunds the bid amount back to the buyer
     fn cancel_bid(
@@ -199,6 +237,7 @@ impl ContractSaleComponent {
             .take()
             .expect("BUG: cancel_bid(): expected buyer");
         Promise::new(buyer).transfer(bid.amount.value());
+        LOG_EVENT_CONTRACT_BID_CANCELLED.log("");
         bid
     }
 
@@ -221,17 +260,18 @@ impl ContractSaleComponent {
         expiration: Option<Expiration>,
     ) {
         account_ids.buyer = Some(env::predecessor_account_id());
-        owner.bid = Some((
-            env::predecessor_account_id().into(),
-            ContractBid { amount, expiration },
-        ));
+        let bid = ContractBid { amount, expiration };
+        owner.bid = Some((env::predecessor_account_id().into(), bid));
         ContractBid::set_near_balance(amount);
 
         if let Some(sale_price) = owner.sale_price {
             if amount >= sale_price {
                 Self::execute_contract_sale(owner, account_ids);
+                return;
             }
         }
+
+        Self::log_bid_placed(bid);
     }
 
     fn validate_sell_contract_request(price: YoctoNear) -> ContractOwnerObject {
@@ -288,6 +328,8 @@ impl ContractSaleComponent {
 mod tests {
     use super::*;
     use crate::components::contract_ownership::ContractOwnershipComponent;
+    use crate::ContractOwnership;
+    use near_sdk::test_utils;
     use oysterpack_smart_near::component::*;
     use oysterpack_smart_near::domain::ExpirationDuration;
     use oysterpack_smart_near::YOCTO;
@@ -319,6 +361,8 @@ mod tests {
         testing_env!(ctx.clone());
         service.buy_contract(None);
         // Assert
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
         let bid = service.contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 1000);
@@ -326,8 +370,11 @@ mod tests {
         assert!(bid.bid.expiration.is_none());
 
         // Act - Bob raises the bid
+        testing_env!(ctx.clone());
         service.raise_contract_bid(None);
         // Assert
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
         let bid = service.contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 2000);
@@ -335,8 +382,11 @@ mod tests {
         assert!(bid.bid.expiration.is_none());
 
         // Act - Bob raises the bid and updates expiration
+        testing_env!(ctx.clone());
         service.raise_contract_bid(None);
         // Assert
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
         let bid = service.contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 3000);
@@ -350,6 +400,8 @@ mod tests {
             ExpirationDuration::Epochs(10),
         )));
         // Assert
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
         let bid = service.contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 3000);
@@ -360,8 +412,11 @@ mod tests {
         );
 
         // Act - Bob clears the expiration
+        testing_env!(ctx.clone());
         service.update_contract_bid_expiration(None);
         // Assert
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
         let bid = service.contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 3000);
@@ -369,8 +424,11 @@ mod tests {
         assert!(bid.bid.expiration.is_none());
 
         // Act - Bob lowers the bid
+        testing_env!(ctx.clone());
         service.lower_contract_bid(1000.into(), None);
         // Assert
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
         let bid = service.contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 2000);
@@ -390,11 +448,57 @@ mod tests {
         testing_env!(ctx.clone());
         service.sell_contract(YOCTO.into());
         // Assert
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
         assert_eq!(service.contract_sale_price(), Some(YOCTO.into()));
         let bid = service.contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 2000);
         assert_eq!(ContractBid::near_balance(), bid.bid.amount);
         assert!(bid.bid.expiration.is_none());
+
+        // Act - owner cancels sale
+        testing_env!(ctx.clone());
+        service.cancel_contract_sale();
+        // Assert
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
+        assert!(service.contract_sale_price().is_none());
+        let bid = service.contract_bid().unwrap();
+        assert_eq!(bid.buyer.as_str(), bob);
+        assert_eq!(bid.bid.amount.value(), 2000);
+        assert_eq!(ContractBid::near_balance(), bid.bid.amount);
+        assert!(bid.bid.expiration.is_none());
+
+        // Act - buyer cancels bid
+        ctx.predecessor_account_id = service.contract_bid().unwrap().buyer.clone();
+        testing_env!(ctx.clone());
+        service.cancel_contract_bid();
+        // Assert
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
+        assert!(service.contract_sale_price().is_none());
+        assert!(service.contract_bid().is_none());
+        assert_eq!(ContractBid::near_balance(), ZERO_NEAR);
+
+        // Act - owner sells contract
+        ctx.predecessor_account_id = alfio.to_string();
+        testing_env!(ctx.clone());
+        service.sell_contract(YOCTO.into());
+        // Assert
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
+        assert_eq!(service.contract_sale_price(), Some(YOCTO.into()));
+
+        // Act - Bob will submit a bid high enough to buy the contract
+        ctx.predecessor_account_id = bob.to_string();
+        ctx.attached_deposit = YOCTO;
+        testing_env!(ctx.clone());
+        service.buy_contract(None);
+        // Assert
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
+        assert_eq!(ContractOwnershipComponent.owner().as_str(), bob);
+        assert_eq!(ContractBid::near_balance(), ZERO_NEAR);
     }
 }

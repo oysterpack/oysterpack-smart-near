@@ -13,6 +13,8 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 ///   internally between transacting accounts that are registered on the contract.
 /// - Accounts must initiate NEAR fund withdrawals themselves via the NEAR standard `StorageManagement`
 ///   interface (NEP-145). Thus, in order to transact the accounts must be registered with the contract.
+///
+/// TODO: enable buyers to pay with STAKE
 pub trait ContractSale {
     /// Returns None if the contract is not listed for sale
     fn contract_sale_price(&self) -> Option<YoctoNear>;
@@ -121,6 +123,13 @@ pub const LOG_EVENT_CONTRACT_SALE_CANCELLED: LogEvent =
 
 /// log event for [`ContractSale::buy_contract`]
 pub const LOG_EVENT_CONTRACT_BID_PLACED: LogEvent = LogEvent(Level::INFO, "CONTRACT_BID_PLACED");
+
+pub const LOG_EVENT_CONTRACT_BID_RAISED: LogEvent = LogEvent(Level::INFO, "CONTRACT_BID_RAISED");
+
+pub const LOG_EVENT_CONTRACT_BID_LOWERED: LogEvent = LogEvent(Level::INFO, "CONTRACT_BID_LOWERED");
+
+pub const LOG_EVENT_CONTRACT_BID_EXPIRATION_CHANGE: LogEvent =
+    LogEvent(Level::INFO, "CONTRACT_BID_EXPIRATION_CHANGE");
 
 /// log event for [`ContractSale::cancel_contract_buy_order`]
 pub const LOG_EVENT_CONTRACT_BID_CANCELLED: LogEvent =
