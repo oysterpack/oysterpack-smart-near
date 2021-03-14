@@ -84,6 +84,16 @@ pub trait ContractSale {
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
     fn lower_contract_bid(&mut self, amount: YoctoNear, expiration: Option<ExpirationSetting>);
 
+    /// Enables the buyer to update the expiration. Sending in None clears the expiration.
+    ///
+    /// ## Panics
+    /// - if there is no current bid
+    /// - if predecessor ID is not the current buyer
+    /// - if 1 yoctoNEAR deposit is not attached
+    ///
+    /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
+    fn update_contract_bid_expiration(&mut self, expiration: Option<ExpirationSetting>);
+
     /// Cancels the buy order and withdraws the bid amount.
     ///
     /// ## Panics

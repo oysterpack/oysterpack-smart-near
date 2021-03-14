@@ -148,6 +148,24 @@ impl ContractSale for ContractSaleComponent {
         Promise::new(env::predecessor_account_id()).transfer(amount.value() + 1);
     }
 
+    fn update_contract_bid_expiration(&mut self, expiration: Option<ExpirationSetting>) {
+        assert_yocto_near_attached();
+
+        let mut owner = ContractOwnerObject::load();
+        match owner.bid {
+            None => ERR_NO_ACTIVE_BID.panic(),
+            Some((buyer_account_id_hash, mut bid)) => {
+                ERR_ACCESS_DENIED_MUST_BE_BUYER
+                    .assert(|| buyer_account_id_hash == env::predecessor_account_id().into());
+
+                bid.expiration = expiration.map(Into::into);
+                owner.bid = Some((buyer_account_id_hash, bid));
+            }
+        }
+
+        owner.save();
+    }
+
     fn cancel_contract_bid(&mut self) {
         assert_yocto_near_attached();
 
@@ -271,10 +289,12 @@ mod tests {
     use super::*;
     use crate::components::contract_ownership::ContractOwnershipComponent;
     use oysterpack_smart_near::component::*;
+    use oysterpack_smart_near::domain::ExpirationDuration;
     use oysterpack_smart_near_test::*;
 
     #[test]
     fn contract_sale_basic_workflow() {
+        // Arrange
         let alfio = "alfio";
         let bob = "bob";
 
@@ -292,15 +312,54 @@ mod tests {
         // should have no effect and should be harmless to call when there is no bid
         service.cancel_contract_bid();
 
-        // Bob will submit a bid to buy the contract
+        // Act - Bob will submit a bid to buy the contract
         ctx.predecessor_account_id = bob.to_string();
         ctx.attached_deposit = 1000;
         testing_env!(ctx.clone());
         service.buy_contract(None);
-
+        // Assert
         let bid = service.contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
-        assert_eq!(bid.bid.amount.value(), ctx.attached_deposit);
+        assert_eq!(bid.bid.amount.value(), 1000);
+        assert!(bid.bid.expiration.is_none());
+
+        // Act - Bob raises the bid
+        service.raise_contract_bid(None);
+        // Assert
+        let bid = service.contract_bid().unwrap();
+        assert_eq!(bid.buyer.as_str(), bob);
+        assert_eq!(bid.bid.amount.value(), 2000);
+        assert!(bid.bid.expiration.is_none());
+
+        // Act - Bob raises the bid and updates expiration
+        service.raise_contract_bid(None);
+        // Assert
+        let bid = service.contract_bid().unwrap();
+        assert_eq!(bid.buyer.as_str(), bob);
+        assert_eq!(bid.bid.amount.value(), 3000);
+        assert!(bid.bid.expiration.is_none());
+
+        // Act - Bob sets an expiration
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        service.update_contract_bid_expiration(Some(ExpirationSetting::Relative(
+            ExpirationDuration::Epochs(10),
+        )));
+        // Assert
+        let bid = service.contract_bid().unwrap();
+        assert_eq!(bid.buyer.as_str(), bob);
+        assert_eq!(bid.bid.amount.value(), 3000);
+        assert_eq!(
+            bid.bid.expiration,
+            Some(ExpirationSetting::Relative(ExpirationDuration::Epochs(10),).into())
+        );
+
+        // Act - Bob clears the expiration
+        service.update_contract_bid_expiration(None);
+        // Assert
+        let bid = service.contract_bid().unwrap();
+        assert_eq!(bid.buyer.as_str(), bob);
+        assert_eq!(bid.bid.amount.value(), 3000);
         assert!(bid.bid.expiration.is_none());
     }
 }
