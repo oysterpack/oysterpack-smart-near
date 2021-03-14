@@ -1,4 +1,4 @@
-use crate::{ContractBid, ContractOwnerObject, ContractOwnershipAccountIdsObject};
+use crate::ContractBid;
 use near_sdk::{
     serde::{Deserialize, Serialize},
     AccountId,
@@ -43,7 +43,7 @@ pub trait ContractSale {
     /// - if 1 yoctoNEAR is not attached
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
-    fn cancel_contract_sell_order(&mut self);
+    fn cancel_contract_sale(&mut self);
 
     /// Places an order to buy the contract for the specified bid.
     ///
@@ -69,7 +69,7 @@ pub trait ContractSale {
     /// - if 1 yoctoNEAR is not attached
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
-    fn cancel_contract_buy_order(&mut self);
+    fn cancel_contract_bid(&mut self);
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

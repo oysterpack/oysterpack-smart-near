@@ -1,11 +1,9 @@
-use crate::{ContractOwnerObject, ContractOwnershipAccountIdsObject};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     json_types::ValidAccountId,
     serde::{Deserialize, Serialize},
     AccountId,
 };
-use oysterpack_smart_near::asserts::assert_yocto_near_attached;
 use oysterpack_smart_near::domain::YoctoNear;
 use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 
@@ -13,10 +11,7 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 pub trait ContractOwnership {
     /// checks if the account ID is the current contract owner
     /// - account ID is not specified, then the predecessor ID is used
-    fn owner(&self) -> AccountId {
-        let account_ids = ContractOwnershipAccountIdsObject::load();
-        account_ids.owner.clone()
-    }
+    fn owner(&self) -> AccountId;
 
     /// Initiates the workflow to transfer contract ownership.
     ///
@@ -30,11 +25,7 @@ pub trait ContractOwnership {
     /// - if contract is for sale
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
-    fn transfer_ownership(&mut self, new_owner: ValidAccountId) {
-        assert_yocto_near_attached();
-        ContractOwnerObject::assert_owner_access();
-        ContractOwnerObject::set_owner(new_owner);
-    }
+    fn transfer_ownership(&mut self, new_owner: ValidAccountId);
 
     /// Enables the transfer to be cancelled before it is finalized.
     ///
@@ -45,26 +36,13 @@ pub trait ContractOwnership {
     /// - if 1 yoctoNEAR is not attached
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
-    fn cancel_transfer_ownership(&mut self) {
-        assert_yocto_near_attached();
-
-        let mut owner = ContractOwnerObject::assert_owner_access();
-        if owner.prospective_owner_account_id_hash.take().is_some() {
-            owner.save();
-        }
-    }
+    fn cancel_transfer_ownership(&mut self);
 
     /// Returns true if the specified account ID is the prospective owner that the transfer is waiting
     /// on for finalization.
     ///
     /// Returns false if there is no ownership transfer in progress.
-    fn is_prospective_owner(&self, account_id: ValidAccountId) -> bool {
-        ContractOwnerObject::load()
-            .prospective_owner_account_id_hash()
-            .map_or(false, |account_id_hash| {
-                account_id_hash == account_id.into()
-            })
-    }
+    fn is_prospective_owner(&self, account_id: ValidAccountId) -> bool;
 
     /// Used to finalize the contract transfer to the new prospective owner
     ///

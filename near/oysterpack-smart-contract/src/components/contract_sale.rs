@@ -13,7 +13,7 @@ use oysterpack_smart_near::{
     domain::{Expiration, YoctoNear, ZERO_NEAR},
 };
 
-pub struct ContractSaleComponent {}
+pub struct ContractSaleComponent;
 
 impl ContractSale for ContractSaleComponent {
     fn contract_sale_price(&self) -> Option<YoctoNear> {
@@ -27,7 +27,11 @@ impl ContractSale for ContractSaleComponent {
             .map(|bid| {
                 let account_ids = ContractOwnershipAccountIdsObject::load();
                 ContractBuyerBid {
-                    buyer: account_ids.buyer.as_ref().cloned().unwrap(),
+                    buyer: account_ids
+                        .buyer
+                        .as_ref()
+                        .cloned()
+                        .expect("BUG: contract_bid(): expected buyer"),
                     bid,
                 }
             })
@@ -61,7 +65,7 @@ impl ContractSale for ContractSaleComponent {
         contract_owner.save();
     }
 
-    fn cancel_contract_sell_order(&mut self) {
+    fn cancel_contract_sale(&mut self) {
         assert_yocto_near_attached();
         let mut contract_owner = ContractOwnerObject::assert_owner_access();
         if contract_owner.sale_price.take().is_some() {
@@ -90,7 +94,7 @@ impl ContractSale for ContractSaleComponent {
         account_ids.save();
     }
 
-    fn cancel_contract_buy_order(&mut self) {
+    fn cancel_contract_bid(&mut self) {
         assert_yocto_near_attached();
 
         let mut owner = ContractOwnerObject::load();
@@ -205,5 +209,28 @@ impl ContractSaleComponent {
             "buyer: {}, sale price: {}",
             &account_ids.owner, bid.amount
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::components::contract_ownership::ContractOwnershipComponent;
+    use oysterpack_smart_near::component::*;
+    use oysterpack_smart_near_test::*;
+
+    #[test]
+    fn contract_sale() {
+        let alfio = "alfio";
+        let bob = "bob";
+        let alice = "alice";
+        let joe = "joe";
+
+        let mut ctx = new_context(bob);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        let service = ContractSaleComponent;
     }
 }
