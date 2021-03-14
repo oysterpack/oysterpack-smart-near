@@ -241,7 +241,7 @@ impl ContractSaleComponent {
             || !contract_owner.transfer_initiated(),
             || "contract sale is not allowed because contract ownership transfer has been initiated",
         );
-        ERR_CONTRACT_SALE_PRICE_MUST_NOT_BE_ZERO.assert(|| price == ZERO_NEAR);
+        ERR_CONTRACT_SALE_PRICE_MUST_NOT_BE_ZERO.assert(|| price > ZERO_NEAR);
         contract_owner
     }
 
@@ -290,6 +290,7 @@ mod tests {
     use crate::components::contract_ownership::ContractOwnershipComponent;
     use oysterpack_smart_near::component::*;
     use oysterpack_smart_near::domain::ExpirationDuration;
+    use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
     #[test]
@@ -321,6 +322,7 @@ mod tests {
         let bid = service.contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 1000);
+        assert_eq!(ContractBid::near_balance(), bid.bid.amount);
         assert!(bid.bid.expiration.is_none());
 
         // Act - Bob raises the bid
@@ -329,6 +331,7 @@ mod tests {
         let bid = service.contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 2000);
+        assert_eq!(ContractBid::near_balance(), bid.bid.amount);
         assert!(bid.bid.expiration.is_none());
 
         // Act - Bob raises the bid and updates expiration
@@ -337,6 +340,7 @@ mod tests {
         let bid = service.contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 3000);
+        assert_eq!(ContractBid::near_balance(), bid.bid.amount);
         assert!(bid.bid.expiration.is_none());
 
         // Act - Bob sets an expiration
@@ -349,6 +353,7 @@ mod tests {
         let bid = service.contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 3000);
+        assert_eq!(ContractBid::near_balance(), bid.bid.amount);
         assert_eq!(
             bid.bid.expiration,
             Some(ExpirationSetting::Relative(ExpirationDuration::Epochs(10),).into())
@@ -360,6 +365,36 @@ mod tests {
         let bid = service.contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 3000);
+        assert_eq!(ContractBid::near_balance(), bid.bid.amount);
+        assert!(bid.bid.expiration.is_none());
+
+        // Act - Bob lowers the bid
+        service.lower_contract_bid(1000.into(), None);
+        // Assert
+        let bid = service.contract_bid().unwrap();
+        assert_eq!(bid.buyer.as_str(), bob);
+        assert_eq!(bid.bid.amount.value(), 2000);
+        assert_eq!(ContractBid::near_balance(), bid.bid.amount);
+        assert!(bid.bid.expiration.is_none());
+        let receipts = deserialize_receipts();
+        let action = &receipts[0].actions[0];
+        match action {
+            Action::Transfer(transfer) => {
+                assert_eq!(transfer.deposit, 1001);
+            }
+            _ => panic!("expected TransferAction"),
+        }
+
+        // Act - owner sells contract
+        ctx.predecessor_account_id = alfio.to_string();
+        testing_env!(ctx.clone());
+        service.sell_contract(YOCTO.into());
+        // Assert
+        assert_eq!(service.contract_sale_price(), Some(YOCTO.into()));
+        let bid = service.contract_bid().unwrap();
+        assert_eq!(bid.buyer.as_str(), bob);
+        assert_eq!(bid.bid.amount.value(), 2000);
+        assert_eq!(ContractBid::near_balance(), bid.bid.amount);
         assert!(bid.bid.expiration.is_none());
     }
 }
