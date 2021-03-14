@@ -1,6 +1,7 @@
-use crate::ContractOwner;
+use crate::{ContractOwner, ContractOwnerObject};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
+    env,
     json_types::ValidAccountId,
     serde::{Deserialize, Serialize},
 };
@@ -10,9 +11,16 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 
 /// Every contract has an owner
 pub trait ContractOwnership {
-    /// checks if the predecessor account ID is the current contract owner
-    fn is_owner(&self, account_id: ValidAccountId) -> bool {
-        ContractOwner::load().account_id_hash() == account_id.into()
+    /// checks if the account ID is the current contract owner
+    /// - account ID is not specified, then the predecessor ID is used
+    fn is_owner(&self, account_id: Option<ValidAccountId>) -> bool {
+        match account_id {
+            None => {
+                ContractOwnerObject::load().account_id_hash()
+                    == env::predecessor_account_id().into()
+            }
+            Some(account_id) => ContractOwnerObject::load().account_id_hash() == account_id.into(),
+        }
     }
 
     /// Initiates the workflow to transfer contract ownership.
@@ -24,12 +32,13 @@ pub trait ContractOwnership {
     /// - if the predecessor account is not the owner account
     /// - if 1 yoctoNEAR is not attached
     /// - if the new owner account ID is not valid
+    /// - if contract is for sale
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
     fn transfer_ownership(&mut self, new_owner: ValidAccountId) {
         assert_yocto_near_attached();
-        ContractOwner::assert_owner_access();
-        ContractOwner::update(new_owner);
+        ContractOwnerObject::assert_owner_access();
+        ContractOwnerObject::set_owner(new_owner);
     }
 
     /// Enables the transfer to be cancelled before it is finalized.
@@ -44,8 +53,10 @@ pub trait ContractOwnership {
     fn cancel_transfer_ownership(&mut self) {
         assert_yocto_near_attached();
 
-        let mut owner = ContractOwner::assert_owner_access();
-        owner.clear_prospective_owner();
+        let mut owner = ContractOwnerObject::assert_owner_access();
+        if owner.prospective_owner_account_id_hash.take().is_some() {
+            owner.save();
+        }
     }
 
     /// Returns true if the specified account ID is the prospective owner that the transfer is waiting
@@ -53,7 +64,7 @@ pub trait ContractOwnership {
     ///
     /// Returns false if there is no ownership transfer in progress.
     fn is_prospective_owner(&self, account_id: ValidAccountId) -> bool {
-        ContractOwner::load()
+        ContractOwnerObject::load()
             .prospective_owner_account_id_hash()
             .map_or(false, |account_id_hash| {
                 account_id_hash == account_id.into()

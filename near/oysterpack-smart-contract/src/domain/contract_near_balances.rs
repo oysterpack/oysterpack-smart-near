@@ -103,6 +103,12 @@ impl ContractNearBalances {
             .map_or_else(NearBalances::new, |object| object.deref().clone())
     }
 
+    pub fn near_balance(id: BalanceId) -> YoctoNear {
+        DAO::load(&NEAR_BALANCES_KEY).map_or(ZERO_NEAR, |object| {
+            object.get(&id).cloned().unwrap_or(ZERO_NEAR)
+        })
+    }
+
     /// Increments the balance by the specified amount and returns the updated balance
     pub fn incr_balance(id: BalanceId, amount: YoctoNear) -> YoctoNear {
         let mut balances = DAO::load(&NEAR_BALANCES_KEY)
