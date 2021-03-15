@@ -21,9 +21,7 @@ impl AccountStorageUsage for AccountStorageUsageComponent {
 impl Component for AccountStorageUsageComponent {
     type State = StorageUsageBounds;
 
-    fn state_key() -> u128 {
-        1952475351321611295376996018476025471
-    }
+    const STATE_KEY: u128 = 1952475351321611295376996018476025471;
 }
 
 impl Deploy for AccountStorageUsageComponent {

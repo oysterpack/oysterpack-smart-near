@@ -17,16 +17,16 @@ pub trait Component {
 
     /// Used to to store the service state to blockchain storage
     /// - it is recommended to generate a ULID for the key to avoid collisions
-    fn state_key() -> u128;
+    const STATE_KEY: u128;
 
     /// loads the service state from storage using the key defined by [`state_key`]()
     fn load_state() -> Option<ComponentState<Self::State>> {
-        ComponentState::<Self::State>::load(&Self::state_key())
+        ComponentState::<Self::State>::load(&Self::STATE_KEY)
     }
 
     /// creates new in-memory state, i.e., the state is not persisted to storage
     fn new_state(state: Self::State) -> ComponentState<Self::State> {
-        ComponentState::<Self::State>::new(Self::state_key(), state)
+        ComponentState::<Self::State>::new(Self::STATE_KEY, state)
     }
 }
 
@@ -54,9 +54,7 @@ mod tests {
     impl Component for Foo {
         type State = u128;
 
-        fn state_key() -> u128 {
-            1952470210719526730429153601986271427
-        }
+        const STATE_KEY: u128 = 1952470210719526730429153601986271427;
     }
 
     impl Foo {
