@@ -3,12 +3,26 @@ use crate::{ErrCode, ErrorConst};
 use near_sdk::env;
 use std::fmt::Display;
 
-const ERR_YOCTONEAR_DEPOSIT_REQUIRED: ErrorConst = ErrorConst(
+pub const ERR_CODE_BAD_REQUEST: ErrCode = ErrCode("BAD_REQUEST");
+
+pub const ERR_CODE_INSUFFICIENT_NEAR_DEPOSIT: ErrCode = ErrCode("INSUFFICIENT_NEAR_DEPOSIT");
+
+pub const ERR_YOCTONEAR_DEPOSIT_REQUIRED: ErrorConst = ErrorConst(
     ErrCode("YOCTONEAR_DEPOSIT_REQUIRED"),
     "exactly 1 yoctoNEAR must be attached",
 );
 
-const ERR_INSUFFICIENT_NEAR_DEPOSIT: ErrCode = ErrCode("INSUFFICIENT_NEAR_DEPOSIT");
+pub const ERR_NEAR_DEPOSIT_REQUIRED: ErrorConst =
+    ErrorConst(ErrCode("NEAR_DEPOSIT_REQUIRED"), "NEAR deposit is required");
+
+pub fn assert_request<F, Msg, MsgF>(check: F, msg: MsgF)
+where
+    F: FnOnce() -> bool,
+    Msg: Display,
+    MsgF: FnOnce() -> Msg,
+{
+    ERR_CODE_BAD_REQUEST.assert(check, msg);
+}
 
 /// used to protect functions that transfer value against FCAK calls
 pub fn assert_yocto_near_attached() {
@@ -22,7 +36,7 @@ pub fn assert_min_near_attached(min: YoctoNear) {
     assert!(
         env::attached_deposit() >= *min,
         "{} attached NEAR amount is insufficient - minimum required amount is: {} yoctoNEAR",
-        ERR_INSUFFICIENT_NEAR_DEPOSIT,
+        ERR_CODE_INSUFFICIENT_NEAR_DEPOSIT,
         min
     )
 }
@@ -31,7 +45,7 @@ pub fn assert_near_attached<Msg: Display>(msg: Msg) {
     assert!(
         env::attached_deposit() > 0,
         "{} {}",
-        ERR_INSUFFICIENT_NEAR_DEPOSIT,
+        ERR_NEAR_DEPOSIT_REQUIRED,
         msg
     )
 }

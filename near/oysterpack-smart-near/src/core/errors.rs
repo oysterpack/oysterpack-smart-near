@@ -1,8 +1,6 @@
 use near_sdk::env;
 use std::fmt::{self, Display, Formatter};
 
-pub const ERR_BAD_REQUEST: ErrCode = ErrCode("BAD_REQUEST");
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ErrCode(pub &'static str);
 

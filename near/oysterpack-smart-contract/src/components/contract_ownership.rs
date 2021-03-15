@@ -12,10 +12,9 @@ use crate::{
 };
 use near_sdk::json_types::ValidAccountId;
 use near_sdk::{env, AccountId, Promise};
-use oysterpack_smart_near::asserts::assert_yocto_near_attached;
+use oysterpack_smart_near::asserts::{assert_request, assert_yocto_near_attached};
 use oysterpack_smart_near::component::Deploy;
 use oysterpack_smart_near::domain::{AccountIdHash, YoctoNear};
-use oysterpack_smart_near::ERR_BAD_REQUEST;
 
 pub struct ContractOwnershipComponent;
 
@@ -39,7 +38,7 @@ impl ContractOwnership for ContractOwnershipComponent {
         assert_yocto_near_attached();
 
         let mut owner = ContractOwnerObject::assert_owner_access();
-        ERR_BAD_REQUEST.assert(
+        assert_request(
             || new_owner.as_ref() != env::predecessor_account_id().as_str(),
             || "you cannot transfer to yourself",
         );
@@ -414,5 +413,37 @@ mod tests_transfer_ownership {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
         ContractOwnershipComponent.transfer_ownership(to_valid_account_id(alfio));
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [YOCTONEAR_DEPOSIT_REQUIRED]")]
+    fn zero_deposit_attached() {
+        // Arrange
+        let alfio = "alfio";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        // Act
+        ctx.attached_deposit = 0;
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.transfer_ownership(to_valid_account_id("bob"));
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [YOCTONEAR_DEPOSIT_REQUIRED]")]
+    fn two_deposit_attached() {
+        // Arrange
+        let alfio = "alfio";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        // Act
+        ctx.attached_deposit = 2;
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.transfer_ownership(to_valid_account_id("bob"));
     }
 }
