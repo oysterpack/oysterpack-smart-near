@@ -263,3 +263,118 @@ mod tests {
         println!("{:?}", owner_balance);
     }
 }
+
+#[cfg(test)]
+mod tests_transfer_ownership {
+    use super::*;
+    use crate::ContractSale;
+    use oysterpack_smart_near::YOCTO;
+    use oysterpack_smart_near_test::*;
+
+    #[test]
+    fn while_contract_is_for_sale() {
+        // Arrange
+        let alfio = "alfio";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.sell_contract((1000 * YOCTO).into());
+        assert!(ContractSaleComponent::contract_sale_price().is_some());
+
+        // Act
+        ContractOwnershipComponent.transfer_ownership(to_valid_account_id("bob"));
+        assert!(ContractSaleComponent::contract_sale_price().is_none());
+        assert_eq!(
+            ContractOwnershipComponent::prospective_owner()
+                .unwrap()
+                .as_str(),
+            "bob"
+        );
+    }
+
+    #[test]
+    fn while_contract_has_bid() {
+        // Arrange
+        let alfio = "alfio";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        ctx.attached_deposit = YOCTO;
+        ctx.predecessor_account_id = "bob".to_string();
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+        assert!(ContractSaleComponent::contract_bid().is_some());
+
+        // Act
+        ctx.attached_deposit = 1;
+        ctx.predecessor_account_id = alfio.to_string();
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.transfer_ownership(to_valid_account_id("bob"));
+        assert!(ContractSaleComponent::contract_bid().is_none());
+        assert_eq!(
+            ContractOwnershipComponent::prospective_owner()
+                .unwrap()
+                .as_str(),
+            "bob"
+        );
+        let receipts = deserialize_receipts();
+        assert_eq!("bob", &receipts[0].receiver_id);
+        let action = &receipts[0].actions[0];
+        match action {
+            Action::Transfer(transfer) => {
+                assert_eq!(YOCTO, transfer.deposit);
+            }
+            _ => panic!("expected TransferAction"),
+        }
+    }
+
+    #[test]
+    fn while_contract_for_sale_with_bid() {
+        // Arrange
+        let alfio = "alfio";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.sell_contract((1000 * YOCTO).into());
+        assert!(ContractSaleComponent::contract_sale_price().is_some());
+
+        ctx.attached_deposit = YOCTO;
+        ctx.predecessor_account_id = "bob".to_string();
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+        assert!(ContractSaleComponent::contract_bid().is_some());
+
+        // Act
+        ctx.attached_deposit = 1;
+        ctx.predecessor_account_id = alfio.to_string();
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.transfer_ownership(to_valid_account_id("bob"));
+        assert!(ContractSaleComponent::contract_bid().is_none());
+        assert!(ContractSaleComponent::contract_sale_price().is_none());
+        assert_eq!(
+            ContractOwnershipComponent::prospective_owner()
+                .unwrap()
+                .as_str(),
+            "bob"
+        );
+        let receipts = deserialize_receipts();
+        assert_eq!("bob", &receipts[0].receiver_id);
+        let action = &receipts[0].actions[0];
+        match action {
+            Action::Transfer(transfer) => {
+                assert_eq!(YOCTO, transfer.deposit);
+            }
+            _ => panic!("expected TransferAction"),
+        }
+    }
+}

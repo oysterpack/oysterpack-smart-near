@@ -26,7 +26,6 @@ pub trait ContractOwnership {
     /// - if the predecessor account is not the owner account
     /// - if 1 yoctoNEAR is not attached
     /// - if the new owner account ID is not valid
-    /// - if contract is for sale
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
     fn transfer_ownership(&mut self, new_owner: ValidAccountId);
