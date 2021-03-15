@@ -63,10 +63,8 @@ impl ContractOwnerObject {
         owner
     }
 
-    /// asserts that the predecessor account ID is the prospective owner
-    ///
-    /// ## Panics
-    /// if there is no contract ownership transfer in progress
+    /// asserts that a contract transfer is in progress and the predecessor account ID is the
+    /// prospective owner
     pub fn assert_prospective_owner_access() -> Self {
         let owner = Self::load();
         ERR_PROSPECTIVE_OWNER_ACCESS_REQUIRED.assert(|| {
@@ -91,11 +89,6 @@ impl ContractOwnerObject {
                     })
         });
         owner
-    }
-
-    pub(crate) fn set_owner(new_owner: ValidAccountId) {
-        let new_owner = DAO::new(CONTRACT_OWNER_KEY, ContractOwner::new(new_owner));
-        new_owner.save();
     }
 }
 

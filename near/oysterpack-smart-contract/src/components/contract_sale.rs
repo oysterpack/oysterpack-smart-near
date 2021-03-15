@@ -1,13 +1,14 @@
+use crate::components::contract_ownership::ContractOwnershipComponent;
 use crate::{
     components::contract_metrics::ContractMetricsComponent, interface::ContractMetrics,
-    ContractBuyerBid, ContractOwner, ContractOwnerObject, ContractOwnershipAccountIdsObject,
-    ERR_ACCESS_DENIED_MUST_BE_BUYER, ERR_CONTRACT_BID_TOO_LOW, ERR_CONTRACT_SALE_NOT_ALLOWED,
-    ERR_CONTRACT_SALE_PRICE_MUST_NOT_BE_ZERO, ERR_EXPIRATION_IS_ALREADY_EXPIRED, ERR_NO_ACTIVE_BID,
-    ERR_OWNER_CANNOT_BUY_CONTRACT, LOG_EVENT_CONTRACT_BID_CANCELLED,
-    LOG_EVENT_CONTRACT_BID_EXPIRATION_CHANGE, LOG_EVENT_CONTRACT_BID_EXPIRED,
-    LOG_EVENT_CONTRACT_BID_LOST, LOG_EVENT_CONTRACT_BID_LOWERED, LOG_EVENT_CONTRACT_BID_PLACED,
-    LOG_EVENT_CONTRACT_BID_RAISED, LOG_EVENT_CONTRACT_FOR_SALE, LOG_EVENT_CONTRACT_SALE_CANCELLED,
-    LOG_EVENT_CONTRACT_SOLD,
+    ContractBuyerBid, ContractOwner, ContractOwnerObject, ContractOwnership,
+    ContractOwnershipAccountIdsObject, ERR_ACCESS_DENIED_MUST_BE_BUYER, ERR_CONTRACT_BID_TOO_LOW,
+    ERR_CONTRACT_SALE_NOT_ALLOWED, ERR_CONTRACT_SALE_PRICE_MUST_NOT_BE_ZERO,
+    ERR_EXPIRATION_IS_ALREADY_EXPIRED, ERR_NO_ACTIVE_BID, ERR_OWNER_CANNOT_BUY_CONTRACT,
+    LOG_EVENT_CONTRACT_BID_CANCELLED, LOG_EVENT_CONTRACT_BID_EXPIRATION_CHANGE,
+    LOG_EVENT_CONTRACT_BID_EXPIRED, LOG_EVENT_CONTRACT_BID_LOST, LOG_EVENT_CONTRACT_BID_LOWERED,
+    LOG_EVENT_CONTRACT_BID_PLACED, LOG_EVENT_CONTRACT_BID_RAISED, LOG_EVENT_CONTRACT_FOR_SALE,
+    LOG_EVENT_CONTRACT_SALE_CANCELLED, LOG_EVENT_CONTRACT_SOLD,
 };
 use crate::{ContractBid, ContractSale};
 use near_sdk::{env, Promise};
@@ -226,7 +227,7 @@ impl ContractSaleComponent {
 
     /// 1. clears the current bid
     /// 2. refunds the bid amount back to the buyer
-    fn cancel_bid(
+    pub(crate) fn cancel_bid(
         owner: &mut ContractOwnerObject,
         account_ids: &mut ContractOwnershipAccountIdsObject,
     ) -> ContractBid {
@@ -302,8 +303,8 @@ impl ContractSaleComponent {
         ContractBid::clear_near_balance();
 
         // transfer the owner's NEAR funds out to the owner's account
-        let near_balances = ContractMetricsComponent.near_balances();
-        Promise::new(account_ids.owner.clone()).transfer(near_balances.owner().value());
+        let owner_available_balance = ContractOwnershipComponent.owner_balance().available;
+        Promise::new(account_ids.owner.clone()).transfer(owner_available_balance.value());
 
         // update the contract owner
         let (buyer_account_id_hash, bid) = owner

@@ -18,6 +18,10 @@ pub trait ContractOwnership {
     /// The ownership transfer is not finalized until the new owner finalizes the transfer.
     /// This avoids transferring transferring contract ownership to a non-existent account ID.
     ///
+    /// ## NOTES
+    /// - any open contract sale is cancelled
+    /// - any active bid is cancelled
+    ///
     /// ## Panics
     /// - if the predecessor account is not the owner account
     /// - if 1 yoctoNEAR is not attached
@@ -46,8 +50,9 @@ pub trait ContractOwnership {
 
     /// Used to finalize the contract transfer to the new prospective owner
     ///
-    /// When the transfer is finalized, any current owner balance is transferred to the previous
-    /// owner account.
+    /// ## Notes
+    /// This effectively transfers any owner balance to the new owner. The owner can withdraw
+    /// from its available balance before the transfer is finalized.s
     ///
     /// ## Panics
     /// - if the predecessor ID is not the new prospective owner
@@ -112,4 +117,9 @@ pub const ERR_PROSPECTIVE_OWNER_ACCESS_REQUIRED: ErrorConst = ErrorConst(
 pub const ERR_CURRENT_OR_PROSPECTIVE_OWNER_ACCESS_REQUIRED: ErrorConst = ErrorConst(
     ErrCode("CURRENT_OR_PROSPECTIVE_OWNER_ACCESS_REQUIRED"),
     "action requires current or prospective owner access",
+);
+
+pub const ERR_OWNER_BALANCE_OVERDRAW: ErrorConst = ErrorConst(
+    ErrCode("OWNER_BALANCE_OVERDRAW"),
+    "owner balance is insufficient to fulfill withdrawal",
 );

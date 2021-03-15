@@ -1,9 +1,14 @@
+use crate::components::contract_metrics::ContractMetricsComponent;
+use crate::components::contract_sale::ContractSaleComponent;
 use crate::{
-    ContractOwnerNearBalance, ContractOwnerObject, ContractOwnership,
-    ContractOwnershipAccountIdsObject, LOG_EVENT_CONTRACT_TRANSFER_CANCELLED,
-    LOG_EVENT_CONTRACT_TRANSFER_INITIATED,
+    ContractMetrics, ContractOwnerNearBalance, ContractOwnerObject, ContractOwnership,
+    ContractOwnershipAccountIdsObject, ERR_OWNER_BALANCE_OVERDRAW,
+    LOG_EVENT_CONTRACT_SALE_CANCELLED, LOG_EVENT_CONTRACT_TRANSFER_CANCELLED,
+    LOG_EVENT_CONTRACT_TRANSFER_FINALIZED, LOG_EVENT_CONTRACT_TRANSFER_INITIATED,
 };
 use near_sdk::json_types::ValidAccountId;
+use near_sdk::{env, Promise};
+use oysterpack_smart_account_management::AccountMetrics;
 use oysterpack_smart_near::asserts::assert_yocto_near_attached;
 use oysterpack_smart_near::component::Deploy;
 use oysterpack_smart_near::domain::{AccountIdHash, YoctoNear};
@@ -36,6 +41,16 @@ impl ContractOwnership for ContractOwnershipComponent {
 
         let mut update_prospective_owner = || {
             owner.prospective_owner_account_id_hash = Some(new_owner_account_id_hash);
+            if owner.sale_price.take().is_some() {
+                LOG_EVENT_CONTRACT_SALE_CANCELLED
+                    .log("contract ownership transfer is being initiated");
+            }
+            if owner.bid.is_some() {
+                let mut account_ids = ContractOwnershipAccountIdsObject::load();
+                ContractSaleComponent::cancel_bid(&mut owner, &mut account_ids);
+                account_ids.save();
+            }
+
             LOG_EVENT_CONTRACT_TRANSFER_INITIATED.log(new_owner.as_ref());
             owner.save();
         };
@@ -53,7 +68,7 @@ impl ContractOwnership for ContractOwnershipComponent {
     fn cancel_ownership_transfer(&mut self) {
         assert_yocto_near_attached();
 
-        let mut owner = ContractOwnerObject::assert_owner_access();
+        let mut owner = ContractOwnerObject::assert_current_or_prospective_owner_access();
         if owner.prospective_owner_account_id_hash.take().is_some() {
             owner.save();
             LOG_EVENT_CONTRACT_TRANSFER_CANCELLED.log("");
@@ -69,14 +84,51 @@ impl ContractOwnership for ContractOwnershipComponent {
     }
 
     fn finalize_transfer_ownership(&mut self) {
-        unimplemented!()
+        assert_yocto_near_attached();
+
+        let mut owner = ContractOwnerObject::assert_prospective_owner_access();
+        let mut account_ids = ContractOwnershipAccountIdsObject::load();
+
+        // finalize
+        owner.account_id_hash = env::predecessor_account_id().into();
+        owner.prospective_owner_account_id_hash.take();
+
+        account_ids.owner = env::predecessor_account_id();
+        account_ids.prospective_owner.take();
+
+        owner.save();
+        account_ids.save();
+
+        LOG_EVENT_CONTRACT_TRANSFER_FINALIZED.log("");
     }
 
-    fn withdraw_owner_balance(&mut self, _amount: Option<YoctoNear>) -> ContractOwnerNearBalance {
-        unimplemented!()
+    fn withdraw_owner_balance(&mut self, amount: Option<YoctoNear>) -> ContractOwnerNearBalance {
+        assert_yocto_near_attached();
+        ContractOwnerObject::assert_owner_access();
+
+        let mut owner_balance = self.owner_balance();
+        let amount = match amount {
+            None => owner_balance.available,
+            Some(amount) => {
+                ERR_OWNER_BALANCE_OVERDRAW.assert(|| owner_balance.available >= amount);
+                amount
+            }
+        };
+
+        let account_ids = ContractOwnershipAccountIdsObject::load();
+        Promise::new(account_ids.owner.clone()).transfer(amount.value() + 1);
+
+        owner_balance.total -= amount;
+        owner_balance.available -= amount;
+        owner_balance
     }
 
     fn owner_balance(&self) -> ContractOwnerNearBalance {
-        unimplemented!()
+        let near_balances = ContractMetricsComponent.near_balances();
+        let storage_usage_costs = ContractMetricsComponent.storage_usage_costs();
+        ContractOwnerNearBalance {
+            total: near_balances.owner(),
+            available: near_balances.owner() - storage_usage_costs.owner(),
+        }
     }
 }
