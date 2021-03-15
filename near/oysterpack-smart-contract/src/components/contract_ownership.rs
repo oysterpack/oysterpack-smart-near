@@ -15,6 +15,7 @@ use near_sdk::{env, AccountId, Promise};
 use oysterpack_smart_near::asserts::assert_yocto_near_attached;
 use oysterpack_smart_near::component::Deploy;
 use oysterpack_smart_near::domain::{AccountIdHash, YoctoNear};
+use oysterpack_smart_near::ERR_BAD_REQUEST;
 
 pub struct ContractOwnershipComponent;
 
@@ -38,6 +39,10 @@ impl ContractOwnership for ContractOwnershipComponent {
         assert_yocto_near_attached();
 
         let mut owner = ContractOwnerObject::assert_owner_access();
+        ERR_BAD_REQUEST.assert(
+            || new_owner.as_ref() != env::predecessor_account_id().as_str(),
+            || "you cannot transfer to yourself",
+        );
         let new_owner_account_id_hash: AccountIdHash = new_owner.as_ref().as_str().into();
         let current_prospective_owner_account_id_hash =
             owner.prospective_owner_account_id_hash.as_ref().cloned();
@@ -376,5 +381,38 @@ mod tests_transfer_ownership {
             }
             _ => panic!("expected TransferAction"),
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [OWNER_ACCESS_REQUIRED]")]
+    fn not_owner() {
+        // Arrange
+        let alfio = "alfio";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        // Act
+        ctx.attached_deposit = 1;
+        ctx.predecessor_account_id = "bob".to_string();
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(alfio));
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [BAD_REQUEST]")]
+    fn transfer_to_self_owner() {
+        // Arrange
+        let alfio = "alfio";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        // Act
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(alfio));
     }
 }
