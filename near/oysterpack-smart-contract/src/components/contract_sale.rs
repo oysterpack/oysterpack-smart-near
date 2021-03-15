@@ -22,11 +22,11 @@ use oysterpack_smart_near::{
 pub struct ContractSaleComponent;
 
 impl ContractSale for ContractSaleComponent {
-    fn contract_sale_price(&self) -> Option<YoctoNear> {
+    fn contract_sale_price() -> Option<YoctoNear> {
         ContractOwnerObject::load().contract_sale_price()
     }
 
-    fn contract_bid(&self) -> Option<ContractBuyerBid> {
+    fn contract_bid() -> Option<ContractBuyerBid> {
         ContractOwnerObject::load()
             .bid()
             .map(|bid| bid.1)
@@ -348,10 +348,10 @@ mod tests {
         ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
 
         let mut service = ContractSaleComponent;
-        assert!(service.contract_sale_price().is_none());
+        assert!(ContractSaleComponent::contract_sale_price().is_none());
         // should be harmless to call by the owner - should have no effect
         service.cancel_contract_sale();
-        assert!(service.contract_bid().is_none());
+        assert!(ContractSaleComponent::contract_bid().is_none());
         // should have no effect and should be harmless to call when there is no bid
         service.cancel_contract_bid();
 
@@ -363,7 +363,7 @@ mod tests {
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        let bid = service.contract_bid().unwrap();
+        let bid = ContractSaleComponent::contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 1000);
         assert_eq!(ContractBid::near_balance(), bid.bid.amount);
@@ -375,7 +375,7 @@ mod tests {
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        let bid = service.contract_bid().unwrap();
+        let bid = ContractSaleComponent::contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 2000);
         assert_eq!(ContractBid::near_balance(), bid.bid.amount);
@@ -387,7 +387,7 @@ mod tests {
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        let bid = service.contract_bid().unwrap();
+        let bid = ContractSaleComponent::contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 3000);
         assert_eq!(ContractBid::near_balance(), bid.bid.amount);
@@ -402,7 +402,7 @@ mod tests {
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        let bid = service.contract_bid().unwrap();
+        let bid = ContractSaleComponent::contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 3000);
         assert_eq!(ContractBid::near_balance(), bid.bid.amount);
@@ -417,7 +417,7 @@ mod tests {
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        let bid = service.contract_bid().unwrap();
+        let bid = ContractSaleComponent::contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 3000);
         assert_eq!(ContractBid::near_balance(), bid.bid.amount);
@@ -429,7 +429,7 @@ mod tests {
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        let bid = service.contract_bid().unwrap();
+        let bid = ContractSaleComponent::contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 2000);
         assert_eq!(ContractBid::near_balance(), bid.bid.amount);
@@ -450,8 +450,11 @@ mod tests {
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        assert_eq!(service.contract_sale_price(), Some(YOCTO.into()));
-        let bid = service.contract_bid().unwrap();
+        assert_eq!(
+            ContractSaleComponent::contract_sale_price(),
+            Some(YOCTO.into())
+        );
+        let bid = ContractSaleComponent::contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 2000);
         assert_eq!(ContractBid::near_balance(), bid.bid.amount);
@@ -463,22 +466,22 @@ mod tests {
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        assert!(service.contract_sale_price().is_none());
-        let bid = service.contract_bid().unwrap();
+        assert!(ContractSaleComponent::contract_sale_price().is_none());
+        let bid = ContractSaleComponent::contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 2000);
         assert_eq!(ContractBid::near_balance(), bid.bid.amount);
         assert!(bid.bid.expiration.is_none());
 
         // Act - buyer cancels bid
-        ctx.predecessor_account_id = service.contract_bid().unwrap().buyer.clone();
+        ctx.predecessor_account_id = ContractSaleComponent::contract_bid().unwrap().buyer.clone();
         testing_env!(ctx.clone());
         service.cancel_contract_bid();
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        assert!(service.contract_sale_price().is_none());
-        assert!(service.contract_bid().is_none());
+        assert!(ContractSaleComponent::contract_sale_price().is_none());
+        assert!(ContractSaleComponent::contract_bid().is_none());
         assert_eq!(ContractBid::near_balance(), ZERO_NEAR);
 
         // Act - owner sells contract
@@ -488,7 +491,10 @@ mod tests {
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        assert_eq!(service.contract_sale_price(), Some(YOCTO.into()));
+        assert_eq!(
+            ContractSaleComponent::contract_sale_price(),
+            Some(YOCTO.into())
+        );
 
         // Act - Bob will submit a bid high enough to buy the contract
         ctx.predecessor_account_id = bob.to_string();

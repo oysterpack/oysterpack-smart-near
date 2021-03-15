@@ -7,11 +7,10 @@ use crate::{
     LOG_EVENT_CONTRACT_TRANSFER_FINALIZED, LOG_EVENT_CONTRACT_TRANSFER_INITIATED,
 };
 use near_sdk::json_types::ValidAccountId;
-use near_sdk::{env, Promise};
+use near_sdk::{env, AccountId, Promise};
 use oysterpack_smart_near::asserts::assert_yocto_near_attached;
 use oysterpack_smart_near::component::Deploy;
 use oysterpack_smart_near::domain::{AccountIdHash, YoctoNear};
-use oysterpack_smart_near_test::near_vm_logic::types::AccountId;
 
 pub struct ContractOwnershipComponent;
 
@@ -124,8 +123,8 @@ impl ContractOwnership for ContractOwnershipComponent {
     }
 
     fn owner_balance() -> ContractOwnerNearBalance {
-        let near_balances = ContractMetricsComponent.near_balances();
-        let storage_usage_costs = ContractMetricsComponent.storage_usage_costs();
+        let near_balances = ContractMetricsComponent::near_balances();
+        let storage_usage_costs = ContractMetricsComponent::storage_usage_costs();
         ContractOwnerNearBalance {
             total: near_balances.owner(),
             available: near_balances.owner() - storage_usage_costs.owner(),

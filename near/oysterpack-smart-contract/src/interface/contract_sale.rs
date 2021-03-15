@@ -17,10 +17,10 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 /// TODO: enable buyers to pay with STAKE
 pub trait ContractSale {
     /// Returns None if the contract is not listed for sale
-    fn contract_sale_price(&self) -> Option<YoctoNear>;
+    fn contract_sale_price() -> Option<YoctoNear>;
 
     /// Returns None if there is no current bid on the contract
-    fn contract_bid(&self) -> Option<ContractBuyerBid>;
+    fn contract_bid() -> Option<ContractBuyerBid>;
 
     /// Puts up the contract for sale for the specified sale price.
     ///

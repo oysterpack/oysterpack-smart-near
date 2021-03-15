@@ -1,7 +1,7 @@
 use crate::*;
 use near_sdk::json_types::ValidAccountId;
 use near_sdk::near_bindgen;
-use oysterpack_smart_account_management::StorageBalance;
+use oysterpack_smart_account_management::{AccountMetrics, GetAccountMetrics, StorageBalance};
 use oysterpack_smart_account_management::{StorageBalanceBounds, StorageManagement};
 use oysterpack_smart_near::domain::YoctoNear;
 
@@ -36,5 +36,12 @@ impl StorageManagement for Contract {
         self.context
             .account_management
             .storage_balance_of(account_id)
+    }
+}
+
+#[near_bindgen]
+impl GetAccountMetrics for Contract {
+    fn account_metrics() -> AccountMetrics {
+        AccountManager::account_metrics()
     }
 }

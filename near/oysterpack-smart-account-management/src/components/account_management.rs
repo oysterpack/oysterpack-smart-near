@@ -499,6 +499,8 @@ mod tests_storage_management {
     mod tests_storage_deposit {
         use super::*;
 
+        type AccountManager = AccountManagementComponent<()>;
+
         #[cfg(test)]
         mod self_registration_only {
             use super::*;
@@ -538,7 +540,7 @@ mod tests_storage_management {
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
                     },
@@ -565,7 +567,7 @@ mod tests_storage_management {
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
 
@@ -685,7 +687,7 @@ mod tests_storage_management {
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
                     },
@@ -712,7 +714,7 @@ mod tests_storage_management {
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
 
@@ -825,7 +827,7 @@ mod tests_storage_management {
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
                     },
@@ -852,7 +854,7 @@ mod tests_storage_management {
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
 
@@ -981,7 +983,7 @@ mod tests_storage_management {
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
                     },
@@ -1012,7 +1014,7 @@ mod tests_storage_management {
                         assert_eq!(account.near_balance(), deposit_amount);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
                     },
@@ -1046,7 +1048,7 @@ mod tests_storage_management {
                         assert_eq!(account.near_balance(), storage_balance_bounds.max.unwrap());
 
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
 
@@ -1191,7 +1193,7 @@ mod tests_storage_management {
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
                     },
@@ -1222,7 +1224,7 @@ mod tests_storage_management {
                         assert_eq!(account.near_balance(), storage_balance_max());
 
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
                     },
@@ -1256,7 +1258,7 @@ mod tests_storage_management {
                         assert_eq!(account.near_balance(), storage_balance_bounds.max.unwrap());
 
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
 
@@ -1386,7 +1388,7 @@ mod tests_storage_management {
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
                     },
@@ -1417,7 +1419,7 @@ mod tests_storage_management {
                         assert_eq!(account.near_balance(), deposit_amount);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
                     },
@@ -1451,7 +1453,7 @@ mod tests_storage_management {
                         assert_eq!(account.near_balance(), storage_balance_bounds.max.unwrap());
 
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
 
@@ -1559,7 +1561,7 @@ mod tests_storage_management {
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
                     },
@@ -1585,7 +1587,7 @@ mod tests_storage_management {
                         assert_eq!(account.near_balance(), deposit_amount);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
                     },
@@ -1609,7 +1611,7 @@ mod tests_storage_management {
 
                         let account = service.registered_account_near_data(PREDECESSOR_ACCOUNT_ID);
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
                     },
@@ -1680,7 +1682,7 @@ mod tests_storage_management {
                         assert_eq!(account.near_balance(), service.storage_balance_bounds().min);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
                     },
@@ -1706,7 +1708,7 @@ mod tests_storage_management {
                         assert_eq!(account.near_balance(), deposit_amount);
 
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
                     },
@@ -1730,7 +1732,7 @@ mod tests_storage_management {
 
                         let account = service.registered_account_near_data(ACCOUNT_ID);
                         // AccountStorageEvent:Registered event should have been published to update stats
-                        let account_stats = service.account_metrics();
+                        let account_stats = AccountManager::account_metrics();
                         assert_eq!(account_stats.total_registered_accounts, 1.into());
                         assert_eq!(account_stats.total_near_balance, account.near_balance());
                     },
@@ -1769,6 +1771,8 @@ mod tests_storage_management {
     #[cfg(test)]
     mod test_storage_withdraw {
         use super::*;
+
+        pub type AccountManager = AccountManagementComponent<()>;
 
         fn run_test<F>(
             storage_usage_bounds: StorageUsageBounds,
@@ -1835,7 +1839,7 @@ mod tests_storage_management {
                     }
 
                     // check account stats
-                    let stats = service.account_metrics();
+                    let stats = AccountManager::account_metrics();
                     assert_eq!(stats.total_near_balance, storage_balance.total);
                 },
             );
@@ -1871,7 +1875,7 @@ mod tests_storage_management {
                     }
 
                     // check account stats
-                    let stats = service.account_metrics();
+                    let stats = AccountManager::account_metrics();
                     assert_eq!(stats.total_near_balance, storage_balance.total);
                 },
             );
@@ -1899,7 +1903,7 @@ mod tests_storage_management {
                     assert!(receipts.is_empty());
 
                     // check account stats
-                    let stats = service.account_metrics();
+                    let stats = AccountManager::account_metrics();
                     assert_eq!(stats.total_near_balance, storage_balance.total);
                 },
             );
@@ -1957,6 +1961,8 @@ mod tests_storage_management {
     #[cfg(test)]
     mod test_storage_unregister_with_default_unregister_delegate {
         use super::*;
+
+        pub type AccountManager = AccountManagementComponent<()>;
 
         fn run_test<F>(
             storage_usage_bounds: StorageUsageBounds,
@@ -2017,7 +2023,7 @@ mod tests_storage_management {
                     }
 
                     // check account stats
-                    let stats = service.account_metrics();
+                    let stats = AccountManager::account_metrics();
                     assert_eq!(stats.total_registered_accounts, 0.into());
                     assert_eq!(stats.total_near_balance, 0.into());
                     assert_eq!(stats.total_storage_usage, 0.into());
@@ -2057,7 +2063,7 @@ mod tests_storage_management {
                     }
 
                     // check account stats
-                    let stats = service.account_metrics();
+                    let stats = AccountManager::account_metrics();
                     assert_eq!(stats.total_registered_accounts, 0.into());
                     assert_eq!(stats.total_near_balance, 0.into());
                     assert_eq!(stats.total_storage_usage, 0.into());
