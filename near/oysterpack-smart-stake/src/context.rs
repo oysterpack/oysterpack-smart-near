@@ -1,8 +1,7 @@
-use near_sdk::env;
 use teloc::*;
 
-use oysterpack_smart_account_management::{components::account_management::*, StorageUsageBounds};
-use oysterpack_smart_near::{component::*, contract_context::SmartContractContext};
+use oysterpack_smart_account_management::components::account_management::*;
+use oysterpack_smart_near::contract_context::SmartContractContext;
 
 pub type AccountData = ();
 
@@ -24,14 +23,6 @@ impl SmartContractContext for Context {
         Self {
             account_management: container.resolve(),
         }
-    }
-
-    fn deploy(_context: &mut Self) {
-        assert!(!env::state_exists(), "contract is already initialized");
-        AccountManagementComponent::<AccountData>::deploy(Some(StorageUsageBounds {
-            min: 1000.into(),
-            max: None,
-        }));
     }
 }
 

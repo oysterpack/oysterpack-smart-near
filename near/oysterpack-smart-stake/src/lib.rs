@@ -5,34 +5,30 @@ pub use context::*;
 
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    near_bindgen, wee_alloc, PanicOnDefault,
+    env, near_bindgen, wee_alloc, PanicOnDefault,
 };
-use oysterpack_smart_near::contract_context::SmartContractContext;
+use oysterpack_smart_account_management::StorageUsageBounds;
+use oysterpack_smart_near::{component::Deploy, contract_context::SmartContractContext};
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
-#[borsh_init(init)]
-pub struct Contract {
-    #[borsh_skip]
-    context: Context,
-}
+pub struct Contract;
 
 #[near_bindgen]
 impl Contract {
     #[init]
-    pub fn deploy() -> Self {
-        let mut context = Context::build(());
-        Context::deploy(&mut context);
-        Self { context }
-    }
-}
+    pub fn deploy(config: Option<StorageUsageBounds>) -> Self {
+        assert!(!env::state_exists(), "contract is already initialized");
 
-impl Contract {
-    /// gets run each time the contract is loaded from storage and instantiated
-    fn init(&mut self) {
-        self.context = Context::build(());
+        let config = config.unwrap_or_else(|| StorageUsageBounds {
+            min: 1000.into(),
+            max: None,
+        });
+        AccountManager::deploy(Some(config));
+
+        Self
     }
 }
