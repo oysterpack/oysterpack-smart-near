@@ -125,7 +125,7 @@ impl ContractOwnership for ContractOwnershipComponent {
         };
 
         let account_ids = ContractOwnershipAccountIdsObject::load();
-        Promise::new(account_ids.owner.clone()).transfer(amount.value() + 1);
+        Promise::new(account_ids.owner.clone()).transfer(amount.value());
 
         owner_balance.total -= amount;
         owner_balance.available -= amount;
@@ -145,6 +145,7 @@ impl ContractOwnership for ContractOwnershipComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use oysterpack_smart_near::domain::ZERO_NEAR;
     use oysterpack_smart_near_test::*;
 
     #[test]
@@ -198,6 +199,30 @@ mod tests {
         // Assert
         assert_eq!(alfio, ContractOwnershipComponent::owner().as_str());
         assert!(ContractOwnershipComponent::prospective_owner().is_none());
+        let owner_balance = ContractOwnershipComponent::owner_balance();
+        println!("{:?}", owner_balance);
+
+        // Act - withdraw all owner available balance
+        // Act - cancel the transfer
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        let owner_balance = ContractOwnershipComponent.withdraw_owner_balance(None);
+        println!("after withdrawal: {:?}", owner_balance);
+        // Assert
+        assert_eq!(owner_balance.available, ZERO_NEAR);
+        assert_eq!(owner_balance, ContractOwnershipComponent::owner_balance());
+
+        // Act - initiate transfer again
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+        // Assert
+        assert_eq!(
+            bob,
+            ContractOwnershipComponent::prospective_owner()
+                .unwrap()
+                .as_str()
+        );
         let owner_balance = ContractOwnershipComponent::owner_balance();
         println!("{:?}", owner_balance);
     }
