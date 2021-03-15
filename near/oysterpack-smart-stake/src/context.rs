@@ -1,7 +1,7 @@
 use teloc::*;
 
 use oysterpack_smart_account_management::components::account_management::*;
-use oysterpack_smart_near::contract_context::SmartContractContext;
+use oysterpack_smart_near::SmartContractContext;
 
 pub type AccountData = ();
 

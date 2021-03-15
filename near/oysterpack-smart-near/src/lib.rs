@@ -3,7 +3,9 @@
 pub use crate::core::*;
 
 pub mod component;
-pub mod contract_context;
+mod contract_context;
 mod core;
 pub mod data;
 pub mod domain;
+
+pub use contract_context::*;

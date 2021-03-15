@@ -8,7 +8,7 @@ use near_sdk::{
     env, near_bindgen, wee_alloc, PanicOnDefault,
 };
 use oysterpack_smart_account_management::StorageUsageBounds;
-use oysterpack_smart_near::{component::Deploy, contract_context::SmartContractContext};
+use oysterpack_smart_near::{component::Deploy, SmartContractContext};
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;

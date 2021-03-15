@@ -1,4 +1,3 @@
-use lazy_static::lazy_static;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
@@ -6,15 +5,8 @@ use near_sdk::{
 use oysterpack_smart_near::{
     data::Object,
     domain::{YoctoNear, ZERO_NEAR},
-    eventbus::{self, Event, EventHandlers},
-    Level, LogEvent,
 };
-use std::{
-    collections::HashMap,
-    fmt::{self, Display, Formatter},
-    ops::Deref,
-    sync::Mutex,
-};
+use std::{collections::HashMap, ops::Deref};
 
 /// Balance ID is used to track separate NEAR balances
 #[derive(
@@ -156,121 +148,28 @@ impl ContractNearBalances {
     }
 }
 
-/// [`ContractNearBalances`] are are tracked with these events
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub enum NearBalanceChangeEvent {
-    /// Increment the balance by the specified amount
-    ///
-    /// ## Panics
-    /// if overflow occurs
-    Increment(BalanceId, YoctoNear),
-    /// Decrement the balance by the specified amount
-    ///
-    /// ## Panics
-    /// if overflow occurs
-    Decrement(BalanceId, YoctoNear),
-    /// Sets the balance to the specified amount
-    Update(BalanceId, YoctoNear),
-    /// Deletes the balance from storage - effectively setting it 0
-    Clear(BalanceId),
-}
-
-impl Display for NearBalanceChangeEvent {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-/// log event for [`NearBalanceChangeEvent`]
-pub const LOG_EVENT_NEAR_BALANCE_CHANGED: LogEvent = LogEvent(Level::INFO, "NEAR_BALANCE_CHANGED");
-
-impl NearBalanceChangeEvent {
-    pub fn log(&self) {
-        LOG_EVENT_NEAR_BALANCE_CHANGED.log(self.to_string());
-    }
-}
-
-// TODO: create macro to generate boilerplate code for event: #[event]
-lazy_static! {
-    static ref NEAR_BALANCE_CHANGE_EVENTS: Mutex<EventHandlers<NearBalanceChangeEvent>> =
-        Mutex::new(EventHandlers::new());
-    static ref EVENT_HANDLER_REGISTERED: Mutex<bool> = Mutex::new(false);
-}
-
-impl Event for NearBalanceChangeEvent {
-    fn handlers<F>(f: F)
-    where
-        F: FnOnce(&EventHandlers<Self>),
-    {
-        f(&*NEAR_BALANCE_CHANGE_EVENTS.lock().unwrap())
-    }
-
-    fn handlers_mut<F>(f: F)
-    where
-        F: FnOnce(&mut EventHandlers<Self>),
-    {
-        f(&mut *NEAR_BALANCE_CHANGE_EVENTS.lock().unwrap())
-    }
-}
-
-/// can be safely called multiple times and will only register the event handler once
-pub(crate) fn register_event_handler() {
-    let mut registered = EVENT_HANDLER_REGISTERED.lock().unwrap();
-    if !*registered {
-        eventbus::register(on_near_balance_change_event);
-        *registered = true;
-    }
-}
-
-fn on_near_balance_change_event(event: &NearBalanceChangeEvent) {
-    event.log();
-    match *event {
-        NearBalanceChangeEvent::Increment(id, amount) => {
-            ContractNearBalances::incr_balance(id, amount);
-        }
-        NearBalanceChangeEvent::Decrement(id, amount) => {
-            ContractNearBalances::decr_balance(id, amount);
-        }
-        NearBalanceChangeEvent::Update(id, amount) => ContractNearBalances::set_balance(id, amount),
-        NearBalanceChangeEvent::Clear(id) => ContractNearBalances::clear_balance(id),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use near_sdk::test_utils::{self, test_env};
+    use near_sdk::test_utils::test_env;
     use oysterpack_smart_near::YOCTO;
 
     const LIQUIDITY_BALANCE_ID: BalanceId = BalanceId(0);
     const EARNINGS_BALANCE_ID: BalanceId = BalanceId(1);
 
     #[test]
-    fn near_balance_change_event_handling() {
+    fn contract_near_balances() {
         // Arrange
         test_env::setup();
-        register_event_handler();
 
         let balances = ContractNearBalances::load_near_balances();
         assert!(balances.is_empty());
 
         // Act - increment balances
-        eventbus::post(&NearBalanceChangeEvent::Increment(
-            LIQUIDITY_BALANCE_ID,
-            YOCTO.into(),
-        ));
-        eventbus::post(&NearBalanceChangeEvent::Increment(
-            LIQUIDITY_BALANCE_ID,
-            YOCTO.into(),
-        ));
-        eventbus::post(&NearBalanceChangeEvent::Increment(
-            LIQUIDITY_BALANCE_ID,
-            YOCTO.into(),
-        ));
-        eventbus::post(&NearBalanceChangeEvent::Increment(
-            EARNINGS_BALANCE_ID,
-            (2 * YOCTO).into(),
-        ));
+        ContractNearBalances::incr_balance(LIQUIDITY_BALANCE_ID, YOCTO.into());
+        ContractNearBalances::incr_balance(LIQUIDITY_BALANCE_ID, YOCTO.into());
+        ContractNearBalances::incr_balance(LIQUIDITY_BALANCE_ID, YOCTO.into());
+        ContractNearBalances::incr_balance(EARNINGS_BALANCE_ID, (2 * YOCTO).into());
 
         // Assert
         let balances = ContractNearBalances::load_near_balances();
@@ -284,19 +183,9 @@ mod tests {
             2 * YOCTO
         );
 
-        let logs = test_utils::get_logs();
-        assert_eq!(logs.len(), 4);
-        println!("{:#?}", logs);
-
         // Act - decrement balances
-        eventbus::post(&NearBalanceChangeEvent::Decrement(
-            LIQUIDITY_BALANCE_ID,
-            YOCTO.into(),
-        ));
-        eventbus::post(&NearBalanceChangeEvent::Decrement(
-            EARNINGS_BALANCE_ID,
-            YOCTO.into(),
-        ));
+        ContractNearBalances::decr_balance(LIQUIDITY_BALANCE_ID, YOCTO.into());
+        ContractNearBalances::decr_balance(EARNINGS_BALANCE_ID, YOCTO.into());
 
         // Assert
         let balances = ContractNearBalances::load_near_balances();
@@ -307,19 +196,9 @@ mod tests {
         );
         assert_eq!(balances.get(&EARNINGS_BALANCE_ID).unwrap().value(), YOCTO);
 
-        let logs = test_utils::get_logs();
-        assert_eq!(logs.len(), 6);
-        println!("{:#?}", logs);
-
         // Act - decrement balances
-        eventbus::post(&NearBalanceChangeEvent::Update(
-            LIQUIDITY_BALANCE_ID,
-            (10 * YOCTO).into(),
-        ));
-        eventbus::post(&NearBalanceChangeEvent::Update(
-            EARNINGS_BALANCE_ID,
-            (20 * YOCTO).into(),
-        ));
+        ContractNearBalances::set_balance(LIQUIDITY_BALANCE_ID, (10 * YOCTO).into());
+        ContractNearBalances::set_balance(EARNINGS_BALANCE_ID, (20 * YOCTO).into());
 
         // Assert
         let balances = ContractNearBalances::load_near_balances();
@@ -333,12 +212,8 @@ mod tests {
             20 * YOCTO
         );
 
-        let logs = test_utils::get_logs();
-        assert_eq!(logs.len(), 8);
-        println!("{:#?}", logs);
-
         // Act - decrement balances
-        eventbus::post(&NearBalanceChangeEvent::Clear(LIQUIDITY_BALANCE_ID));
+        ContractNearBalances::clear_balance(LIQUIDITY_BALANCE_ID);
 
         // Assert
         let balances = ContractNearBalances::load_near_balances();
@@ -348,9 +223,5 @@ mod tests {
             balances.get(&EARNINGS_BALANCE_ID).unwrap().value(),
             20 * YOCTO
         );
-
-        let logs = test_utils::get_logs();
-        assert_eq!(logs.len(), 9);
-        println!("{:#?}", logs);
     }
 }
