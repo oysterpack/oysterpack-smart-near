@@ -82,7 +82,7 @@ impl ContractOwnership for ContractOwnershipComponent {
         account_ids.prospective_owner.as_ref().cloned()
     }
 
-    fn finalize_transfer_ownership(&mut self) {
+    fn finalize_ownership_transfer(&mut self) {
         assert_yocto_near_attached();
 
         let mut owner = ContractOwnerObject::assert_prospective_owner_access();

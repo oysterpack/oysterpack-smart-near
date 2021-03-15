@@ -59,7 +59,7 @@ pub trait ContractOwnership {
     /// - if 1 yoctoNEAR is not attached
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
-    fn finalize_transfer_ownership(&mut self);
+    fn finalize_ownership_transfer(&mut self);
 
     /// Used by the contract owner to withdraw from the contract owner's available balance.
     ///
@@ -82,11 +82,11 @@ pub trait ContractOwnership {
 pub const LOG_EVENT_CONTRACT_TRANSFER_INITIATED: LogEvent =
     LogEvent(Level::INFO, "CONTRACT_TRANSFER_INITIATED");
 
-/// log event for [`ContractOwnership::cancel_transfer_ownership`]
+/// log event for [`ContractOwnership::cancel_ownership_transfer`]
 pub const LOG_EVENT_CONTRACT_TRANSFER_CANCELLED: LogEvent =
     LogEvent(Level::INFO, "CONTRACT_TRANSFER_CANCELLED");
 
-/// log event for [`ContractOwnership::finalize_transfer_ownership`]
+/// log event for [`ContractOwnership::finalize_ownership_transfer`]
 pub const LOG_EVENT_CONTRACT_TRANSFER_FINALIZED: LogEvent =
     LogEvent(Level::INFO, "CONTRACT_TRANSFER_FINALIZED");
 
