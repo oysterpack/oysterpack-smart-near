@@ -1,3 +1,7 @@
+//! [`ContractOwnershipComponent`]
+//! - deployment: [`ContractOwnershipComponent::deploy`]
+//!   - config: `ValidAccountId` - owner account ID
+
 use crate::components::contract_metrics::ContractMetricsComponent;
 use crate::components::contract_sale::ContractSaleComponent;
 use crate::{
@@ -15,10 +19,11 @@ use oysterpack_smart_near::domain::{AccountIdHash, YoctoNear};
 pub struct ContractOwnershipComponent;
 
 impl Deploy for ContractOwnershipComponent {
+    /// owner account ID
     type Config = ValidAccountId;
 
     fn deploy(config: Option<Self::Config>) {
-        let owner = config.unwrap();
+        let owner = config.expect("owner account ID is required");
         ContractOwnerObject::initialize_contract(owner);
     }
 }
@@ -73,6 +78,11 @@ impl ContractOwnership for ContractOwnershipComponent {
         let mut owner = ContractOwnerObject::assert_current_or_prospective_owner_access();
         if owner.prospective_owner_account_id_hash.take().is_some() {
             owner.save();
+
+            let mut account_ids = ContractOwnershipAccountIdsObject::load();
+            account_ids.prospective_owner.take();
+            account_ids.save();
+
             LOG_EVENT_CONTRACT_TRANSFER_CANCELLED.log("");
         }
     }
@@ -134,6 +144,61 @@ impl ContractOwnership for ContractOwnershipComponent {
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
-    // use oysterpack_smart_near_test::*;
+    use super::*;
+    use oysterpack_smart_near_test::*;
+
+    #[test]
+    fn basic_ownership_workflow() {
+        // Arrange
+        let alfio = "alfio";
+        let bob = "bob";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        // Set alfio as owner at deployment
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        // Assert
+        assert_eq!(alfio, ContractOwnershipComponent::owner().as_str());
+        assert!(ContractOwnershipComponent::prospective_owner().is_none());
+        let owner_balance = ContractOwnershipComponent::owner_balance();
+        println!("{:?}", owner_balance);
+
+        // Act - initiate transfer
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+        // Assert
+        assert_eq!(
+            bob,
+            ContractOwnershipComponent::prospective_owner()
+                .unwrap()
+                .as_str()
+        );
+        let owner_balance = ContractOwnershipComponent::owner_balance();
+        println!("{:?}", owner_balance);
+
+        // Act - initiate same transfer again
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+        // Assert - should have no effect
+        assert_eq!(
+            bob,
+            ContractOwnershipComponent::prospective_owner()
+                .unwrap()
+                .as_str()
+        );
+        let owner_balance = ContractOwnershipComponent::owner_balance();
+        println!("{:?}", owner_balance);
+
+        // Act - cancel the transfer
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.cancel_ownership_transfer();
+        // Assert
+        assert_eq!(alfio, ContractOwnershipComponent::owner().as_str());
+        assert!(ContractOwnershipComponent::prospective_owner().is_none());
+        let owner_balance = ContractOwnershipComponent::owner_balance();
+        println!("{:?}", owner_balance);
+    }
 }
