@@ -1,6 +1,6 @@
 use crate::components::contract_ownership::ContractOwnershipComponent;
+use crate::{ContractBid, ContractSale};
 use crate::{
-    components::contract_metrics::ContractMetricsComponent, interface::ContractMetrics,
     ContractBuyerBid, ContractOwner, ContractOwnerObject, ContractOwnership,
     ContractOwnershipAccountIdsObject, ERR_ACCESS_DENIED_MUST_BE_BUYER, ERR_CONTRACT_BID_TOO_LOW,
     ERR_CONTRACT_SALE_NOT_ALLOWED, ERR_CONTRACT_SALE_PRICE_MUST_NOT_BE_ZERO,
@@ -10,7 +10,6 @@ use crate::{
     LOG_EVENT_CONTRACT_BID_PLACED, LOG_EVENT_CONTRACT_BID_RAISED, LOG_EVENT_CONTRACT_FOR_SALE,
     LOG_EVENT_CONTRACT_SALE_CANCELLED, LOG_EVENT_CONTRACT_SOLD,
 };
-use crate::{ContractBid, ContractSale};
 use near_sdk::{env, Promise};
 use oysterpack_smart_near::asserts::assert_near_attached;
 use oysterpack_smart_near::domain::ExpirationSetting;
@@ -303,8 +302,8 @@ impl ContractSaleComponent {
         ContractBid::clear_near_balance();
 
         // transfer the owner's NEAR funds out to the owner's account
-        let owner_available_balance = ContractOwnershipComponent.owner_balance().available;
-        Promise::new(account_ids.owner.clone()).transfer(owner_available_balance.value());
+        let owner_balance = ContractOwnershipComponent.owner_balance();
+        Promise::new(account_ids.owner.clone()).transfer(owner_balance.available.value());
 
         // update the contract owner
         let (buyer_account_id_hash, bid) = owner
@@ -495,11 +494,22 @@ mod tests {
         ctx.predecessor_account_id = bob.to_string();
         ctx.attached_deposit = YOCTO;
         testing_env!(ctx.clone());
+        let previous_owner = ContractOwnershipComponent.owner();
+        let owner_balance = ContractOwnershipComponent.owner_balance();
         service.buy_contract(None);
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
         assert_eq!(ContractOwnershipComponent.owner().as_str(), bob);
         assert_eq!(ContractBid::near_balance(), ZERO_NEAR);
+        let receipts = deserialize_receipts();
+        assert_eq!(&previous_owner, &receipts[0].receiver_id.as_str());
+        let action = &receipts[0].actions[0];
+        match action {
+            Action::Transfer(transfer) => {
+                assert_eq!(transfer.deposit, owner_balance.available.value());
+            }
+            _ => panic!("expected TransferAction"),
+        }
     }
 }
