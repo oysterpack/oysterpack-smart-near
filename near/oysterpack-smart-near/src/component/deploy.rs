@@ -1,9 +1,7 @@
-/// Provides standard interface pattern for contracts to use at deployment time to run service related
-/// deployment code.
-/// - for example, service may require config to initialize its persistent state
+/// Provides standard interface pattern for contracts to use at deployment time to run component
+/// related deployment code.
 ///
-/// ## NOTES
-/// - components may not need to implement ['Deploy']
+/// For example, components may require config to initialize its persistent state.
 pub trait Deploy {
     type Config;
 
