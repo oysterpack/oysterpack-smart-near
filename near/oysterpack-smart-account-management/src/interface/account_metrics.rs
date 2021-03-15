@@ -6,5 +6,3 @@ pub trait GetAccountMetrics {
         AccountMetrics::load()
     }
 }
-
-impl GetAccountMetrics for AccountMetrics {}
