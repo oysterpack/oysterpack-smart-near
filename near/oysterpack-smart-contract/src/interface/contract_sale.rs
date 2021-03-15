@@ -113,15 +113,12 @@ pub struct ContractBuyerBid {
     pub bid: ContractBid,
 }
 
-/// log event for [`ContractSale::sell_contract`]
-/// - event gets logged each time the sale price is changed
+/// event gets logged each time the sale price is changed
 pub const LOG_EVENT_CONTRACT_FOR_SALE: LogEvent = LogEvent(Level::INFO, "CONTRACT_FOR_SALE");
 
-/// log event for [`ContractSale::cancel_contract_sell_order`]
 pub const LOG_EVENT_CONTRACT_SALE_CANCELLED: LogEvent =
     LogEvent(Level::INFO, "CONTRACT_SALE_CANCELLED");
 
-/// log event for [`ContractSale::buy_contract`]
 pub const LOG_EVENT_CONTRACT_BID_PLACED: LogEvent = LogEvent(Level::INFO, "CONTRACT_BID_PLACED");
 
 pub const LOG_EVENT_CONTRACT_BID_RAISED: LogEvent = LogEvent(Level::INFO, "CONTRACT_BID_RAISED");
@@ -131,7 +128,6 @@ pub const LOG_EVENT_CONTRACT_BID_LOWERED: LogEvent = LogEvent(Level::INFO, "CONT
 pub const LOG_EVENT_CONTRACT_BID_EXPIRATION_CHANGE: LogEvent =
     LogEvent(Level::INFO, "CONTRACT_BID_EXPIRATION_CHANGE");
 
-/// log event for [`ContractSale::cancel_contract_buy_order`]
 pub const LOG_EVENT_CONTRACT_BID_CANCELLED: LogEvent =
     LogEvent(Level::INFO, "CONTRACT_BID_CANCELLED");
 
@@ -141,7 +137,6 @@ pub const LOG_EVENT_CONTRACT_BID_EXPIRED: LogEvent = LogEvent(Level::INFO, "CONT
 /// log event for lost bids, which means a higher bid was placed
 pub const LOG_EVENT_CONTRACT_BID_LOST: LogEvent = LogEvent(Level::INFO, "CONTRACT_BID_LOST");
 
-/// log event for contract sale transactions
 pub const LOG_EVENT_CONTRACT_SOLD: LogEvent = LogEvent(Level::INFO, "CONTRACT_SOLD");
 
 /// Indicates access was denied because owner access was required

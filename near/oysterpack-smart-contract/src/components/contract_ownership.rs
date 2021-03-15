@@ -1,11 +1,12 @@
 use crate::{
     ContractOwnerNearBalance, ContractOwnerObject, ContractOwnership,
-    ContractOwnershipAccountIdsObject,
+    ContractOwnershipAccountIdsObject, LOG_EVENT_CONTRACT_TRANSFER_CANCELLED,
+    LOG_EVENT_CONTRACT_TRANSFER_INITIATED,
 };
 use near_sdk::json_types::ValidAccountId;
 use oysterpack_smart_near::asserts::assert_yocto_near_attached;
 use oysterpack_smart_near::component::Deploy;
-use oysterpack_smart_near::domain::YoctoNear;
+use oysterpack_smart_near::domain::{AccountIdHash, YoctoNear};
 use oysterpack_smart_near_test::near_vm_logic::types::AccountId;
 
 pub struct ContractOwnershipComponent;
@@ -27,16 +28,35 @@ impl ContractOwnership for ContractOwnershipComponent {
 
     fn transfer_ownership(&mut self, new_owner: ValidAccountId) {
         assert_yocto_near_attached();
-        ContractOwnerObject::assert_owner_access();
-        ContractOwnerObject::set_owner(new_owner);
+
+        let mut owner = ContractOwnerObject::assert_owner_access();
+        let new_owner_account_id_hash: AccountIdHash = new_owner.as_ref().as_str().into();
+        let current_prospective_owner_account_id_hash =
+            owner.prospective_owner_account_id_hash.as_ref().cloned();
+
+        let mut update_prospective_owner = || {
+            owner.prospective_owner_account_id_hash = Some(new_owner_account_id_hash);
+            LOG_EVENT_CONTRACT_TRANSFER_INITIATED.log(new_owner.as_ref());
+            owner.save();
+        };
+
+        match current_prospective_owner_account_id_hash {
+            None => update_prospective_owner(),
+            Some(prospective_owner_account_id_hash) => {
+                if prospective_owner_account_id_hash != new_owner_account_id_hash {
+                    update_prospective_owner()
+                }
+            }
+        }
     }
 
-    fn cancel_transfer_ownership(&mut self) {
+    fn cancel_ownership_transfer(&mut self) {
         assert_yocto_near_attached();
 
         let mut owner = ContractOwnerObject::assert_owner_access();
         if owner.prospective_owner_account_id_hash.take().is_some() {
             owner.save();
+            LOG_EVENT_CONTRACT_TRANSFER_CANCELLED.log("");
         }
     }
 

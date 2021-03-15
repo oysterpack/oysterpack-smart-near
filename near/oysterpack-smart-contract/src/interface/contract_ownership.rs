@@ -36,7 +36,7 @@ pub trait ContractOwnership {
     /// - if 1 yoctoNEAR is not attached
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
-    fn cancel_transfer_ownership(&mut self);
+    fn cancel_ownership_transfer(&mut self);
 
     /// Returns true if the specified account ID is the prospective owner that the transfer is waiting
     /// on for finalization.
