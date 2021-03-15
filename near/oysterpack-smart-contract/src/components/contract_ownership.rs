@@ -225,5 +225,41 @@ mod tests {
         );
         let owner_balance = ContractOwnershipComponent::owner_balance();
         println!("{:?}", owner_balance);
+
+        // Act - prospective owner cancels transfer
+        ctx.predecessor_account_id = bob.to_string();
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.cancel_ownership_transfer();
+        // Assert
+        assert_eq!(alfio, ContractOwnershipComponent::owner().as_str());
+        assert!(ContractOwnershipComponent::prospective_owner().is_none());
+        let owner_balance = ContractOwnershipComponent::owner_balance();
+        println!("{:?}", owner_balance);
+
+        // Act - initiate transfer again
+        ctx.predecessor_account_id = alfio.to_string();
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+        // Assert
+        assert_eq!(
+            bob,
+            ContractOwnershipComponent::prospective_owner()
+                .unwrap()
+                .as_str()
+        );
+        let owner_balance = ContractOwnershipComponent::owner_balance();
+        println!("{:?}", owner_balance);
+
+        // Act - finalize the transfer
+        ctx.predecessor_account_id = bob.to_string();
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.finalize_ownership_transfer();
+        // Assert
+        // Assert
+        assert_eq!(bob, ContractOwnershipComponent::owner().as_str());
+        assert!(ContractOwnershipComponent::prospective_owner().is_none());
+        let owner_balance = ContractOwnershipComponent::owner_balance();
+        println!("{:?}", owner_balance);
     }
 }
