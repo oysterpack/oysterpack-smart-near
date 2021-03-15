@@ -1,14 +1,13 @@
-mod context;
-mod functions;
+mod account_metrics;
+mod storage_management;
 
-pub use context::*;
-
+use crate::storage_management::AccountManager;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env, near_bindgen, wee_alloc, PanicOnDefault,
 };
 use oysterpack_smart_account_management::StorageUsageBounds;
-use oysterpack_smart_near::{component::Deploy, SmartContractContext};
+use oysterpack_smart_near::component::Deploy;
 
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
