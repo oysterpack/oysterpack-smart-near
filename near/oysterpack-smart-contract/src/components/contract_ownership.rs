@@ -25,7 +25,7 @@ impl Deploy for ContractOwnershipComponent {
 }
 
 impl ContractOwnership for ContractOwnershipComponent {
-    fn owner(&self) -> AccountId {
+    fn owner() -> AccountId {
         let account_ids = ContractOwnershipAccountIdsObject::load();
         account_ids.owner.clone()
     }
@@ -39,6 +39,10 @@ impl ContractOwnership for ContractOwnershipComponent {
             owner.prospective_owner_account_id_hash.as_ref().cloned();
 
         let mut update_prospective_owner = || {
+            let mut account_ids = ContractOwnershipAccountIdsObject::load();
+            account_ids.prospective_owner = Some(new_owner.as_ref().to_string());
+            account_ids.save();
+
             owner.prospective_owner_account_id_hash = Some(new_owner_account_id_hash);
             if owner.sale_price.take().is_some() {
                 LOG_EVENT_CONTRACT_SALE_CANCELLED
@@ -74,12 +78,9 @@ impl ContractOwnership for ContractOwnershipComponent {
         }
     }
 
-    fn is_prospective_owner(&self, account_id: ValidAccountId) -> bool {
-        ContractOwnerObject::load()
-            .prospective_owner_account_id_hash()
-            .map_or(false, |account_id_hash| {
-                account_id_hash == account_id.into()
-            })
+    fn prospective_owner() -> Option<AccountId> {
+        let account_ids = ContractOwnershipAccountIdsObject::load();
+        account_ids.prospective_owner.as_ref().cloned()
     }
 
     fn finalize_transfer_ownership(&mut self) {
@@ -105,7 +106,7 @@ impl ContractOwnership for ContractOwnershipComponent {
         assert_yocto_near_attached();
         ContractOwnerObject::assert_owner_access();
 
-        let mut owner_balance = self.owner_balance();
+        let mut owner_balance = Self::owner_balance();
         let amount = match amount {
             None => owner_balance.available,
             Some(amount) => {
@@ -122,7 +123,7 @@ impl ContractOwnership for ContractOwnershipComponent {
         owner_balance
     }
 
-    fn owner_balance(&self) -> ContractOwnerNearBalance {
+    fn owner_balance() -> ContractOwnerNearBalance {
         let near_balances = ContractMetricsComponent.near_balances();
         let storage_usage_costs = ContractMetricsComponent.storage_usage_costs();
         ContractOwnerNearBalance {
@@ -130,4 +131,10 @@ impl ContractOwnership for ContractOwnershipComponent {
             available: near_balances.owner() - storage_usage_costs.owner(),
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    // use super::*;
+    // use oysterpack_smart_near_test::*;
 }

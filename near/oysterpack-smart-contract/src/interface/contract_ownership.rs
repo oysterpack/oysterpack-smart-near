@@ -11,7 +11,7 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 pub trait ContractOwnership {
     /// checks if the account ID is the current contract owner
     /// - account ID is not specified, then the predecessor ID is used
-    fn owner(&self) -> AccountId;
+    fn owner() -> AccountId;
 
     /// Initiates the workflow to transfer contract ownership.
     ///
@@ -42,11 +42,10 @@ pub trait ContractOwnership {
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
     fn cancel_ownership_transfer(&mut self);
 
-    /// Returns true if the specified account ID is the prospective owner that the transfer is waiting
-    /// on for finalization.
+    /// Returns the prospective owner that the transfer is waiting on for finalization.
     ///
-    /// Returns false if there is no ownership transfer in progress.
-    fn is_prospective_owner(&self, account_id: ValidAccountId) -> bool;
+    /// Returns None if there is no ownership transfer in progress.
+    fn prospective_owner() -> Option<AccountId>;
 
     /// Used to finalize the contract transfer to the new prospective owner
     ///
@@ -76,7 +75,7 @@ pub trait ContractOwnership {
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
     fn withdraw_owner_balance(&mut self, amount: Option<YoctoNear>) -> ContractOwnerNearBalance;
 
-    fn owner_balance(&self) -> ContractOwnerNearBalance;
+    fn owner_balance() -> ContractOwnerNearBalance;
 }
 
 /// log event for [`ContractOwnership::transfer_ownership`]

@@ -302,7 +302,7 @@ impl ContractSaleComponent {
         ContractBid::clear_near_balance();
 
         // transfer the owner's NEAR funds out to the owner's account
-        let owner_balance = ContractOwnershipComponent.owner_balance();
+        let owner_balance = ContractOwnershipComponent::owner_balance();
         Promise::new(account_ids.owner.clone()).transfer(owner_balance.available.value());
 
         // update the contract owner
@@ -494,13 +494,13 @@ mod tests {
         ctx.predecessor_account_id = bob.to_string();
         ctx.attached_deposit = YOCTO;
         testing_env!(ctx.clone());
-        let previous_owner = ContractOwnershipComponent.owner();
-        let owner_balance = ContractOwnershipComponent.owner_balance();
+        let previous_owner = ContractOwnershipComponent::owner();
+        let owner_balance = ContractOwnershipComponent::owner_balance();
         service.buy_contract(None);
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        assert_eq!(ContractOwnershipComponent.owner().as_str(), bob);
+        assert_eq!(ContractOwnershipComponent::owner().as_str(), bob);
         assert_eq!(ContractBid::near_balance(), ZERO_NEAR);
         let receipts = deserialize_receipts();
         assert_eq!(&previous_owner, &receipts[0].receiver_id.as_str());
