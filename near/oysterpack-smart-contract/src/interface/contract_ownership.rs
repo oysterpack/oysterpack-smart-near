@@ -21,7 +21,7 @@ pub trait ContractOwnership {
     /// - any open contract sale is cancelled
     /// - any active bid is cancelled
     ///
-    /// ## Log Events
+    /// ## Log Event
     /// [`LOG_EVENT_CONTRACT_TRANSFER_INITIATED`]
     ///
     /// ## Panics
@@ -35,6 +35,9 @@ pub trait ContractOwnership {
     /// Enables the transfer to be cancelled before it is finalized.
     ///
     /// The transfer can only be cancelled by both the current owner and the prospective owner.
+    ///
+    /// ## Log Event
+    /// [`LOG_EVENT_CONTRACT_TRANSFER_CANCELLED`]
     ///
     /// ## Panics
     /// - `ERR_CURRENT_OR_PROSPECTIVE_OWNER_ACCESS_REQUIRED` - if the predecessor account is not the current or prospective owner account
@@ -53,6 +56,9 @@ pub trait ContractOwnership {
     /// ## Notes
     /// This effectively transfers any owner balance to the new owner. The owner can withdraw
     /// from its available balance before the transfer is finalized.
+    ///
+    /// ## Log Event
+    /// [`LOG_EVENT_CONTRACT_TRANSFER_FINALIZED`]
     ///
     /// ## Panics
     /// - `ERR_PROSPECTIVE_OWNER_ACCESS_REQUIRED` - if the predecessor ID is not the new prospective owner
