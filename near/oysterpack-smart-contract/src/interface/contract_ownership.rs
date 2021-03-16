@@ -9,8 +9,7 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 
 /// Every contract has an owner
 pub trait ContractOwnership {
-    /// checks if the account ID is the current contract owner
-    /// - account ID is not specified, then the predecessor ID is used
+    /// returns the contract owner account ID
     fn owner() -> AccountId;
 
     /// Initiates the workflow to transfer contract ownership.
@@ -22,9 +21,12 @@ pub trait ContractOwnership {
     /// - any open contract sale is cancelled
     /// - any active bid is cancelled
     ///
+    /// ## Log Events
+    /// [`LOG_EVENT_CONTRACT_TRANSFER_INITIATED`]
+    ///
     /// ## Panics
-    /// - if the predecessor account is not the owner account
-    /// - if 1 yoctoNEAR is not attached
+    /// - `ERR_OWNER_ACCESS_REQUIRED` - if the predecessor account is not the owner account
+    /// - `ERR_YOCTONEAR_DEPOSIT_REQUIRED` - if 1 yoctoNEAR is not attached
     /// - if the new owner account ID is not valid
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
@@ -35,8 +37,8 @@ pub trait ContractOwnership {
     /// The transfer can only be cancelled by both the current owner and the prospective owner.
     ///
     /// ## Panics
-    /// - if the predecessor account is not the current or prospective owner account
-    /// - if 1 yoctoNEAR is not attached
+    /// - `ERR_CURRENT_OR_PROSPECTIVE_OWNER_ACCESS_REQUIRED` - if the predecessor account is not the current or prospective owner account
+    /// - `ERR_YOCTONEAR_DEPOSIT_REQUIRED` - if 1 yoctoNEAR is not attached
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
     fn cancel_ownership_transfer(&mut self);
@@ -53,9 +55,9 @@ pub trait ContractOwnership {
     /// from its available balance before the transfer is finalized.
     ///
     /// ## Panics
-    /// - if the predecessor ID is not the new prospective owner
-    /// - if there is no contract ownership transfer in progress
-    /// - if 1 yoctoNEAR is not attached
+    /// - `ERR_PROSPECTIVE_OWNER_ACCESS_REQUIRED` - if the predecessor ID is not the new prospective owner
+    /// - `ERR_CONTRACT_OWNER_TRANSFER_NOT_INITIATED` - if there is no contract ownership transfer in progress
+    /// - `ERR_YOCTONEAR_DEPOSIT_REQUIRED` - if 1 yoctoNEAR is not attached
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
     fn finalize_ownership_transfer(&mut self);
@@ -67,9 +69,10 @@ pub trait ContractOwnership {
     /// Returns the updated contract owner NEAR balance.
     ///
     /// ## Panics
-    /// - if the predecessor account is not the owner account
-    /// - if 1 yoctoNEAR is not attached
-    /// - if there are insufficient funds to fulfill the request
+    /// - `ERR_OWNER_ACCESS_REQUIRED` - if the predecessor account is not the owner account
+    /// - `ERR_YOCTONEAR_DEPOSIT_REQUIRED` - if 1 yoctoNEAR is not attached
+    /// - `ERR_OWNER_BALANCE_OVERDRAW` - if there are insufficient funds to fulfill the request
+    /// - `ERR_CODE_BAD_REQUEST` - if specified amount is zero
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
     fn withdraw_owner_balance(&mut self, amount: Option<YoctoNear>) -> ContractOwnerNearBalance;
