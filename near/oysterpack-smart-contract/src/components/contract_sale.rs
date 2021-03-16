@@ -282,7 +282,7 @@ impl ContractSaleComponent {
         let contract_owner = ContractOwnerObject::assert_owner_access();
         ERR_CONTRACT_SALE_NOT_ALLOWED.assert(
             || !contract_owner.transfer_initiated(),
-            || "contract sale is not allowed because contract ownership transfer has been initiated",
+            || "contract cannot be sold after transfer process has been started",
         );
         ERR_CONTRACT_SALE_PRICE_MUST_NOT_BE_ZERO.assert(|| price > ZERO_NEAR);
         contract_owner
@@ -725,6 +725,54 @@ mod tests_sell_contract {
     }
 
     #[test]
+    fn new_sale_expired_bid() {
+        // Arrange
+        let owner = "alfio";
+        let buyer = "bob";
+
+        let mut ctx = new_context(owner);
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(owner)));
+        ctx.attached_deposit = 2 * YOCTO;
+        ctx.predecessor_account_id = buyer.to_string();
+        ctx.epoch_height = 100;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(Some(ExpirationSetting::Absolute(Expiration::Epoch(
+            200.into(),
+        ))));
+
+        // Act
+        ctx.attached_deposit = 1;
+        ctx.predecessor_account_id = owner.to_string();
+        ctx.epoch_height = 201;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.sell_contract(YOCTO.into());
+        // Assert
+        assert_eq!(
+            ContractSaleComponent::contract_sale_price(),
+            Some(YOCTO.into())
+        );
+        assert!(ContractSaleComponent::contract_bid().is_none());
+        assert!(ContractOwnershipAccountIdsObject::load().buyer.is_none());
+        assert_eq!(ContractOwnershipComponent::owner(), owner.to_string());
+
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
+        assert_eq!(
+            &logs[0],
+            LOG_EVENT_CONTRACT_BID_CANCELLED
+                .message("bid expired")
+                .as_str()
+        );
+        assert_eq!(
+            &logs[1],
+            LOG_EVENT_CONTRACT_FOR_SALE.message(YOCTO).as_str()
+        );
+    }
+
+    #[test]
     fn updated_sale_matching_bid() {
         // Arrange
         let owner = "alfio";
@@ -806,5 +854,49 @@ mod tests_sell_contract {
                 .message(format!("buyer={}, price={}", buyer, 2 * YOCTO))
                 .as_str()
         );
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "[ERR] [CONTRACT_SALE_NOT_ALLOWED] contract cannot be sold after transfer process has been started"
+    )]
+    fn transfer_ownership_initiated() {
+        // Arrange
+        let owner = "alfio";
+        let buyer = "bob";
+
+        let mut ctx = new_context(owner);
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(owner)));
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(buyer));
+
+        // Act
+        ctx.attached_deposit = 1;
+        ctx.predecessor_account_id = owner.to_string();
+        testing_env!(ctx.clone());
+        ContractSaleComponent.sell_contract(YOCTO.into());
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [OWNER_ACCESS_REQUIRED]")]
+    fn not_owner() {
+        // Arrange
+        let owner = "alfio";
+
+        let mut ctx = new_context(owner);
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(owner)));
+
+        // Act
+        ctx.attached_deposit = 1;
+        ctx.predecessor_account_id = "bob".to_string();
+        testing_env!(ctx.clone());
+        ContractSaleComponent.sell_contract(YOCTO.into());
     }
 }
