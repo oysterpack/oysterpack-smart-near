@@ -45,10 +45,13 @@ impl ContractSale for ContractSaleComponent {
     fn sell_contract(&mut self, price: YoctoNear) {
         let mut contract_owner = Self::validate_sell_contract_request(price);
         match contract_owner.bid() {
-            None => {
-                contract_owner.sale_price = Some(price);
-                LOG_EVENT_CONTRACT_FOR_SALE.log(price);
-            }
+            None => match contract_owner.sale_price {
+                Some(current_price) if price == current_price => return,
+                _ => {
+                    contract_owner.sale_price = Some(price);
+                    LOG_EVENT_CONTRACT_FOR_SALE.log(price);
+                }
+            },
             Some((_buyer, bid)) => {
                 if bid.expired() {
                     let mut account_ids = ContractOwnershipAccountIdsObject::load();
@@ -553,5 +556,63 @@ mod tests_sell_contract {
             &logs[0],
             LOG_EVENT_CONTRACT_FOR_SALE.message(YOCTO).as_str()
         );
+    }
+
+    #[test]
+    fn update_sale_no_bid() {
+        // Arrange
+        let alfio = "alfio";
+
+        let mut ctx = new_context(alfio);
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        // Act
+        ContractSaleComponent.sell_contract(YOCTO.into());
+        ContractSaleComponent.sell_contract((2 * YOCTO).into());
+        // Assert
+        assert_eq!(
+            ContractSaleComponent::contract_sale_price(),
+            Some((2 * YOCTO).into())
+        );
+        let logs = test_utils::get_logs();
+
+        assert_eq!(
+            &logs[0],
+            LOG_EVENT_CONTRACT_FOR_SALE.message(YOCTO).as_str()
+        );
+        assert_eq!(
+            &logs[1],
+            LOG_EVENT_CONTRACT_FOR_SALE.message(2 * YOCTO).as_str()
+        );
+    }
+
+    #[test]
+    fn update_sale_with_same_price_no_bid() {
+        // Arrange
+        let alfio = "alfio";
+
+        let mut ctx = new_context(alfio);
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        // Act
+        ContractSaleComponent.sell_contract(YOCTO.into());
+        ContractSaleComponent.sell_contract(YOCTO.into());
+        // Assert
+        assert_eq!(
+            ContractSaleComponent::contract_sale_price(),
+            Some(YOCTO.into())
+        );
+        let logs = test_utils::get_logs();
+        assert_eq!(
+            &logs[0],
+            LOG_EVENT_CONTRACT_FOR_SALE.message(YOCTO).as_str()
+        );
+        assert_eq!(logs.len(), 1);
     }
 }
