@@ -74,6 +74,11 @@ pub trait ContractOwnership {
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
     fn withdraw_owner_balance(&mut self, amount: Option<YoctoNear>) -> ContractOwnerNearBalance;
 
+    /// Returns how much of the contract's NEAR balance is owned by the contract owner and what amount
+    /// is available for withdrawal.
+    ///
+    /// The owner must retain enough NEAR deposit on the contract to cover storage costs that are
+    /// the contract's responsibility to pay for, i.e., excluding account storage.
     fn owner_balance() -> ContractOwnerNearBalance;
 }
 

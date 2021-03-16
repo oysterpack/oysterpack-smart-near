@@ -8,11 +8,8 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 
 /// Enables the contract to be transferred to a new owner via a sale.
 ///
-/// ## NOTES
-/// - NEAR funds are never transferred externally as part of the transaction. NEAR funds are transferred
-///   internally between transacting accounts that are registered on the contract.
-/// - Accounts must initiate NEAR fund withdrawals themselves via the NEAR standard `StorageManagement`
-///   interface (NEP-145). Thus, in order to transact the accounts must be registered with the contract.
+/// When the sale transaction is executed, the sale amount will be released to the current owner and
+/// all of the owner's balance will be transferred out of the contract to the owner's NEAR account.
 ///
 /// TODO: enable buyers to pay with STAKE
 pub trait ContractSale {
