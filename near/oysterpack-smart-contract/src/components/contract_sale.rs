@@ -899,4 +899,58 @@ mod tests_sell_contract {
         testing_env!(ctx.clone());
         ContractSaleComponent.sell_contract(YOCTO.into());
     }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [YOCTONEAR_DEPOSIT_REQUIRED]")]
+    fn zero_deposit() {
+        // Arrange
+        let owner = "alfio";
+
+        let mut ctx = new_context(owner);
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(owner)));
+
+        // Act
+        ctx.attached_deposit = 0;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.sell_contract(YOCTO.into());
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [YOCTONEAR_DEPOSIT_REQUIRED]")]
+    fn two_deposit() {
+        // Arrange
+        let owner = "alfio";
+
+        let mut ctx = new_context(owner);
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(owner)));
+
+        // Act
+        ctx.attached_deposit = 2;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.sell_contract(YOCTO.into());
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [CONTRACT_SALE_PRICE_MUST_NOT_BE_ZERO]")]
+    fn zero_sale_price() {
+        // Arrange
+        let owner = "alfio";
+
+        let mut ctx = new_context(owner);
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(owner)));
+
+        // Act
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.sell_contract(ZERO_NEAR);
+    }
 }
