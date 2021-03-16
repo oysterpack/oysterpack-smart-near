@@ -23,6 +23,11 @@ pub trait ContractSale {
     ///
     /// - If the contract is already for sale, then the sale price is updated to the new price.
     /// - If there already is a higher bid price, then the contract is sold for the bid price.
+    /// - If the current bid is expired, then the bid is cancelled
+    ///
+    /// ## Log Events
+    /// - [`LOG_EVENT_CONTRACT_FOR_SALE`]
+    /// - [`LOG_EVENT_CONTRACT_BID_CANCELLED`] - if current bid has expired
     ///
     /// ## Panics
     /// - if the predecessor account is not the owner account
@@ -127,12 +132,6 @@ pub const LOG_EVENT_CONTRACT_BID_EXPIRATION_CHANGE: LogEvent =
 
 pub const LOG_EVENT_CONTRACT_BID_CANCELLED: LogEvent =
     LogEvent(Level::INFO, "CONTRACT_BID_CANCELLED");
-
-/// log event for expired bids which are automatically cancelled
-pub const LOG_EVENT_CONTRACT_BID_EXPIRED: LogEvent = LogEvent(Level::INFO, "CONTRACT_BID_EXPIRED");
-
-/// log event for lost bids, which means a higher bid was placed
-pub const LOG_EVENT_CONTRACT_BID_LOST: LogEvent = LogEvent(Level::INFO, "CONTRACT_BID_LOST");
 
 pub const LOG_EVENT_CONTRACT_SOLD: LogEvent = LogEvent(Level::INFO, "CONTRACT_SOLD");
 

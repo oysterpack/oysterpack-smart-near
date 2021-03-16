@@ -60,7 +60,11 @@ impl ContractOwnership for ContractOwnershipComponent {
             }
             if owner.bid.is_some() {
                 let mut account_ids = ContractOwnershipAccountIdsObject::load();
-                ContractSaleComponent::cancel_bid(&mut owner, &mut account_ids);
+                ContractSaleComponent::cancel_bid(
+                    &mut owner,
+                    &mut account_ids,
+                    "contract ownership transfer has been initiated",
+                );
                 account_ids.save();
             }
 

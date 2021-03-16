@@ -6,9 +6,8 @@ use crate::{
     ERR_CONTRACT_SALE_NOT_ALLOWED, ERR_CONTRACT_SALE_PRICE_MUST_NOT_BE_ZERO,
     ERR_EXPIRATION_IS_ALREADY_EXPIRED, ERR_NO_ACTIVE_BID, ERR_OWNER_CANNOT_BUY_CONTRACT,
     LOG_EVENT_CONTRACT_BID_CANCELLED, LOG_EVENT_CONTRACT_BID_EXPIRATION_CHANGE,
-    LOG_EVENT_CONTRACT_BID_EXPIRED, LOG_EVENT_CONTRACT_BID_LOST, LOG_EVENT_CONTRACT_BID_LOWERED,
-    LOG_EVENT_CONTRACT_BID_PLACED, LOG_EVENT_CONTRACT_BID_RAISED, LOG_EVENT_CONTRACT_FOR_SALE,
-    LOG_EVENT_CONTRACT_SALE_CANCELLED, LOG_EVENT_CONTRACT_SOLD,
+    LOG_EVENT_CONTRACT_BID_LOWERED, LOG_EVENT_CONTRACT_BID_PLACED, LOG_EVENT_CONTRACT_BID_RAISED,
+    LOG_EVENT_CONTRACT_FOR_SALE, LOG_EVENT_CONTRACT_SALE_CANCELLED, LOG_EVENT_CONTRACT_SOLD,
 };
 use near_sdk::{env, Promise};
 use oysterpack_smart_near::asserts::assert_near_attached;
@@ -53,7 +52,7 @@ impl ContractSale for ContractSaleComponent {
             Some((_buyer, bid)) => {
                 if bid.expired() {
                     let mut account_ids = ContractOwnershipAccountIdsObject::load();
-                    Self::cancel_losing_bid(&mut contract_owner, &mut account_ids);
+                    Self::cancel_bid(&mut contract_owner, &mut account_ids, "bid expired");
                     account_ids.save();
 
                     contract_owner.sale_price = Some(price);
@@ -98,7 +97,7 @@ impl ContractSale for ContractSaleComponent {
             Some(current_bid) => {
                 ERR_CONTRACT_BID_TOO_LOW
                     .assert(|| bid > current_bid.amount || current_bid.expired());
-                Self::cancel_losing_bid(&mut owner, &mut account_ids);
+                Self::cancel_bid(&mut owner, &mut account_ids, "higher bid has been placed");
                 Self::place_bid(&mut owner, &mut account_ids, bid, expiration);
             }
         }
@@ -196,7 +195,7 @@ impl ContractSale for ContractSaleComponent {
         ERR_ACCESS_DENIED_MUST_BE_BUYER
             .assert(|| account_ids.buyer == Some(env::predecessor_account_id()));
 
-        Self::cancel_bid(&mut owner, &mut account_ids);
+        Self::cancel_bid(&mut owner, &mut account_ids, "");
 
         owner.save();
         account_ids.save();
@@ -229,6 +228,7 @@ impl ContractSaleComponent {
     pub(crate) fn cancel_bid(
         owner: &mut ContractOwnerObject,
         account_ids: &mut ContractOwnershipAccountIdsObject,
+        msg: &str,
     ) -> ContractBid {
         ContractBid::clear_near_balance();
         let (_, bid) = owner.bid.take().expect("BUG: cancel_bid(): expected bid");
@@ -237,21 +237,21 @@ impl ContractSaleComponent {
             .take()
             .expect("BUG: cancel_bid(): expected buyer");
         Promise::new(buyer).transfer(bid.amount.value());
-        LOG_EVENT_CONTRACT_BID_CANCELLED.log("");
+        LOG_EVENT_CONTRACT_BID_CANCELLED.log(msg);
         bid
     }
 
-    fn cancel_losing_bid(
-        owner: &mut ContractOwnerObject,
-        account_ids: &mut ContractOwnershipAccountIdsObject,
-    ) {
-        let bid = Self::cancel_bid(owner, account_ids);
-        if bid.expired() {
-            LOG_EVENT_CONTRACT_BID_EXPIRED.log("expired bid was cancelled");
-        } else {
-            LOG_EVENT_CONTRACT_BID_LOST.log("higher bid was placed");
-        }
-    }
+    // fn cancel_losing_bid(
+    //     owner: &mut ContractOwnerObject,
+    //     account_ids: &mut ContractOwnershipAccountIdsObject,
+    // ) {
+    //     let bid = Self::cancel_bid(owner, account_ids);
+    //     if bid.expired() {
+    //         LOG_EVENT_CONTRACT_BID_EXPIRED.log("bid expired");
+    //     } else {
+    //         LOG_EVENT_CONTRACT_BID_LOST.log("higher bid was placed");
+    //     }
+    // }
 
     fn place_bid(
         owner: &mut ContractOwnerObject,
@@ -517,5 +517,37 @@ mod tests {
             }
             _ => panic!("expected TransferAction"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests_sell_contract {
+    use super::*;
+    use crate::components::contract_ownership::ContractOwnershipComponent;
+    use crate::ContractOwnership;
+    use near_sdk::test_utils;
+    use oysterpack_smart_near::component::*;
+    use oysterpack_smart_near::domain::ExpirationDuration;
+    use oysterpack_smart_near::YOCTO;
+    use oysterpack_smart_near_test::*;
+
+    #[test]
+    fn new_sale_no_bid() {
+        // Arrange
+        let alfio = "alfio";
+
+        let mut ctx = new_context(alfio);
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        // Act
+        ContractSaleComponent.sell_contract(YOCTO.into());
+        // Assert
+        assert_eq!(
+            ContractSaleComponent::contract_sale_price(),
+            Some(YOCTO.into())
+        );
     }
 }
