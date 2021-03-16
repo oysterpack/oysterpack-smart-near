@@ -129,9 +129,9 @@ impl ContractOwnership for ContractOwnershipComponent {
         };
 
         let account_ids = ContractOwnershipAccountIdsObject::load();
-        Promise::new(account_ids.owner.clone()).transfer(amount.value());
+        Promise::new(account_ids.owner.clone()).transfer(amount.value() + 1);
 
-        owner_balance.total -= amount;
+        owner_balance.total -= amount + 1;
         owner_balance.available -= amount;
         owner_balance
     }
@@ -139,9 +139,13 @@ impl ContractOwnership for ContractOwnershipComponent {
     fn owner_balance() -> ContractOwnerNearBalance {
         let near_balances = ContractMetricsComponent::near_balances();
         let storage_usage_costs = ContractMetricsComponent::storage_usage_costs();
+        let available = near_balances
+            .owner()
+            .saturating_sub(storage_usage_costs.owner().value())
+            .into();
         ContractOwnerNearBalance {
             total: near_balances.owner(),
-            available: near_balances.owner() - storage_usage_costs.owner(),
+            available,
         }
     }
 }
@@ -782,5 +786,72 @@ mod tests_cancel_ownership_transfer {
             .is_none());
         let logs = test_utils::get_logs();
         assert_eq!(&logs[0], "[INFO] [CONTRACT_TRANSFER_CANCELLED] ")
+    }
+}
+
+#[cfg(test)]
+mod owner_balance {
+    use super::*;
+    use oysterpack_smart_near::domain::ZERO_NEAR;
+    use oysterpack_smart_near_test::*;
+
+    #[test]
+    fn withdraw_all_available_balance() {
+        // Arrange
+        let alfio = "alfio";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        let owner_balance_1 = ContractOwnershipComponent::owner_balance();
+        assert!(owner_balance_1.available > ZERO_NEAR);
+        // Act
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        let owner_balance_2 = ContractOwnershipComponent.withdraw_owner_balance(None);
+        assert_eq!(owner_balance_2.available, ZERO_NEAR);
+        let receipts = deserialize_receipts();
+        assert_eq!(
+            &receipts[0].receiver_id,
+            ContractOwnershipComponent::owner().as_str()
+        );
+        match &receipts[0].actions[0] {
+            Action::Transfer(transfer) => {
+                // available balance is bit higher than the initial balance because of transaction rewards
+                assert!(transfer.deposit > owner_balance_1.available.value() + 1);
+            }
+            _ => panic!("expected TransferAction"),
+        }
+    }
+
+    #[test]
+    fn withdraw_partial_available_balance() {
+        // Arrange
+        let alfio = "alfio";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        // Act
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        let initial_balance = ContractOwnershipComponent::owner_balance();
+        let amount = initial_balance.available.value() / 2;
+        let owner_balance = ContractOwnershipComponent.withdraw_owner_balance(Some(amount.into()));
+        assert!(owner_balance.available < initial_balance.available);
+        let receipts = deserialize_receipts();
+        assert_eq!(
+            &receipts[0].receiver_id,
+            ContractOwnershipComponent::owner().as_str()
+        );
+        match &receipts[0].actions[0] {
+            Action::Transfer(transfer) => {
+                // available balance is bit higher than the initial balance because of transaction rewards
+                assert_eq!(transfer.deposit, amount + 1);
+            }
+            _ => panic!("expected TransferAction"),
+        }
     }
 }
