@@ -1,5 +1,6 @@
 use crate::{
-    ContractBid, ERR_CURRENT_OR_PROSPECTIVE_OWNER_ACCESS_REQUIRED, ERR_OWNER_ACCESS_REQUIRED,
+    ContractBid, ERR_CONTRACT_OWNER_TRANSFER_NOT_INITIATED,
+    ERR_CURRENT_OR_PROSPECTIVE_OWNER_ACCESS_REQUIRED, ERR_OWNER_ACCESS_REQUIRED,
     ERR_PROSPECTIVE_OWNER_ACCESS_REQUIRED,
 };
 use near_sdk::json_types::ValidAccountId;
@@ -67,6 +68,8 @@ impl ContractOwnerObject {
     /// prospective owner
     pub fn assert_prospective_owner_access() -> Self {
         let owner = Self::load();
+        ERR_CONTRACT_OWNER_TRANSFER_NOT_INITIATED
+            .assert(|| owner.prospective_owner_account_id_hash.is_some());
         ERR_PROSPECTIVE_OWNER_ACCESS_REQUIRED.assert(|| {
             owner
                 .prospective_owner_account_id_hash()

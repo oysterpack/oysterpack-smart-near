@@ -272,6 +272,7 @@ mod tests {
 mod tests_transfer_ownership {
     use super::*;
     use crate::ContractSale;
+    use near_sdk::test_utils;
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
@@ -298,6 +299,14 @@ mod tests_transfer_ownership {
                 .as_str(),
             "bob"
         );
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
+        assert_eq!(
+            &logs[0],
+            "[INFO] [CONTRACT_FOR_SALE] 1000000000000000000000000000"
+        );
+        assert!(&logs[1].starts_with("[INFO] [CONTRACT_SALE_CANCELLED]"));
+        assert_eq!(&logs[2], "[INFO] [CONTRACT_TRANSFER_INITIATED] bob");
     }
 
     #[test]
@@ -445,5 +454,76 @@ mod tests_transfer_ownership {
         ctx.attached_deposit = 2;
         testing_env!(ctx.clone());
         ContractOwnershipComponent.transfer_ownership(to_valid_account_id("bob"));
+    }
+}
+
+#[cfg(test)]
+mod tests_finalize_transfer_ownership {
+    use super::*;
+    use near_sdk::test_utils;
+    use oysterpack_smart_near_test::*;
+
+    #[test]
+    fn finalize_transfer() {
+        // Arrange
+        let alfio = "alfio";
+        let bob = "bob";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+
+        // Act
+        ctx.predecessor_account_id = bob.to_string();
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.finalize_ownership_transfer();
+
+        // Assert
+        assert_eq!(ContractOwnershipComponent::owner().as_str(), bob);
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
+        assert!(&logs[0].starts_with("[INFO] [CONTRACT_TRANSFER_FINALIZED]"));
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [PROSPECTIVE_OWNER_ACCESS_REQUIRED]")]
+    fn not_prospective_owner() {
+        // Arrange
+        let alfio = "alfio";
+        let bob = "bob";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+
+        // Act
+        ctx.predecessor_account_id = "alice".to_string();
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.finalize_ownership_transfer();
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [CONTRACT_OWNER_TRANSFER_NOT_INITIATED]")]
+    fn no_transfer_in_progress() {
+        // Arrange
+        let alfio = "alfio";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        // Act
+        ctx.attached_deposit = 1;
+        ctx.predecessor_account_id = "alice".to_string();
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.finalize_ownership_transfer();
     }
 }

@@ -50,7 +50,7 @@ pub trait ContractOwnership {
     ///
     /// ## Notes
     /// This effectively transfers any owner balance to the new owner. The owner can withdraw
-    /// from its available balance before the transfer is finalized.s
+    /// from its available balance before the transfer is finalized.
     ///
     /// ## Panics
     /// - if the predecessor ID is not the new prospective owner
@@ -109,6 +109,11 @@ pub const ERR_OWNER_ACCESS_REQUIRED: ErrorConst = ErrorConst(
 pub const ERR_PROSPECTIVE_OWNER_ACCESS_REQUIRED: ErrorConst = ErrorConst(
     ErrCode("PROSPECTIVE_OWNER_ACCESS_REQUIRED"),
     "action requires prospective owner access",
+);
+
+pub const ERR_CONTRACT_OWNER_TRANSFER_NOT_INITIATED: ErrorConst = ErrorConst(
+    ErrCode("CONTRACT_OWNER_TRANSFER_NOT_INITIATED"),
+    "contract ownership transfer has not been initiated",
 );
 
 /// Indicates access was denied because current or prospective owner access was required
