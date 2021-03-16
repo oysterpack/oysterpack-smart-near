@@ -524,10 +524,8 @@ mod tests {
 mod tests_sell_contract {
     use super::*;
     use crate::components::contract_ownership::ContractOwnershipComponent;
-    use crate::ContractOwnership;
     use near_sdk::test_utils;
     use oysterpack_smart_near::component::*;
-    use oysterpack_smart_near::domain::ExpirationDuration;
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
