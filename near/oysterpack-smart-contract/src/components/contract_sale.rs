@@ -615,4 +615,38 @@ mod tests_sell_contract {
         );
         assert_eq!(logs.len(), 1);
     }
+
+    #[test]
+    fn new_sale_lower_bid() {
+        // Arrange
+        let owner = "alfio";
+        let buyer = "bob";
+
+        let mut ctx = new_context(owner);
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(owner)));
+        ctx.attached_deposit = 100;
+        ctx.predecessor_account_id = buyer.to_string();
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+
+        // Act
+        ctx.attached_deposit = 1;
+        ctx.predecessor_account_id = owner.to_string();
+        testing_env!(ctx.clone());
+        ContractSaleComponent.sell_contract(YOCTO.into());
+        // Assert
+        assert_eq!(
+            ContractSaleComponent::contract_sale_price(),
+            Some(YOCTO.into())
+        );
+        let logs = test_utils::get_logs();
+
+        assert_eq!(
+            &logs[0],
+            LOG_EVENT_CONTRACT_FOR_SALE.message(YOCTO).as_str()
+        );
+    }
 }
