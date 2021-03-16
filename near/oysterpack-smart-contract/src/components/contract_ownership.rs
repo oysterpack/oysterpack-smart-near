@@ -12,9 +12,11 @@ use crate::{
 };
 use near_sdk::json_types::ValidAccountId;
 use near_sdk::{env, AccountId, Promise};
-use oysterpack_smart_near::asserts::{assert_request, assert_yocto_near_attached};
+use oysterpack_smart_near::asserts::{
+    assert_request, assert_yocto_near_attached, ERR_CODE_BAD_REQUEST,
+};
 use oysterpack_smart_near::component::Deploy;
-use oysterpack_smart_near::domain::{AccountIdHash, YoctoNear};
+use oysterpack_smart_near::domain::{AccountIdHash, YoctoNear, ZERO_NEAR};
 
 pub struct ContractOwnershipComponent;
 
@@ -123,6 +125,8 @@ impl ContractOwnership for ContractOwnershipComponent {
         let amount = match amount {
             None => owner_balance.available,
             Some(amount) => {
+                ERR_CODE_BAD_REQUEST
+                    .assert(|| amount > ZERO_NEAR, || "withdraw amount cannot be zero");
                 ERR_OWNER_BALANCE_OVERDRAW.assert(|| owner_balance.available >= amount);
                 amount
             }
@@ -853,5 +857,143 @@ mod owner_balance {
             }
             _ => panic!("expected TransferAction"),
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [OWNER_BALANCE_OVERDRAW]")]
+    fn over_withdraw_partial_available_balance() {
+        // Arrange
+        let alfio = "alfio";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        // Act
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        let initial_balance = ContractOwnershipComponent::owner_balance();
+        let amount = initial_balance.available.value() + 1;
+        ContractOwnershipComponent.withdraw_owner_balance(Some(amount.into()));
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [BAD_REQUEST] withdraw amount cannot be zero")]
+    fn zero_withdraw_partial_available_balance() {
+        // Arrange
+        let alfio = "alfio";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        // Act
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.withdraw_owner_balance(Some(ZERO_NEAR));
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [OWNER_ACCESS_REQUIRED]")]
+    fn withdraw_partial_available_balance_as_non_owner() {
+        // Arrange
+        let alfio = "alfio";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        // Act
+        ctx.attached_deposit = 1;
+        ctx.predecessor_account_id = "bob".to_string();
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.withdraw_owner_balance(Some(100.into()));
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [OWNER_ACCESS_REQUIRED]")]
+    fn withdraw_all_available_balance_as_non_owner() {
+        // Arrange
+        let alfio = "alfio";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        // Act
+        ctx.attached_deposit = 1;
+        ctx.predecessor_account_id = "bob".to_string();
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.withdraw_owner_balance(None);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "[ERR] [YOCTONEAR_DEPOSIT_REQUIRED] exactly 1 yoctoNEAR must be attached"
+    )]
+    fn withdraw_all_available_balance_zero_deposit_attached() {
+        // Arrange
+        let alfio = "alfio";
+        let ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        // Act
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.withdraw_owner_balance(None);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "[ERR] [YOCTONEAR_DEPOSIT_REQUIRED] exactly 1 yoctoNEAR must be attached"
+    )]
+    fn withdraw_all_available_balance_2_deposit_attached() {
+        // Arrange
+        let alfio = "alfio";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        // Act
+        ctx.attached_deposit = 2;
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.withdraw_owner_balance(None);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "[ERR] [YOCTONEAR_DEPOSIT_REQUIRED] exactly 1 yoctoNEAR must be attached"
+    )]
+    fn withdraw_partial_available_balance_zero_deposit_attached() {
+        // Arrange
+        let alfio = "alfio";
+        let ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        // Act
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.withdraw_owner_balance(Some(100.into()));
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "[ERR] [YOCTONEAR_DEPOSIT_REQUIRED] exactly 1 yoctoNEAR must be attached"
+    )]
+    fn withdraw_partial_available_balance_2_deposit_attached() {
+        // Arrange
+        let alfio = "alfio";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        // Act
+        ctx.attached_deposit = 2;
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.withdraw_owner_balance(Some(100.into()));
     }
 }
