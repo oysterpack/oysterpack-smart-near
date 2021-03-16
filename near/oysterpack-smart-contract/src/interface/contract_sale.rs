@@ -28,6 +28,7 @@ pub trait ContractSale {
     /// ## Log Events
     /// - [`LOG_EVENT_CONTRACT_FOR_SALE`]
     /// - [`LOG_EVENT_CONTRACT_BID_CANCELLED`] - if current bid has expired
+    /// = [`LOG_EVENT_CONTRACT_SOLD`] - if the current bid is >= the sale price
     ///
     /// ## Panics
     /// - if the predecessor account is not the owner account

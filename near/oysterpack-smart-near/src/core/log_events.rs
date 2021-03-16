@@ -7,8 +7,10 @@ pub enum Level {
     WARN,
 }
 
+pub type LogEventName = &'static str;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct LogEvent(pub Level, pub &'static str);
+pub struct LogEvent(pub Level, pub LogEventName);
 
 impl Display for LogEvent {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -22,6 +24,13 @@ impl LogEvent {
         Msg: Display,
     {
         env::log(format!("{} {}", self, msg).as_bytes());
+    }
+
+    pub fn message<Msg>(&self, msg: Msg) -> String
+    where
+        Msg: Display,
+    {
+        format!("{} {}", self, msg).to_string()
     }
 }
 

@@ -549,5 +549,11 @@ mod tests_sell_contract {
             ContractSaleComponent::contract_sale_price(),
             Some(YOCTO.into())
         );
+        let logs = test_utils::get_logs();
+
+        assert_eq!(
+            &logs[0],
+            LOG_EVENT_CONTRACT_FOR_SALE.message(YOCTO).as_str()
+        );
     }
 }
