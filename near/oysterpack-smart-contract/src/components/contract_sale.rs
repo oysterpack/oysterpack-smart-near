@@ -321,7 +321,7 @@ impl ContractSaleComponent {
             .expect("BUG: execute_contract_sale(): expected buyer");
 
         LOG_EVENT_CONTRACT_SOLD.log(format!(
-            "buyer: {}, sale price: {}",
+            "buyer={}, price={}",
             &account_ids.owner, bid.amount
         ));
     }
@@ -647,6 +647,43 @@ mod tests_sell_contract {
         assert_eq!(
             &logs[0],
             LOG_EVENT_CONTRACT_FOR_SALE.message(YOCTO).as_str()
+        );
+    }
+
+    #[test]
+    fn new_sale_matching_bid() {
+        // Arrange
+        let owner = "alfio";
+        let buyer = "bob";
+
+        let mut ctx = new_context(owner);
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(owner)));
+        ctx.attached_deposit = YOCTO;
+        ctx.predecessor_account_id = buyer.to_string();
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+
+        // Act
+        ctx.attached_deposit = 1;
+        ctx.predecessor_account_id = owner.to_string();
+        testing_env!(ctx.clone());
+        ContractSaleComponent.sell_contract(YOCTO.into());
+        // Assert
+        assert!(ContractSaleComponent::contract_sale_price().is_none());
+        assert!(ContractSaleComponent::contract_bid().is_none());
+        assert!(ContractOwnershipAccountIdsObject::load().buyer.is_none());
+        assert_eq!(ContractOwnershipComponent::owner(), buyer.to_string());
+
+        let logs = test_utils::get_logs();
+
+        assert_eq!(
+            &logs[0],
+            LOG_EVENT_CONTRACT_SOLD
+                .message(format!("buyer={}, price={}", buyer, YOCTO))
+                .as_str()
         );
     }
 }
