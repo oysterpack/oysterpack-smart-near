@@ -1192,6 +1192,7 @@ mod tests_buy_contract {
     #[cfg(test)]
     mod no_sale_with_bid {
         use super::*;
+        use oysterpack_smart_near::domain::ExpirationDuration;
 
         #[test]
         #[should_panic(expected = "[ERR] [CONTRACT_BID_NOT_ATTACHED]")]
@@ -1211,6 +1212,53 @@ mod tests_buy_contract {
             ctx.attached_deposit = 999;
             testing_env!(ctx.clone());
             ContractSaleComponent.buy_contract(None);
+        }
+
+        #[test]
+        fn higher_prior_expired_bid() {
+            testing_env!(new_context(OWNER));
+            let mut ctx = arrange(
+                None,
+                Some(ContractBuyerBid {
+                    buyer: BUYER_2.to_string(),
+                    bid: ContractBid {
+                        amount: 1000.into(),
+                        expiration: Some(
+                            ExpirationSetting::Relative(ExpirationDuration::Epochs(10)).into(),
+                        ),
+                    },
+                }),
+            );
+
+            let bid = ContractSaleComponent::contract_bid().unwrap();
+
+            ctx.predecessor_account_id = BUYER_1.to_string();
+            ctx.attached_deposit = 999;
+            if let Some(Expiration::Epoch(epoch)) = bid.bid.expiration {
+                ctx.epoch_height = epoch.value() + 1; // expires the bid
+            }
+            testing_env!(ctx.clone());
+            ContractSaleComponent.buy_contract(None);
+            let bid = ContractSaleComponent::contract_bid().unwrap();
+            assert_eq!(bid.buyer, ctx.predecessor_account_id);
+            assert_eq!(bid.bid.amount, ctx.attached_deposit.into());
+
+            let logs = test_utils::get_logs();
+            println!("{:#?}", logs);
+            assert_eq!(
+                logs,
+                vec![
+                    LOG_EVENT_CONTRACT_BID_CANCELLED.message("higher bid has been placed"),
+                    LOG_EVENT_CONTRACT_BID_PLACED.message("bid: 999")
+                ]
+            );
+
+            let receipts = deserialize_receipts();
+            assert_eq!(&receipts[0].receiver_id, BUYER_2);
+            match &receipts[0].actions[0] {
+                Action::Transfer(transfer) => assert_eq!(transfer.deposit, 1000),
+                _ => panic!("expected TransferAction"),
+            }
         }
 
         #[test]
