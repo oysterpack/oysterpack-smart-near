@@ -20,6 +20,12 @@ impl ContractBid {
             .map_or(false, |expiration| expiration.expired())
     }
 
+    pub fn assert_not_expired(&self) {
+        ERR_BID_IS_EXPIRED.assert(|| !self.expired());
+    }
+
+    /// ## Panics
+    /// if bid becomes expired
     pub(crate) fn update_expiration(&mut self, expiration: Option<ExpirationSetting>) {
         if let Some(expiration) = expiration {
             let expiration: Expiration = expiration.into();
