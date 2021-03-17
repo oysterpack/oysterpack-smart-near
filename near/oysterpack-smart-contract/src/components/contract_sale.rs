@@ -1,5 +1,5 @@
 use crate::components::contract_ownership::ContractOwnershipComponent;
-use crate::{ContractBid, ContractSale, ERR_BID_IS_EXPIRED};
+use crate::{ContractBid, ContractSale};
 use crate::{
     ContractBuyerBid, ContractOwner, ContractOwnerObject, ContractOwnership,
     ContractOwnershipAccountIdsObject, ERR_ACCESS_DENIED_MUST_BE_BUYER, ERR_CONTRACT_BID_TOO_LOW,
@@ -10,7 +10,7 @@ use crate::{
     LOG_EVENT_CONTRACT_SALE_CANCELLED, LOG_EVENT_CONTRACT_SOLD,
 };
 use near_sdk::{env, Promise};
-use oysterpack_smart_near::asserts::assert_near_attached;
+use oysterpack_smart_near::asserts::{assert_near_attached, ERR_CODE_BAD_REQUEST};
 use oysterpack_smart_near::domain::ExpirationSetting;
 use oysterpack_smart_near::{
     asserts::assert_yocto_near_attached,
@@ -84,11 +84,7 @@ impl ContractSale for ContractSaleComponent {
 
     fn buy_contract(&mut self, expiration: Option<ExpirationSetting>) {
         assert_near_attached("contract bid cannot be zero");
-        let expiration = expiration.map(|expiration| {
-            let expiration: Expiration = expiration.into();
-            ERR_BID_IS_EXPIRED.assert(|| !expiration.expired());
-            expiration
-        });
+        let expiration = Self::assert_not_expired(expiration);
 
         let mut account_ids = ContractOwnershipAccountIdsObject::load();
         ERR_OWNER_CANNOT_BUY_CONTRACT.assert(|| env::predecessor_account_id() != account_ids.owner);
@@ -115,6 +111,7 @@ impl ContractSale for ContractSaleComponent {
 
     fn raise_contract_bid(&mut self, expiration: Option<ExpirationSetting>) {
         assert_near_attached("bid raise cannot be zero");
+        Self::assert_not_expired(expiration);
 
         let mut owner = ContractOwnerObject::load();
         match owner.bid {
@@ -150,6 +147,7 @@ impl ContractSale for ContractSaleComponent {
 
     fn lower_contract_bid(&mut self, amount: YoctoNear, expiration: Option<ExpirationSetting>) {
         assert_yocto_near_attached();
+        Self::assert_not_expired(expiration);
 
         let mut owner = ContractOwnerObject::load();
         match owner.bid {
@@ -175,6 +173,11 @@ impl ContractSale for ContractSaleComponent {
 
     fn update_contract_bid_expiration(&mut self, expiration: ExpirationSetting) {
         assert_yocto_near_attached();
+        let expiration: Expiration = expiration.into();
+        ERR_CODE_BAD_REQUEST.assert(
+            || !expiration.expired(),
+            || "expiration cannot be set to expired",
+        );
 
         let mut owner = ContractOwnerObject::load();
         match owner.bid {
@@ -183,7 +186,7 @@ impl ContractSale for ContractSaleComponent {
                 ERR_ACCESS_DENIED_MUST_BE_BUYER
                     .assert(|| buyer_account_id_hash == env::predecessor_account_id().into());
 
-                bid.expiration = Some(expiration.into());
+                bid.expiration = Some(expiration);
                 owner.bid = Some((buyer_account_id_hash, bid));
                 Self::log_bid_event(LOG_EVENT_CONTRACT_BID_EXPIRATION_CHANGE, bid);
             }
@@ -231,6 +234,17 @@ impl ContractSale for ContractSaleComponent {
 }
 
 impl ContractSaleComponent {
+    fn assert_not_expired(expiration: Option<ExpirationSetting>) -> Option<Expiration> {
+        expiration.map(|expiration| {
+            let expiration: Expiration = expiration.into();
+            ERR_CODE_BAD_REQUEST.assert(
+                || !expiration.expired(),
+                || "expiration cannot be set to expired",
+            );
+            expiration
+        })
+    }
+
     fn log_bid_event(event: LogEvent, bid: ContractBid) {
         match bid.expiration {
             None => event.log(format!("bid: {}", bid.amount)),
@@ -1167,7 +1181,7 @@ mod tests_buy_contract {
         }
 
         #[test]
-        #[should_panic(expected = "[ERR] [BID_IS_EXPIRED]")]
+        #[should_panic(expected = "[ERR] [BAD_REQUEST] expiration cannot be set to expired")]
         fn with_expired_bid() {
             let mut ctx = arrange(None, None);
 
@@ -1731,5 +1745,31 @@ mod tests_lower_contract_bid {
         testing_env!(ctx.clone());
         // Act
         ContractSaleComponent.lower_contract_bid(100.into(), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [BAD_REQUEST] expiration cannot be set to expired")]
+    fn with_expired_expiration() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = YOCTO;
+        ctx.epoch_height = 5;
+        testing_env!(ctx.clone());
+        // Act
+        ContractSaleComponent.buy_contract(None);
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 1;
+        ctx.epoch_height = 11;
+        testing_env!(ctx.clone());
+        // Act
+        ContractSaleComponent.lower_contract_bid(
+            100.into(),
+            Some(ExpirationSetting::Absolute(Expiration::Epoch(10.into()))),
+        );
     }
 }
