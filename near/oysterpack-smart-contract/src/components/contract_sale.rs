@@ -114,7 +114,7 @@ impl ContractSale for ContractSaleComponent {
     }
 
     fn raise_contract_bid(&mut self, expiration: Option<ExpirationSetting>) {
-        assert_near_attached("NEAR attached deposit is required");
+        assert_near_attached("bid raise cannot be zero");
 
         let mut owner = ContractOwnerObject::load();
         match owner.bid {
@@ -1429,5 +1429,153 @@ mod tests_cancel_contract_sale {
         assert!(ContractSaleComponent::contract_sale_price().is_none());
         let logs = test_utils::get_logs();
         assert!(logs.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod tests_raise_contract_bid {
+    use super::*;
+    use oysterpack_smart_near::component::*;
+    use oysterpack_smart_near::YOCTO;
+    use oysterpack_smart_near_test::*;
+
+    const OWNER: &str = "owner";
+    const BUYER: &str = "buyer";
+
+    #[test]
+    #[should_panic(expected = "[ERR] [NO_ACTIVE_BID]")]
+    fn no_prior_bid() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = YOCTO;
+        testing_env!(ctx.clone());
+        // Act
+        ContractSaleComponent.raise_contract_bid(None);
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [ACCESS_DENIED_MUST_BE_BUYER]")]
+    fn not_current_bidder() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = YOCTO;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+
+        ctx.predecessor_account_id = "BUYER2".to_string();
+        ctx.attached_deposit = YOCTO;
+        testing_env!(ctx.clone());
+        // Act
+        ContractSaleComponent.raise_contract_bid(None);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "[ERR] [NEAR_DEPOSIT_REQUIRED] NEAR deposit is required - bid raise cannot be zero"
+    )]
+    fn with_zero_deposit_attached() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 1000;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+
+        ctx.attached_deposit = 0;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.raise_contract_bid(None);
+    }
+
+    #[test]
+    fn prexisting_bid_with_no_sale_price() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 1000;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+
+        ctx.attached_deposit = 500;
+        testing_env!(ctx.clone());
+        // Act
+        ContractSaleComponent.raise_contract_bid(None);
+
+        // Assert
+        let bid = ContractSaleComponent::contract_bid().unwrap();
+        assert_eq!(bid.bid.amount, 1500.into());
+    }
+
+    #[test]
+    fn prexisting_bid_and_raise_triggers_buy() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 1000;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+
+        ctx.predecessor_account_id = OWNER.to_string();
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.sell_contract(1500.into());
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 500;
+        testing_env!(ctx.clone());
+        // Act
+        ContractSaleComponent.raise_contract_bid(None);
+
+        // Assert
+        assert!(ContractSaleComponent::contract_bid().is_none());
+        assert!(ContractSaleComponent::contract_sale_price().is_none());
+        assert_eq!(
+            ContractOwnershipComponent::owner(),
+            ctx.predecessor_account_id
+        );
+    }
+
+    #[test]
+    fn prexisting_bid_with_higher_sale_price() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 1000;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+
+        ctx.predecessor_account_id = OWNER.to_string();
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.sell_contract(2500.into());
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 500;
+        testing_env!(ctx.clone());
+        // Act
+        ContractSaleComponent.raise_contract_bid(None);
+
+        // Assert
+        let bid = ContractSaleComponent::contract_bid().unwrap();
+        assert_eq!(bid.bid.amount, 1500.into());
     }
 }
