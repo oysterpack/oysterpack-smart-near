@@ -122,6 +122,7 @@ impl ContractSale for ContractSaleComponent {
             Some((buyer_account_id_hash, mut bid)) => {
                 ERR_ACCESS_DENIED_MUST_BE_BUYER
                     .assert(|| buyer_account_id_hash == env::predecessor_account_id().into());
+                ERR_BID_IS_EXPIRED.assert(|| !bid.expired());
 
                 let amount = env::attached_deposit().into();
                 ContractBid::incr_near_balance(amount);
@@ -1436,6 +1437,7 @@ mod tests_cancel_contract_sale {
 mod tests_raise_contract_bid {
     use super::*;
     use oysterpack_smart_near::component::*;
+    use oysterpack_smart_near::domain::ExpirationDuration;
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
@@ -1577,5 +1579,86 @@ mod tests_raise_contract_bid {
         // Assert
         let bid = ContractSaleComponent::contract_bid().unwrap();
         assert_eq!(bid.bid.amount, 1500.into());
+    }
+
+    #[test]
+    fn prexisting_bid_with_expiration() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 1000;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+
+        ctx.attached_deposit = 500;
+        ctx.epoch_height = 10;
+        testing_env!(ctx.clone());
+        // Act
+        ContractSaleComponent.raise_contract_bid(Some(ExpirationSetting::Relative(
+            ExpirationDuration::Epochs(10),
+        )));
+
+        // Assert
+        let bid = ContractSaleComponent::contract_bid().unwrap();
+        assert_eq!(bid.bid.amount, 1500.into());
+        match bid.bid.expiration.unwrap() {
+            Expiration::Epoch(epoch) => assert_eq!(epoch, 20.into()),
+            _ => panic!("expected Expiration::Epoch"),
+        }
+    }
+
+    #[test]
+    fn prexisting_bid_with_prior_expiration_set() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 1000;
+        ctx.epoch_height = 10;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(Some(ExpirationSetting::Relative(
+            ExpirationDuration::Epochs(10),
+        )));
+
+        ctx.attached_deposit = 500;
+        testing_env!(ctx.clone());
+        // Act
+        ContractSaleComponent.raise_contract_bid(None);
+
+        // Assert
+        let bid = ContractSaleComponent::contract_bid().unwrap();
+        assert_eq!(bid.bid.amount, 1500.into());
+        match bid.bid.expiration.unwrap() {
+            Expiration::Epoch(epoch) => assert_eq!(epoch, 20.into()),
+            _ => panic!("expected Expiration::Epoch"),
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [BID_IS_EXPIRED]")]
+    fn bid_expired() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 1000;
+        ctx.epoch_height = 10;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(Some(ExpirationSetting::Relative(
+            ExpirationDuration::Epochs(10),
+        )));
+
+        ctx.attached_deposit = 500;
+        ctx.epoch_height = 100;
+        testing_env!(ctx.clone());
+        // Act
+        ContractSaleComponent.raise_contract_bid(None);
     }
 }
