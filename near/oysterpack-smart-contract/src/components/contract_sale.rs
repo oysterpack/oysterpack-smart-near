@@ -93,6 +93,10 @@ impl ContractSale for ContractSaleComponent {
         let mut account_ids = ContractOwnershipAccountIdsObject::load();
         ERR_OWNER_CANNOT_BUY_CONTRACT.assert(|| env::predecessor_account_id() != account_ids.owner);
         let mut owner = ContractOwnerObject::load();
+        ERR_CONTRACT_SALE_NOT_ALLOWED.assert(
+            || !owner.transfer_initiated(),
+            || "bid cannot be placed while contract ownership is being transferred",
+        );
 
         let bid = YoctoNear(env::attached_deposit());
         match owner.bid.map(|(_, bid)| bid) {
@@ -989,6 +993,21 @@ mod tests_buy_contract {
         }
         assert_eq!(ContractOwnershipComponent::owner(), OWNER.to_string());
         ctx
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [CONTRACT_SALE_NOT_ALLOWED]")]
+    fn with_contract_transfer_initiated() {
+        let mut ctx = arrange(None, None);
+
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(BUYER_2));
+
+        ctx.predecessor_account_id = BUYER_1.to_string();
+        ctx.attached_deposit = 10000;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
     }
 
     #[cfg(test)]
