@@ -289,6 +289,28 @@ mod tests_transfer_ownership {
     use oysterpack_smart_near_test::*;
 
     #[test]
+    fn change_transfer_recipient() {
+        // Arrange
+        let alfio = "alfio";
+        let mut ctx = new_context(alfio);
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent.transfer_ownership(to_valid_account_id("bob"));
+
+        // Act
+        ContractOwnershipComponent.transfer_ownership(to_valid_account_id("alice"));
+        // Assert
+        assert_eq!(
+            ContractOwnershipComponent::prospective_owner().unwrap(),
+            "alice".to_string()
+        );
+    }
+
+    #[test]
     fn while_contract_is_for_sale() {
         // Arrange
         let alfio = "alfio";

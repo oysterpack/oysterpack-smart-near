@@ -1993,6 +1993,92 @@ mod tests_contract_bid_expiration {
     }
 
     #[test]
+    #[should_panic(expected = "[ERR] [YOCTONEAR_DEPOSIT_REQUIRED]")]
+    fn update_zero_deposit() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 10 * YOCTO;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+
+        ctx.attached_deposit = 0;
+        ctx.block_timestamp = 100;
+        testing_env!(ctx.clone());
+        // Act
+        let expiration = ExpirationSetting::Relative(ExpirationDuration::Seconds(60));
+        ContractSaleComponent.update_contract_bid_expiration(expiration);
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [YOCTONEAR_DEPOSIT_REQUIRED]")]
+    fn update_two_deposit() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 10 * YOCTO;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+
+        ctx.attached_deposit = 2;
+        ctx.block_timestamp = 100;
+        testing_env!(ctx.clone());
+        // Act
+        let expiration = ExpirationSetting::Relative(ExpirationDuration::Seconds(60));
+        ContractSaleComponent.update_contract_bid_expiration(expiration);
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [ACCESS_DENIED_MUST_BE_BUYER]")]
+    fn update_not_buyer() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 10 * YOCTO;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+
+        ctx.predecessor_account_id = "OTHER".to_string();
+        ctx.attached_deposit = 1;
+        ctx.block_timestamp = 100;
+        testing_env!(ctx.clone());
+        // Act
+        let expiration = ExpirationSetting::Relative(ExpirationDuration::Seconds(60));
+        ContractSaleComponent.update_contract_bid_expiration(expiration);
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [BAD_REQUEST] expiration cannot be set to expired")]
+    fn update_with_expired_setting() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 10 * YOCTO;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+
+        ctx.predecessor_account_id = "OTHER".to_string();
+        ctx.attached_deposit = 1;
+        ctx.block_timestamp = 100;
+        testing_env!(ctx.clone());
+        // Act
+        let expiration = ExpirationSetting::Absolute(Expiration::Timestamp(60.into()));
+        ContractSaleComponent.update_contract_bid_expiration(expiration);
+    }
+
+    #[test]
     fn clear() {
         // Arrange
         let mut ctx = new_context(OWNER);
@@ -2015,5 +2101,69 @@ mod tests_contract_bid_expiration {
         // Assert
         let bid = ContractSaleComponent::contract_bid().unwrap();
         assert!(bid.bid.expiration.is_none());
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [YOCTONEAR_DEPOSIT_REQUIRED]")]
+    fn clear_zero_deposit() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 10 * YOCTO;
+        testing_env!(ctx.clone());
+        let expiration = ExpirationSetting::Relative(ExpirationDuration::Seconds(60));
+        ContractSaleComponent.buy_contract(Some(expiration));
+
+        ctx.attached_deposit = 0;
+        ctx.block_timestamp = 100;
+        testing_env!(ctx.clone());
+        // Act
+        ContractSaleComponent.clear_contract_bid_expiration();
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [YOCTONEAR_DEPOSIT_REQUIRED]")]
+    fn clear_two_deposit() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 10 * YOCTO;
+        testing_env!(ctx.clone());
+        let expiration = ExpirationSetting::Relative(ExpirationDuration::Seconds(60));
+        ContractSaleComponent.buy_contract(Some(expiration));
+
+        ctx.attached_deposit = 2;
+        ctx.block_timestamp = 100;
+        testing_env!(ctx.clone());
+        // Act
+        ContractSaleComponent.clear_contract_bid_expiration();
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [ACCESS_DENIED_MUST_BE_BUYER]")]
+    fn clear_not_buyer() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 10 * YOCTO;
+        testing_env!(ctx.clone());
+        let expiration = ExpirationSetting::Relative(ExpirationDuration::Seconds(60));
+        ContractSaleComponent.buy_contract(Some(expiration));
+
+        ctx.predecessor_account_id = "BUYER2".to_string();
+        ctx.attached_deposit = 1;
+        ctx.block_timestamp = 100;
+        testing_env!(ctx.clone());
+        // Act
+        ContractSaleComponent.clear_contract_bid_expiration();
     }
 }
