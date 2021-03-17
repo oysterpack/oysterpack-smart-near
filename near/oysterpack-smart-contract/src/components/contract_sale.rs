@@ -1701,11 +1701,73 @@ mod tests_raise_contract_bid {
 mod tests_lower_contract_bid {
     use super::*;
     use oysterpack_smart_near::component::*;
+    use oysterpack_smart_near::domain::ExpirationDuration;
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
     const OWNER: &str = "owner";
     const BUYER: &str = "buyer";
+
+    #[test]
+    fn lowered() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 10 * YOCTO;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        // Act
+        ContractSaleComponent.lower_contract_bid(YOCTO.into(), None);
+
+        // Assert
+        assert_eq!(
+            ContractSaleComponent::contract_bid().unwrap().bid.amount,
+            (9 * YOCTO).into()
+        );
+    }
+
+    #[test]
+    fn lowered_with_new_expiration() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 10 * YOCTO;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+
+        ctx.attached_deposit = 1;
+        ctx.block_index = 10;
+        testing_env!(ctx.clone());
+        // Act
+        ContractSaleComponent.lower_contract_bid(
+            YOCTO.into(),
+            Some(ExpirationSetting::Relative(ExpirationDuration::Blocks(10))),
+        );
+
+        // Assert
+        assert_eq!(
+            ContractSaleComponent::contract_bid().unwrap().bid.amount,
+            (9 * YOCTO).into()
+        );
+        match ContractSaleComponent::contract_bid()
+            .unwrap()
+            .bid
+            .expiration
+            .unwrap()
+        {
+            Expiration::Block(block) => assert_eq!(block, 20.into()),
+            _ => panic!("expected expiration on block"),
+        }
+    }
 
     #[test]
     #[should_panic(expected = "[ERR] [NO_ACTIVE_BID]")]
