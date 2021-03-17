@@ -1085,4 +1085,113 @@ mod tests_buy_contract {
             ContractSaleComponent.buy_contract(Some(expiration.into()));
         }
     }
+
+    #[cfg(test)]
+    mod with_sale_no_bid {
+        use super::*;
+        use oysterpack_smart_near::YOCTO;
+
+        #[test]
+        fn higher_sale_price() {
+            let mut ctx = arrange(Some(1000.into()), None);
+
+            ctx.predecessor_account_id = BUYER_1.to_string();
+            ctx.attached_deposit = 100;
+            testing_env!(ctx.clone());
+            ContractSaleComponent.buy_contract(None);
+
+            let bid = ContractSaleComponent::contract_bid().unwrap();
+            assert_eq!(bid.buyer, BUYER_1.to_string());
+            assert_eq!(bid.bid.amount, 100.into());
+            assert!(bid.bid.expiration.is_none());
+
+            let logs = test_utils::get_logs();
+            println!("{:#?}", logs);
+            assert_eq!(
+                &logs[0],
+                LOG_EVENT_CONTRACT_BID_PLACED.message("bid: 100").as_str()
+            );
+        }
+
+        #[test]
+        fn with_matching_sale_price() {
+            let mut ctx = arrange(Some((YOCTO * 1_000_000).into()), None);
+
+            ctx.predecessor_account_id = BUYER_1.to_string();
+            ctx.attached_deposit = YOCTO * 1_000_000;
+            testing_env!(ctx.clone());
+            ContractSaleComponent.buy_contract(None);
+            let logs = test_utils::get_logs();
+            println!("{:#?}", logs);
+            assert_eq!(
+                &logs[0],
+                LOG_EVENT_CONTRACT_SOLD
+                    .message("buyer=buyer1, price=1000000000000000000000000000000")
+                    .as_str()
+            );
+            assert_eq!(ContractOwnershipComponent::owner(), BUYER_1.to_string());
+            assert!(ContractSaleComponent::contract_sale_price().is_none());
+            assert!(ContractSaleComponent::contract_bid().is_none());
+
+            let receipts = deserialize_receipts();
+            assert_eq!(&receipts[0].receiver_id, OWNER);
+            match &receipts[0].actions[0] {
+                Action::Transfer(transfer) => assert!(transfer.deposit > ctx.attached_deposit),
+                _ => panic!("expected TransferAction"),
+            }
+        }
+
+        #[test]
+        fn with_lower_sale_price() {
+            let mut ctx = arrange(Some(100.into()), None);
+
+            ctx.predecessor_account_id = BUYER_1.to_string();
+            ctx.attached_deposit = YOCTO * 1_000_000;
+            testing_env!(ctx.clone());
+            ContractSaleComponent.buy_contract(None);
+            let logs = test_utils::get_logs();
+            println!("{:#?}", logs);
+            assert_eq!(
+                &logs[0],
+                LOG_EVENT_CONTRACT_SOLD
+                    .message("buyer=buyer1, price=1000000000000000000000000000000")
+                    .as_str()
+            );
+            assert_eq!(ContractOwnershipComponent::owner(), BUYER_1.to_string());
+            assert!(ContractSaleComponent::contract_sale_price().is_none());
+            assert!(ContractSaleComponent::contract_bid().is_none());
+
+            let receipts = deserialize_receipts();
+            assert_eq!(&receipts[0].receiver_id, OWNER);
+            match &receipts[0].actions[0] {
+                Action::Transfer(transfer) => assert!(transfer.deposit > ctx.attached_deposit),
+                _ => panic!("expected TransferAction"),
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod no_sale_with_bid {
+        use super::*;
+
+        #[test]
+        #[should_panic(expected = "[ERR] [CONTRACT_BID_NOT_ATTACHED]")]
+        fn higher_prior_bid() {
+            let mut ctx = arrange(
+                None,
+                Some(ContractBuyerBid {
+                    buyer: BUYER_2.to_string(),
+                    bid: ContractBid {
+                        amount: 1000.into(),
+                        expiration: None,
+                    },
+                }),
+            );
+
+            ctx.predecessor_account_id = BUYER_1.to_string();
+            ctx.attached_deposit = 999;
+            testing_env!(ctx.clone());
+            ContractSaleComponent.buy_contract(None);
+        }
+    }
 }
