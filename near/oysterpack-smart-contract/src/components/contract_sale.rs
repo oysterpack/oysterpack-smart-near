@@ -1375,3 +1375,41 @@ mod tests_buy_contract {
         }
     }
 }
+
+#[cfg(test)]
+mod tests_cancel_contract_sale {
+    use super::*;
+    use near_sdk::test_utils;
+    use oysterpack_smart_near::component::*;
+    use oysterpack_smart_near::YOCTO;
+    use oysterpack_smart_near_test::*;
+
+    const OWNER: &str = "owner";
+
+    #[test]
+    fn cancel_prior_sale() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ContractSaleComponent.sell_contract(YOCTO.into());
+
+        // Act
+        ContractSaleComponent.cancel_contract_sale();
+
+        // Assert
+        assert!(ContractSaleComponent::contract_sale_price().is_none());
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
+        assert_eq!(
+            logs,
+            vec![
+                LOG_EVENT_CONTRACT_FOR_SALE.message(YOCTO),
+                LOG_EVENT_CONTRACT_SALE_CANCELLED.message("")
+            ]
+        );
+    }
+}
