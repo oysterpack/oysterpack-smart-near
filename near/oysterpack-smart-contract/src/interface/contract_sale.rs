@@ -77,7 +77,7 @@ pub trait ContractSale {
     /// - if no deposit is attached - at lease 1 yoctoNEAR must be attached
     ///
     /// `#[payable]`
-    fn raise_contract_bid(&mut self, expiration: Option<ExpirationSetting>);
+    fn raise_contract_bid(&mut self, expiration: Option<ExpirationSetting>) -> ContractBid;
 
     /// Enables the buyer to lower the contract bid by the specified amount and update the expiration.
     ///
@@ -90,7 +90,11 @@ pub trait ContractSale {
     /// - if 1 yoctoNEAR deposit is not attached
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
-    fn lower_contract_bid(&mut self, amount: YoctoNear, expiration: Option<ExpirationSetting>);
+    fn lower_contract_bid(
+        &mut self,
+        amount: YoctoNear,
+        expiration: Option<ExpirationSetting>,
+    ) -> ContractBid;
 
     /// Enables the buyer to update the expiration.
     ///

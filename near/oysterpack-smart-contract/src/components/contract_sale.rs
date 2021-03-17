@@ -109,13 +109,16 @@ impl ContractSale for ContractSaleComponent {
         account_ids.save();
     }
 
-    fn raise_contract_bid(&mut self, expiration: Option<ExpirationSetting>) {
+    fn raise_contract_bid(&mut self, expiration: Option<ExpirationSetting>) -> ContractBid {
         assert_near_attached("bid raise cannot be zero");
         Self::assert_not_expired(expiration);
 
         let mut owner = ContractOwnerObject::load();
-        match owner.bid {
-            None => ERR_NO_ACTIVE_BID.panic(),
+        let bid = match owner.bid {
+            None => {
+                ERR_NO_ACTIVE_BID.panic();
+                unreachable!()
+            }
             Some((buyer_account_id_hash, mut bid)) => {
                 ERR_ACCESS_DENIED_MUST_BE_BUYER
                     .assert(|| buyer_account_id_hash == env::predecessor_account_id().into());
@@ -139,19 +142,29 @@ impl ContractSale for ContractSaleComponent {
                 } else {
                     Self::log_bid_raised(bid);
                 }
+                bid
             }
-        }
+        };
 
         owner.save();
+        bid
     }
 
-    fn lower_contract_bid(&mut self, amount: YoctoNear, expiration: Option<ExpirationSetting>) {
+    fn lower_contract_bid(
+        &mut self,
+        amount: YoctoNear,
+        expiration: Option<ExpirationSetting>,
+    ) -> ContractBid {
         assert_yocto_near_attached();
         Self::assert_not_expired(expiration);
+        ERR_CODE_BAD_REQUEST.assert(|| amount > ZERO_NEAR, || "amount cannot be zero");
 
         let mut owner = ContractOwnerObject::load();
-        match owner.bid {
-            None => ERR_NO_ACTIVE_BID.panic(),
+        let bid = match owner.bid {
+            None => {
+                ERR_NO_ACTIVE_BID.panic();
+                unreachable!()
+            }
             Some((buyer_account_id_hash, mut bid)) => {
                 bid.assert_not_expired();
                 ERR_ACCESS_DENIED_MUST_BE_BUYER
@@ -164,11 +177,13 @@ impl ContractSale for ContractSaleComponent {
                 Self::log_bid_lowered(bid);
 
                 owner.bid = Some((buyer_account_id_hash, bid));
+                bid
             }
-        }
+        };
 
         owner.save();
         Promise::new(env::predecessor_account_id()).transfer(amount.value() + 1);
+        bid
     }
 
     fn update_contract_bid_expiration(&mut self, expiration: ExpirationSetting) {
@@ -1548,11 +1563,12 @@ mod tests_raise_contract_bid {
         ctx.attached_deposit = 500;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.raise_contract_bid(None);
+        let raised_bid = ContractSaleComponent.raise_contract_bid(None);
 
         // Assert
         let bid = ContractSaleComponent::contract_bid().unwrap();
         assert_eq!(bid.bid.amount, 1500.into());
+        assert_eq!(raised_bid, bid.bid);
     }
 
     #[test]
@@ -1723,12 +1739,16 @@ mod tests_lower_contract_bid {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.lower_contract_bid(YOCTO.into(), None);
+        let lowered_bid = ContractSaleComponent.lower_contract_bid(YOCTO.into(), None);
 
         // Assert
         assert_eq!(
             ContractSaleComponent::contract_bid().unwrap().bid.amount,
             (9 * YOCTO).into()
+        );
+        assert_eq!(
+            lowered_bid,
+            ContractSaleComponent::contract_bid().unwrap().bid
         );
     }
 
@@ -1833,5 +1853,65 @@ mod tests_lower_contract_bid {
             100.into(),
             Some(ExpirationSetting::Absolute(Expiration::Epoch(10.into()))),
         );
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [ACCESS_DENIED_MUST_BE_BUYER]")]
+    fn not_buyer() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 10 * YOCTO;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+
+        ctx.predecessor_account_id = "OTHER".to_string();
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        // Act
+        ContractSaleComponent.lower_contract_bid(YOCTO.into(), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [YOCTONEAR_DEPOSIT_REQUIRED]")]
+    fn zero_deposit() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 10 * YOCTO;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 0;
+        testing_env!(ctx.clone());
+        // Act
+        ContractSaleComponent.lower_contract_bid(YOCTO.into(), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [BAD_REQUEST] amount cannot be zero")]
+    fn zero_amount() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        testing_env!(ctx.clone());
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 10 * YOCTO;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+
+        ctx.predecessor_account_id = BUYER.to_string();
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        // Act
+        ContractSaleComponent.lower_contract_bid(0.into(), None);
     }
 }
