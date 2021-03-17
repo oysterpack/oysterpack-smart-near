@@ -75,6 +75,12 @@ impl From<ExpirationSetting> for Expiration {
     }
 }
 
+impl From<Expiration> for ExpirationSetting {
+    fn from(expiration: Expiration) -> Self {
+        ExpirationSetting::Absolute(expiration)
+    }
+}
+
 #[derive(
     BorshSerialize,
     BorshDeserialize,

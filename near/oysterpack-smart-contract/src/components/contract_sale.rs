@@ -954,3 +954,67 @@ mod tests_sell_contract {
         ContractSaleComponent.sell_contract(ZERO_NEAR);
     }
 }
+
+#[cfg(test)]
+mod tests_buy_contract {
+    use super::*;
+    use crate::components::contract_ownership::ContractOwnershipComponent;
+    use near_sdk::{test_utils, VMContext};
+    use oysterpack_smart_near::component::*;
+    use oysterpack_smart_near_test::*;
+
+    const OWNER: &str = "owner";
+    const BUYER_1: &str = "buyer1";
+    const BUYER_2: &str = "buyer2";
+
+    fn arrange(sale_price: Option<YoctoNear>, bid: Option<ContractBuyerBid>) -> VMContext {
+        let ctx = new_context(OWNER);
+        {
+            let mut ctx = ctx.clone();
+            ctx.attached_deposit = 1;
+            testing_env!(ctx.clone());
+
+            ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+            if let Some(sale_price) = sale_price {
+                ContractSaleComponent.sell_contract(sale_price);
+            }
+
+            if let Some(bid) = bid {
+                ctx.predecessor_account_id = bid.buyer;
+                ctx.attached_deposit = bid.bid.amount.value();
+                testing_env!(ctx.clone());
+                ContractSaleComponent
+                    .buy_contract(bid.bid.expiration.as_ref().cloned().map(Into::into));
+            }
+        }
+        assert_eq!(ContractOwnershipComponent::owner(), OWNER.to_string());
+        ctx
+    }
+
+    #[cfg(test)]
+    mod no_sale_no_bid {
+        use super::*;
+
+        #[test]
+        fn no_expiration() {
+            let mut ctx = arrange(None, None);
+
+            ctx.predecessor_account_id = BUYER_1.to_string();
+            ctx.attached_deposit = 100;
+            testing_env!(ctx.clone());
+            ContractSaleComponent.buy_contract(None);
+
+            let bid = ContractSaleComponent::contract_bid().unwrap();
+            assert_eq!(bid.buyer, BUYER_1.to_string());
+            assert_eq!(bid.bid.amount, 100.into());
+            assert!(bid.bid.expiration.is_none());
+
+            let logs = test_utils::get_logs();
+            println!("{:#?}", logs);
+            assert_eq!(
+                &logs[0],
+                LOG_EVENT_CONTRACT_BID_PLACED.message("bid: 100").as_str()
+            );
+        }
+    }
+}

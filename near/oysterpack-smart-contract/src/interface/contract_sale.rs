@@ -59,6 +59,9 @@ pub trait ContractSale {
     /// - If there was a previous lower bid in effect, then that buy order will be automatically
     ///   cancelled and the funds will be transferred back to the buyer's registered contract account.
     ///
+    /// ## Log Events
+    /// - [`LOG_EVENT_CONTRACT_BID_PLACED`]
+    ///
     /// ## Panics
     /// - if no deposit is attached - at lease 1 yoctoNEAR must be attached
     /// - if the submitted bid price is not higher than the current bid price
