@@ -1,4 +1,4 @@
-use crate::{BalanceId, ContractNearBalances, ERR_EXPIRATION_IS_ALREADY_EXPIRED};
+use crate::{BalanceId, ContractNearBalances, ERR_BID_IS_EXPIRED};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
@@ -23,7 +23,7 @@ impl ContractBid {
     pub(crate) fn update_expiration(&mut self, expiration: Option<ExpirationSetting>) {
         if let Some(expiration) = expiration {
             let expiration: Expiration = expiration.into();
-            ERR_EXPIRATION_IS_ALREADY_EXPIRED.assert(|| !expiration.expired());
+            ERR_BID_IS_EXPIRED.assert(|| !expiration.expired());
             self.expiration = Some(expiration);
         }
     }

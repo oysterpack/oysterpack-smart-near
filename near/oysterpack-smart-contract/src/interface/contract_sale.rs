@@ -168,7 +168,4 @@ pub const ERR_ACCESS_DENIED_MUST_BE_BUYER: ErrorConst = ErrorConst(
     "action is restricted to current buyer",
 );
 
-pub const ERR_EXPIRATION_IS_ALREADY_EXPIRED: ErrorConst = ErrorConst(
-    ErrCode("EXPIRATION_IS_ALREADY_EXPIRED"),
-    "expiration is already expired",
-);
+pub const ERR_BID_IS_EXPIRED: ErrorConst = ErrorConst(ErrCode("BID_IS_EXPIRED"), "bid is expired");

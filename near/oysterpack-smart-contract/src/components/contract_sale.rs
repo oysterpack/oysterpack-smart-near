@@ -1,13 +1,13 @@
 use crate::components::contract_ownership::ContractOwnershipComponent;
-use crate::{ContractBid, ContractSale};
+use crate::{ContractBid, ContractSale, ERR_BID_IS_EXPIRED};
 use crate::{
     ContractBuyerBid, ContractOwner, ContractOwnerObject, ContractOwnership,
     ContractOwnershipAccountIdsObject, ERR_ACCESS_DENIED_MUST_BE_BUYER, ERR_CONTRACT_BID_TOO_LOW,
-    ERR_CONTRACT_SALE_NOT_ALLOWED, ERR_CONTRACT_SALE_PRICE_MUST_NOT_BE_ZERO,
-    ERR_EXPIRATION_IS_ALREADY_EXPIRED, ERR_NO_ACTIVE_BID, ERR_OWNER_CANNOT_BUY_CONTRACT,
-    LOG_EVENT_CONTRACT_BID_CANCELLED, LOG_EVENT_CONTRACT_BID_EXPIRATION_CHANGE,
-    LOG_EVENT_CONTRACT_BID_LOWERED, LOG_EVENT_CONTRACT_BID_PLACED, LOG_EVENT_CONTRACT_BID_RAISED,
-    LOG_EVENT_CONTRACT_FOR_SALE, LOG_EVENT_CONTRACT_SALE_CANCELLED, LOG_EVENT_CONTRACT_SOLD,
+    ERR_CONTRACT_SALE_NOT_ALLOWED, ERR_CONTRACT_SALE_PRICE_MUST_NOT_BE_ZERO, ERR_NO_ACTIVE_BID,
+    ERR_OWNER_CANNOT_BUY_CONTRACT, LOG_EVENT_CONTRACT_BID_CANCELLED,
+    LOG_EVENT_CONTRACT_BID_EXPIRATION_CHANGE, LOG_EVENT_CONTRACT_BID_LOWERED,
+    LOG_EVENT_CONTRACT_BID_PLACED, LOG_EVENT_CONTRACT_BID_RAISED, LOG_EVENT_CONTRACT_FOR_SALE,
+    LOG_EVENT_CONTRACT_SALE_CANCELLED, LOG_EVENT_CONTRACT_SOLD,
 };
 use near_sdk::{env, Promise};
 use oysterpack_smart_near::asserts::assert_near_attached;
@@ -86,7 +86,7 @@ impl ContractSale for ContractSaleComponent {
         assert_near_attached("contract bid requires attached NEAR deposit");
         let expiration = expiration.map(|expiration| {
             let expiration: Expiration = expiration.into();
-            ERR_EXPIRATION_IS_ALREADY_EXPIRED.assert(|| !expiration.expired());
+            ERR_BID_IS_EXPIRED.assert(|| !expiration.expired());
             expiration
         });
 
@@ -994,6 +994,7 @@ mod tests_buy_contract {
     #[cfg(test)]
     mod no_sale_no_bid {
         use super::*;
+        use oysterpack_smart_near::domain::ExpirationDuration;
 
         #[test]
         fn no_expiration() {
@@ -1015,6 +1016,73 @@ mod tests_buy_contract {
                 &logs[0],
                 LOG_EVENT_CONTRACT_BID_PLACED.message("bid: 100").as_str()
             );
+        }
+
+        #[test]
+        fn with_future_expiration() {
+            let mut ctx = arrange(None, None);
+
+            ctx.predecessor_account_id = BUYER_1.to_string();
+            ctx.attached_deposit = 100;
+            ctx.epoch_height = 10;
+            testing_env!(ctx.clone());
+            let expiration = Expiration::Epoch(20.into());
+            ContractSaleComponent.buy_contract(Some(expiration.into()));
+
+            let bid = ContractSaleComponent::contract_bid().unwrap();
+            assert_eq!(bid.buyer, BUYER_1.to_string());
+            assert_eq!(bid.bid.amount, 100.into());
+            assert_eq!(bid.bid.expiration.unwrap(), expiration);
+
+            let logs = test_utils::get_logs();
+            println!("{:#?}", logs);
+            assert_eq!(
+                &logs[0],
+                LOG_EVENT_CONTRACT_BID_PLACED
+                    .message("bid: 100 | expiration: EpochHeight(20)")
+                    .as_str()
+            );
+        }
+
+        #[test]
+        fn with_future_relative_expiration() {
+            let mut ctx = arrange(None, None);
+
+            ctx.predecessor_account_id = BUYER_1.to_string();
+            ctx.attached_deposit = 100;
+            ctx.epoch_height = 10;
+            testing_env!(ctx.clone());
+            let expiration = Expiration::Epoch(20.into());
+            ContractSaleComponent.buy_contract(Some(ExpirationSetting::Relative(
+                ExpirationDuration::Epochs(10),
+            )));
+
+            let bid = ContractSaleComponent::contract_bid().unwrap();
+            assert_eq!(bid.buyer, BUYER_1.to_string());
+            assert_eq!(bid.bid.amount, 100.into());
+            assert_eq!(bid.bid.expiration.unwrap(), expiration);
+
+            let logs = test_utils::get_logs();
+            println!("{:#?}", logs);
+            assert_eq!(
+                &logs[0],
+                LOG_EVENT_CONTRACT_BID_PLACED
+                    .message("bid: 100 | expiration: EpochHeight(20)")
+                    .as_str()
+            );
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [BID_IS_EXPIRED]")]
+        fn with_expired_bid() {
+            let mut ctx = arrange(None, None);
+
+            ctx.predecessor_account_id = BUYER_1.to_string();
+            ctx.attached_deposit = 100;
+            ctx.epoch_height = 10;
+            testing_env!(ctx.clone());
+            let expiration = Expiration::Epoch(5.into());
+            ContractSaleComponent.buy_contract(Some(expiration.into()));
         }
     }
 }
