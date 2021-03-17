@@ -78,8 +78,8 @@ impl ContractSale for ContractSaleComponent {
         let mut contract_owner = ContractOwnerObject::assert_owner_access();
         if contract_owner.sale_price.take().is_some() {
             contract_owner.save();
+            LOG_EVENT_CONTRACT_SALE_CANCELLED.log("");
         }
-        LOG_EVENT_CONTRACT_SALE_CANCELLED.log("");
     }
 
     fn buy_contract(&mut self, expiration: Option<ExpirationSetting>) {
@@ -1411,5 +1411,23 @@ mod tests_cancel_contract_sale {
                 LOG_EVENT_CONTRACT_SALE_CANCELLED.message("")
             ]
         );
+    }
+
+    #[test]
+    fn no_prior_sale() {
+        // Arrange
+        let mut ctx = new_context(OWNER);
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+
+        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+
+        // Act
+        ContractSaleComponent.cancel_contract_sale();
+
+        // Assert
+        assert!(ContractSaleComponent::contract_sale_price().is_none());
+        let logs = test_utils::get_logs();
+        assert!(logs.is_empty());
     }
 }
