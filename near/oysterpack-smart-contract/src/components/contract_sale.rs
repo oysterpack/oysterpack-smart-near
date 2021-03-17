@@ -83,7 +83,7 @@ impl ContractSale for ContractSaleComponent {
     }
 
     fn buy_contract(&mut self, expiration: Option<ExpirationSetting>) {
-        assert_near_attached("contract bid requires attached NEAR deposit");
+        assert_near_attached("contract bid cannot be zero");
         let expiration = expiration.map(|expiration| {
             let expiration: Expiration = expiration.into();
             ERR_BID_IS_EXPIRED.assert(|| !expiration.expired());
@@ -965,6 +965,7 @@ mod tests_buy_contract {
     use crate::components::contract_ownership::ContractOwnershipComponent;
     use near_sdk::{test_utils, VMContext};
     use oysterpack_smart_near::component::*;
+    use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
     const OWNER: &str = "owner";
@@ -993,6 +994,59 @@ mod tests_buy_contract {
         }
         assert_eq!(ContractOwnershipComponent::owner(), OWNER.to_string());
         ctx
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [NEAR_DEPOSIT_REQUIRED]")]
+    fn zero_yocto_near_attached() {
+        let mut ctx = new_context(OWNER);
+        ctx.attached_deposit = 0;
+        ctx.predecessor_account_id = BUYER_1.to_string();
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+    }
+
+    #[test]
+    fn higher_sale_price_and_lower_prior_bid_() {
+        let mut ctx = arrange(
+            None,
+            Some(ContractBuyerBid {
+                buyer: BUYER_2.to_string(),
+                bid: ContractBid {
+                    amount: 1000.into(),
+                    expiration: None,
+                },
+            }),
+        );
+
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.sell_contract(YOCTO.into());
+
+        ctx.predecessor_account_id = BUYER_1.to_string();
+        ctx.attached_deposit = 1001;
+        testing_env!(ctx.clone());
+        ContractSaleComponent.buy_contract(None);
+        let bid = ContractSaleComponent::contract_bid().unwrap();
+        assert_eq!(bid.buyer, ctx.predecessor_account_id);
+        assert_eq!(bid.bid.amount, ctx.attached_deposit.into());
+
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
+        assert_eq!(
+            logs,
+            vec![
+                LOG_EVENT_CONTRACT_BID_CANCELLED.message("higher bid has been placed"),
+                LOG_EVENT_CONTRACT_BID_PLACED.message("bid: 1001")
+            ]
+        );
+
+        let receipts = deserialize_receipts();
+        assert_eq!(&receipts[0].receiver_id, BUYER_2);
+        match &receipts[0].actions[0] {
+            Action::Transfer(transfer) => assert_eq!(transfer.deposit, 1000),
+            _ => panic!("expected TransferAction"),
+        }
     }
 
     #[test]

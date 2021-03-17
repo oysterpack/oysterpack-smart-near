@@ -44,7 +44,7 @@ pub fn assert_min_near_attached(min: YoctoNear) {
 pub fn assert_near_attached<Msg: Display>(msg: Msg) {
     assert!(
         env::attached_deposit() > 0,
-        "{} {}",
+        "{} - {}",
         ERR_NEAR_DEPOSIT_REQUIRED,
         msg
     )
