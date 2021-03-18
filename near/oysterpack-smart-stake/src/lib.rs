@@ -1,7 +1,9 @@
 mod account_metrics;
+mod account_storage_usage;
+mod components;
 mod storage_management;
 
-use crate::storage_management::AccountManager;
+use components::*;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env, near_bindgen, PanicOnDefault,
