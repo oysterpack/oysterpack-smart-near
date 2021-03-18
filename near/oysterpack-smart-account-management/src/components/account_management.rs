@@ -2370,3 +2370,51 @@ mod tests_account_storage_usage {
         );
     }
 }
+
+#[cfg(test)]
+mod tests_account_metrics {
+    use super::*;
+    use oysterpack_smart_near::YOCTO;
+    use oysterpack_smart_near_test::*;
+
+    type AccountManager = AccountManagementComponent<()>;
+
+    #[test]
+    fn test() {
+        // Arrange - 0 accounts register
+        let account = "alfio";
+        let mut ctx = new_context(account);
+        testing_env!(ctx.clone());
+
+        let storage_usage_bounds = StorageUsageBounds {
+            min: AccountManager::measure_storage_usage(()),
+            max: None,
+        };
+        println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
+        AccountManager::deploy(Some(storage_usage_bounds));
+
+        let mut service = AccountManager::new(Box::new(UnregisterAccountNOOP));
+        // Act
+        let metrics = AccountManager::account_metrics();
+        // Assert
+        assert_eq!(metrics.total_registered_accounts.value(), 0);
+        assert_eq!(metrics.total_near_balance.value(), 0);
+        assert_eq!(metrics.total_storage_usage.value(), 0);
+
+        // Arrange - register account
+        ctx.attached_deposit = YOCTO;
+        testing_env!(ctx.clone());
+        let storage_balance = service.storage_deposit(None, None);
+        let account_data = service.load_account_data(account);
+        assert!(account_data.is_none());
+        let mut account_data: AccountDataObject<()> = AccountDataObject::new(account, ());
+        account_data.save();
+
+        // Act
+        let metrics = AccountManager::account_metrics();
+        // Assert
+        assert_eq!(metrics.total_registered_accounts.value(), 1);
+        assert_eq!(metrics.total_near_balance, storage_balance.total);
+        assert_eq!(metrics.total_storage_usage, storage_usage_bounds.min);
+    }
+}
