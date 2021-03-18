@@ -52,19 +52,6 @@ where
     _phantom_data: PhantomData<T>,
 }
 
-impl<T> Default for AccountManagementComponent<T>
-where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
-{
-    fn default() -> Self {
-        Self {
-            unregister: Box::new(UnregisterAccountNOOP),
-            account_storage_usage: Default::default(),
-            _phantom_data: Default::default(),
-        }
-    }
-}
-
 /// Contract is required to provide implementation that applies contract specific business logic.
 /// - see [`StorageManagement::storage_unregister`]
 pub trait UnregisterAccount {
@@ -1981,7 +1968,8 @@ mod tests_storage_management {
 
             AccountStorageUsageComponent::deploy(Some(storage_usage_bounds));
 
-            let mut service: AccountManagementComponent<()> = Default::default();
+            let mut service: AccountManagementComponent<()> =
+                AccountManagementComponent::new(Box::new(UnregisterAccountNOOP));
 
             if deposit.value() > 0 {
                 ctx.attached_deposit = deposit.value();
