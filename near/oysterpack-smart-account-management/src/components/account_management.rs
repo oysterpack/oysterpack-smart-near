@@ -2446,5 +2446,19 @@ mod tests_account_metrics {
             metrics.total_storage_usage.value(),
             storage_usage_bounds.min.value() * 2
         );
+
+        // Arrange - unregister account
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        service.storage_unregister(None);
+        // Act
+        let metrics = AccountManager::account_metrics();
+        // Assert
+        assert_eq!(metrics.total_registered_accounts.value(), 1);
+        assert_eq!(metrics.total_near_balance, bob_storage_balance.total);
+        assert_eq!(
+            metrics.total_storage_usage.value(),
+            storage_usage_bounds.min.value()
+        );
     }
 }
