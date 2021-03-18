@@ -2416,5 +2416,35 @@ mod tests_account_metrics {
         assert_eq!(metrics.total_registered_accounts.value(), 1);
         assert_eq!(metrics.total_near_balance, storage_balance.total);
         assert_eq!(metrics.total_storage_usage, storage_usage_bounds.min);
+
+        // Arrange - deposit more funds
+        ctx.attached_deposit = YOCTO;
+        testing_env!(ctx.clone());
+        let storage_balance = service.storage_deposit(None, None);
+        // Act
+        let metrics = AccountManager::account_metrics();
+        // Assert
+        assert_eq!(metrics.total_registered_accounts.value(), 1);
+        assert_eq!(metrics.total_near_balance, storage_balance.total);
+        assert_eq!(metrics.total_storage_usage, storage_usage_bounds.min);
+
+        // Arrange - register another account
+        ctx.attached_deposit = YOCTO;
+        testing_env!(ctx.clone());
+        let bob_storage_balance = service.storage_deposit(Some(to_valid_account_id("bob")), None);
+        let mut account_data: AccountDataObject<()> = AccountDataObject::new("bob", ());
+        account_data.save();
+        // Act
+        let metrics = AccountManager::account_metrics();
+        // Assert
+        assert_eq!(metrics.total_registered_accounts.value(), 2);
+        assert_eq!(
+            metrics.total_near_balance,
+            storage_balance.total + bob_storage_balance.total
+        );
+        assert_eq!(
+            metrics.total_storage_usage.value(),
+            storage_usage_bounds.min.value() * 2
+        );
     }
 }
