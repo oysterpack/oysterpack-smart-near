@@ -1,4 +1,4 @@
-use crate::Contract;
+use crate::*;
 use oysterpack_smart_account_management::components::account_management::{
     AccountManagementComponent, UnregisterAccount,
 };

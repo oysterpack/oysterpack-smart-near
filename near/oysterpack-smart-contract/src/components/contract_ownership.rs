@@ -36,6 +36,24 @@ impl ContractOwnership for ContractOwnershipComponent {
         account_ids.owner.clone()
     }
 
+    fn owner_balance() -> ContractOwnerNearBalance {
+        let near_balances = ContractMetricsComponent::near_balances();
+        let storage_usage_costs = ContractMetricsComponent::storage_usage_costs();
+        let available = near_balances
+            .owner()
+            .saturating_sub(storage_usage_costs.owner().value())
+            .into();
+        ContractOwnerNearBalance {
+            total: near_balances.owner(),
+            available,
+        }
+    }
+
+    fn prospective_owner() -> Option<AccountId> {
+        let account_ids = ContractOwnershipAccountIdsObject::load();
+        account_ids.prospective_owner.as_ref().cloned()
+    }
+
     fn transfer_ownership(&mut self, new_owner: ValidAccountId) {
         assert_yocto_near_attached();
 
@@ -97,11 +115,6 @@ impl ContractOwnership for ContractOwnershipComponent {
         }
     }
 
-    fn prospective_owner() -> Option<AccountId> {
-        let account_ids = ContractOwnershipAccountIdsObject::load();
-        account_ids.prospective_owner.as_ref().cloned()
-    }
-
     fn finalize_ownership_transfer(&mut self) {
         assert_yocto_near_attached();
 
@@ -142,19 +155,6 @@ impl ContractOwnership for ContractOwnershipComponent {
         owner_balance.total -= amount + 1;
         owner_balance.available -= amount;
         owner_balance
-    }
-
-    fn owner_balance() -> ContractOwnerNearBalance {
-        let near_balances = ContractMetricsComponent::near_balances();
-        let storage_usage_costs = ContractMetricsComponent::storage_usage_costs();
-        let available = near_balances
-            .owner()
-            .saturating_sub(storage_usage_costs.owner().value())
-            .into();
-        ContractOwnerNearBalance {
-            total: near_balances.owner(),
-            available,
-        }
     }
 }
 

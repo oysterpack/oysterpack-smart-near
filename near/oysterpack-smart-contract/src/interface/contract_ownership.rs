@@ -12,6 +12,18 @@ pub trait ContractOwnership {
     /// returns the contract owner account ID
     fn owner() -> AccountId;
 
+    /// Returns how much of the contract's NEAR balance is owned by the contract owner and what amount
+    /// is available for withdrawal.
+    ///
+    /// The owner must retain enough NEAR deposit on the contract to cover storage costs that are
+    /// the contract's responsibility to pay for, i.e., excluding account storage.
+    fn owner_balance() -> ContractOwnerNearBalance;
+
+    /// Returns the prospective owner that the transfer is waiting on for finalization.
+    ///
+    /// Returns None if there is no ownership transfer in progress.
+    fn prospective_owner() -> Option<AccountId>;
+
     /// Initiates the workflow to transfer contract ownership.
     ///
     /// The ownership transfer is not finalized until the new owner finalizes the transfer.
@@ -46,11 +58,6 @@ pub trait ContractOwnership {
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
     fn cancel_ownership_transfer(&mut self);
 
-    /// Returns the prospective owner that the transfer is waiting on for finalization.
-    ///
-    /// Returns None if there is no ownership transfer in progress.
-    fn prospective_owner() -> Option<AccountId>;
-
     /// Used to finalize the contract transfer to the new prospective owner
     ///
     /// ## Notes
@@ -82,13 +89,6 @@ pub trait ContractOwnership {
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
     fn withdraw_owner_balance(&mut self, amount: Option<YoctoNear>) -> ContractOwnerNearBalance;
-
-    /// Returns how much of the contract's NEAR balance is owned by the contract owner and what amount
-    /// is available for withdrawal.
-    ///
-    /// The owner must retain enough NEAR deposit on the contract to cover storage costs that are
-    /// the contract's responsibility to pay for, i.e., excluding account storage.
-    fn owner_balance() -> ContractOwnerNearBalance;
 }
 
 /// log event for [`ContractOwnership::transfer_ownership`]
