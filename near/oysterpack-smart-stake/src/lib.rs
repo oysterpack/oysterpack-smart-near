@@ -49,19 +49,16 @@ impl Contract {
         }
 
         {
-            let storage_usage_bounds = match config {
-                None => StorageUsageBounds {
-                    min: AccountManager::measure_storage_usage(()),
-                    max: None,
-                },
-                Some(config) => match config.storage_usage_bounds {
-                    None => StorageUsageBounds {
-                        min: AccountManager::measure_storage_usage(()),
-                        max: None,
-                    },
-                    Some(config) => config,
-                },
+            let default_storage_usage_bounds = || StorageUsageBounds {
+                min: AccountManager::measure_storage_usage(()),
+                max: None,
             };
+
+            let storage_usage_bounds = config.map_or_else(default_storage_usage_bounds, |config| {
+                config
+                    .storage_usage_bounds
+                    .unwrap_or_else(default_storage_usage_bounds)
+            });
 
             AccountManager::deploy(Some(storage_usage_bounds));
         }
