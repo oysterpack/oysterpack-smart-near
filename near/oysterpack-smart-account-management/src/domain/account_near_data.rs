@@ -23,7 +23,7 @@ impl AccountNearDataObject {
     ///   match the actual storage usage when the object is saved because there is overhead
     pub fn new(account_id: &str, near_balance: YoctoNear) -> Self {
         let object = DAO::new(
-            AccountNearDataHash(account_id.into(), ACCOUNT_NEAR_DATA_KEY),
+            account_id.into(),
             AccountNearData::new(near_balance, 0.into()),
         );
         Self(object)
@@ -118,6 +118,8 @@ impl AccountNearData {
         }
     }
 
+    /// Posts [`AccountStorageEvent::Deposit`] event
+    ///
     /// ## Panics
     /// if overflow occurs
     pub fn incr_near_balance(&mut self, amount: YoctoNear) {
@@ -125,6 +127,8 @@ impl AccountNearData {
         eventbus::post(&AccountStorageEvent::Deposit(amount));
     }
 
+    /// Posts [`AccountStorageEvent::Withdrawal`] event
+    ///
     /// ## Panics
     /// if overflow occurs
     pub fn dec_near_balance(&mut self, amount: YoctoNear) {
@@ -132,7 +136,14 @@ impl AccountNearData {
         eventbus::post(&AccountStorageEvent::Withdrawal(amount));
     }
 
+    /// - if change was positive then it posts [`AccountStorageEvent::Deposit`] event
+    /// - if change was negative, then it posts  [`AccountStorageEvent::Withdrawal`] event
     pub fn set_near_balance(&mut self, amount: YoctoNear) {
+        if self.near_balance > amount {
+            eventbus::post(&AccountStorageEvent::Withdrawal(self.near_balance - amount));
+        } else if amount > self.near_balance {
+            eventbus::post(&AccountStorageEvent::Deposit(amount - self.near_balance));
+        }
         *self.near_balance = amount.value();
     }
 
@@ -162,16 +173,17 @@ impl AccountNearData {
     }
 }
 
-const ACCOUNT_NEAR_DATA_KEY: u128 = 1953035509579102406775126588391115273;
-
 /// Used as key to store [`AccountNearData`] - defined on [`AccountNearDataObject`]
 #[derive(BorshSerialize, BorshDeserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct AccountNearDataHash(
     AccountIdHash,
-    u128, // ACCOUNT_NEAR_DATA_KEY
+    /// ACCOUNT_NEAR_DATA_KEY
+    u128,
 );
 
 impl AccountNearDataHash {
+    const ACCOUNT_NEAR_DATA_KEY: u128 = 1953035509579102406775126588391115273;
+
     pub fn account_id_hash(&self) -> AccountIdHash {
         self.0
     }
@@ -179,7 +191,7 @@ impl AccountNearDataHash {
 
 impl From<AccountIdHash> for AccountNearDataHash {
     fn from(hash: AccountIdHash) -> Self {
-        Self(hash, ACCOUNT_NEAR_DATA_KEY)
+        Self(hash, Self::ACCOUNT_NEAR_DATA_KEY)
     }
 }
 
