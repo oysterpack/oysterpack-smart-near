@@ -9,7 +9,7 @@ impl AccountStorageUsage for Contract {
         Self::account_manager().storage_usage_bounds()
     }
 
-    fn storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage> {
-        Self::account_manager().storage_usage(account_id)
+    fn account_storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage> {
+        Self::account_manager().account_storage_usage(account_id)
     }
 }

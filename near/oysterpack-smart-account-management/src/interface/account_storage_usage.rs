@@ -13,7 +13,7 @@ pub trait AccountStorageUsage {
     /// Returns the account storage usage in bytes
     ///
     /// Returns None if the account is not registered
-    fn storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage>;
+    fn account_storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage>;
 }
 
 /// Used to configure account storage usage
@@ -26,23 +26,4 @@ pub struct StorageUsageBounds {
     pub min: StorageUsage,
     /// max storage that the contract is allowed to have on the contract
     pub max: Option<StorageUsage>,
-}
-
-/// Used to implement [`AccountStorageUsage`] on any type that implements this trait
-/// - used to expose [`AccountStorageUsage`] on components
-pub trait HasAccountStorageUsage {
-    fn account_storage_usage(&self) -> &dyn AccountStorageUsage;
-}
-
-impl<T> AccountStorageUsage for T
-where
-    T: HasAccountStorageUsage,
-{
-    fn storage_usage_bounds(&self) -> StorageUsageBounds {
-        self.account_storage_usage().storage_usage_bounds()
-    }
-
-    fn storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage> {
-        self.account_storage_usage().storage_usage(account_id)
-    }
 }

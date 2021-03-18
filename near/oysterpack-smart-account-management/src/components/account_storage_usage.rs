@@ -12,7 +12,7 @@ impl AccountStorageUsage for AccountStorageUsageComponent {
         *Self::load_state().unwrap()
     }
 
-    fn storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage> {
+    fn account_storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage> {
         AccountNearDataObject::load(account_id.as_ref().as_str())
             .map(|account| account.storage_usage())
     }

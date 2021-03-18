@@ -5,7 +5,6 @@ mod contract_ownership;
 mod storage_management;
 
 use components::*;
-use near_sdk::json_types::U64;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
@@ -27,10 +26,6 @@ pub struct Contract;
 
 #[near_bindgen]
 impl Contract {
-    pub fn storage() -> U64 {
-        env::storage_usage().into()
-    }
-
     /// Default config values:
     /// - contract owner = predecessor Account ID
     /// - account storage use bounds -  min storage will be determined by measuring account storage usage
@@ -72,4 +67,11 @@ impl Contract {
 pub struct DeploymentConfig {
     owner: ValidAccountId,
     storage_usage_bounds: Option<StorageUsageBounds>,
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn test() {}
 }

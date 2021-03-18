@@ -7,8 +7,8 @@
 
 use crate::{
     Account, AccountDataObject, AccountMetrics, AccountRepository, AccountStorageEvent,
-    AccountStorageUsage, GetAccountMetrics, HasAccountStorageUsage, StorageBalance,
-    StorageBalanceBounds, StorageManagement, StorageUsageBounds, ERR_ACCOUNT_ALREADY_REGISTERED,
+    AccountStorageUsage, GetAccountMetrics, StorageBalance, StorageBalanceBounds,
+    StorageManagement, StorageUsageBounds, ERR_ACCOUNT_ALREADY_REGISTERED,
     ERR_ACCOUNT_NOT_REGISTERED,
 };
 use near_sdk::{
@@ -114,11 +114,13 @@ where
         // seeds the storage required to store metrics
         {
             let account_id = "1953717115592535419708657925195464285";
+            account_manager.delete_account(account_id);
             account_manager.create_account(account_id, 0.into(), Some(account_data.clone()));
             account_manager.delete_account(account_id);
         }
 
         let account_id = "1953718041838591893489340663938715635";
+        account_manager.delete_account(account_id);
         let initial_storage_usage = env::storage_usage();
         account_manager.create_account(account_id, 0.into(), Some(account_data));
         let storage_usage = env::storage_usage() - initial_storage_usage;
@@ -247,12 +249,16 @@ impl<T> GetAccountMetrics for AccountManagementComponent<T> where
 }
 
 /// exposes [`AccountStorageUsage`] interface on the component
-impl<T> HasAccountStorageUsage for AccountManagementComponent<T>
+impl<T> AccountStorageUsage for AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    fn account_storage_usage(&self) -> &dyn AccountStorageUsage {
-        &self.account_storage_usage
+    fn storage_usage_bounds(&self) -> StorageUsageBounds {
+        self.account_storage_usage.storage_usage_bounds()
+    }
+
+    fn account_storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage> {
+        self.account_storage_usage.account_storage_usage(account_id)
     }
 }
 
@@ -2368,7 +2374,9 @@ mod tests_account_storage_usage {
                 .unwrap(),
             storage_balance
         );
-        let storage_usage = service.storage_usage(to_valid_account_id(account)).unwrap();
+        let storage_usage = service
+            .account_storage_usage(to_valid_account_id(account))
+            .unwrap();
         assert_eq!(
             storage_usage,
             service
