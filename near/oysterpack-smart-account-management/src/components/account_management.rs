@@ -555,23 +555,27 @@ mod tests_storage_management {
         let mut service: AccountManagementComponent<()> =
             AccountManagementComponent::new(Box::new(UnregisterAccountNOOP));
         let storage_balance_bounds = service.storage_balance_bounds();
+        println!("storage_balance_bounds = {:?}", storage_balance_bounds);
 
         if already_registered {
             ctx.attached_deposit = storage_balance_bounds.min.value();
             testing_env!(ctx.clone());
-            service.storage_deposit(
+            let storage_balance = service.storage_deposit(
                 Some(to_valid_account_id(
                     account_id.unwrap_or(PREDECESSOR_ACCOUNT_ID),
                 )),
                 Some(true),
             );
+            println!("registered account: {:?}", storage_balance);
         }
 
         ctx.attached_deposit = deposit.value();
+        println!("deposit amount = {}", ctx.attached_deposit);
         testing_env!(ctx.clone());
 
         let storage_balance =
             service.storage_deposit(account_id.map(to_valid_account_id), registration_only);
+        println!("storage_balance after deposit = {:?}", storage_balance);
 
         test(service, storage_balance);
     }
@@ -1010,6 +1014,7 @@ mod tests_storage_management {
         #[cfg(test)]
         mod self_deposit_with_implied_registration_only_false {
             use super::*;
+            use oysterpack_smart_near::YOCTO;
 
             fn run_test<F>(
                 deposit: YoctoNear,
@@ -1144,6 +1149,39 @@ mod tests_storage_management {
                         }
                     },
                 );
+            }
+
+            #[test]
+            fn deposit_with_account_already_maxed_out() {
+                // Arrange
+                let account = "alfio";
+                let mut ctx = new_context(account);
+                testing_env!(ctx.clone());
+
+                AccountManagementComponent::<()>::deploy(Some(StorageUsageBounds {
+                    min: 1000.into(),
+                    max: Some(2000.into()),
+                }));
+
+                let mut service =
+                    AccountManagementComponent::<()>::new(Box::new(UnregisterAccountNOOP));
+
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                let storage_balance_1 = service.storage_deposit(None, None);
+                testing_env!(ctx.clone());
+                let storage_balance_2 = service.storage_deposit(None, None);
+                assert_eq!(storage_balance_1, storage_balance_2);
+                assert_eq!(
+                    storage_balance_1.total,
+                    service.storage_balance_bounds().max.unwrap()
+                );
+                let receipts = deserialize_receipts();
+                assert_eq!(&receipts[0].receiver_id, account);
+                match &receipts[0].actions[0] {
+                    Action::Transfer(transfer) => assert_eq!(transfer.deposit, YOCTO),
+                    _ => panic!("expected TransferAction"),
+                }
             }
 
             #[test]
