@@ -2230,4 +2230,74 @@ mod tests_storage_management {
             );
         }
     }
+
+    #[cfg(test)]
+    mod test_storage_unregister {
+        use super::*;
+        use oysterpack_smart_near::YOCTO;
+
+        struct UnregisterMock {
+            fail: bool,
+        }
+
+        impl UnregisterAccount for UnregisterMock {
+            fn unregister_account(&mut self, force: bool) {
+                if !force && self.fail {
+                    panic!("account cannot be unregistered because ...");
+                }
+            }
+        }
+
+        pub type AccountManager = AccountManagementComponent<()>;
+
+        #[test]
+        #[should_panic(expected = "account cannot be unregistered because ")]
+        fn unregister_panics() {
+            // Arrange
+            let account = "alfio";
+            let mut ctx = new_context(account);
+            testing_env!(ctx.clone());
+
+            AccountManager::deploy(Some(StorageUsageBounds {
+                min: 1000.into(),
+                max: None,
+            }));
+
+            let mut service = AccountManager::new(Box::new(UnregisterMock { fail: true }));
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx.clone());
+            service.storage_deposit(None, None);
+
+            // Act
+            ctx.attached_deposit = 1;
+            testing_env!(ctx.clone());
+            service.storage_unregister(None);
+        }
+
+        #[test]
+        fn force_unregister_panics() {
+            // Arrange
+            let account = "alfio";
+            let mut ctx = new_context(account);
+            testing_env!(ctx.clone());
+
+            AccountManager::deploy(Some(StorageUsageBounds {
+                min: 1000.into(),
+                max: None,
+            }));
+
+            let mut service = AccountManager::new(Box::new(UnregisterMock { fail: true }));
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx.clone());
+            service.storage_deposit(None, None);
+
+            // Act
+            ctx.attached_deposit = 1;
+            testing_env!(ctx.clone());
+            service.storage_unregister(Some(true));
+            assert!(service
+                .storage_balance_of(to_valid_account_id(account))
+                .is_none());
+        }
+    }
 }
