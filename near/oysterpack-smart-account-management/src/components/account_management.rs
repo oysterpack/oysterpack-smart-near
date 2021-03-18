@@ -173,19 +173,17 @@ where
     /// ## Panics
     /// if the account is not registered
     fn registered_account(&self, account_id: &str) -> Account<T> {
-        self.load_account(account_id).unwrap_or_else(|| {
-            ERR_ACCOUNT_NOT_REGISTERED.panic();
-            unreachable!()
-        })
+        let account = self.load_account(account_id);
+        ERR_ACCOUNT_NOT_REGISTERED.assert(|| account.is_some());
+        account.unwrap()
     }
 
     /// ## Panics
     /// if the account is not registered
     fn registered_account_near_data(&self, account_id: &str) -> AccountNearDataObject {
-        self.load_account_near_data(account_id).unwrap_or_else(|| {
-            ERR_ACCOUNT_NOT_REGISTERED.panic();
-            unreachable!()
-        })
+        let account = self.load_account_near_data(account_id);
+        ERR_ACCOUNT_NOT_REGISTERED.assert(|| account.is_some());
+        account.unwrap()
     }
 
     /// Assumes that the account will always have data if registered.
@@ -193,10 +191,9 @@ where
     /// ## Panics
     /// if the account is not registered
     fn registered_account_data(&self, account_id: &str) -> AccountDataObject<T> {
-        self.load_account_data(account_id).unwrap_or_else(|| {
-            ERR_ACCOUNT_NOT_REGISTERED.panic();
-            unreachable!()
-        })
+        let account = self.load_account_data(account_id);
+        ERR_ACCOUNT_NOT_REGISTERED.assert(|| account.is_some());
+        account.unwrap()
     }
 
     fn account_exists(&self, account_id: &str) -> bool {
