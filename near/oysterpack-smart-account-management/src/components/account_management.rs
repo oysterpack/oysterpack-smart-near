@@ -2368,6 +2368,13 @@ mod tests_account_storage_usage {
                 .unwrap(),
             storage_balance
         );
+        let storage_usage = service.storage_usage(to_valid_account_id(account)).unwrap();
+        assert_eq!(
+            storage_usage,
+            service
+                .registered_account_near_data(account)
+                .storage_usage()
+        );
     }
 }
 
