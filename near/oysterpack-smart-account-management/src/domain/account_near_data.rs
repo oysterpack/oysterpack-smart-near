@@ -5,10 +5,9 @@ use near_sdk::{
 };
 use oysterpack_smart_near::{
     data::Object,
-    domain::{StorageUsage, StorageUsageChange, YoctoNear},
+    domain::{StorageUsage, YoctoNear},
     eventbus, Hash,
 };
-use std::convert::TryInto;
 use std::ops::{Deref, DerefMut};
 
 type DAO = Object<AccountNearDataHash, AccountNearData>;
@@ -149,37 +148,22 @@ impl AccountNearData {
 
     /// ## Panics
     /// if overflow occurs
-    pub fn update_storage_usage(&mut self, change: StorageUsageChange) {
-        let storage_usage = *self.storage_usage;
-        let storage_usage: i64 = storage_usage.try_into().unwrap();
-        let storage_value = storage_usage.checked_add(change.value()).unwrap();
-        *self.storage_usage = storage_value.try_into().unwrap();
-    }
-
-    /// ## Panics
-    /// if overflow occurs
-    pub fn incr_storage_usage(&mut self, amount: StorageUsage) {
+    pub(crate) fn incr_storage_usage(&mut self, amount: StorageUsage) {
         *self.storage_usage = self.storage_usage.checked_add(amount.value()).unwrap();
     }
 
     /// ## Panics
     /// if overflow occurs
-    pub fn dec_storage_usage(&mut self, amount: StorageUsage) {
+    pub(crate) fn decr_storage_usage(&mut self, amount: StorageUsage) {
         *self.storage_usage = self.storage_usage.checked_sub(amount.value()).unwrap();
-    }
-
-    pub fn set_storage_usage(&mut self, amount: StorageUsage) {
-        *self.storage_usage = amount.value();
     }
 }
 
+type AccountNearDataKey = u128;
+
 /// Used as key to store [`AccountNearData`] - defined on [`AccountNearDataObject`]
 #[derive(BorshSerialize, BorshDeserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct AccountNearDataHash(
-    AccountIdHash,
-    /// ACCOUNT_NEAR_DATA_KEY
-    u128,
-);
+pub struct AccountNearDataHash(AccountIdHash, AccountNearDataKey);
 
 impl AccountNearDataHash {
     const ACCOUNT_NEAR_DATA_KEY: u128 = 1953035509579102406775126588391115273;
@@ -265,15 +249,15 @@ mod tests {
         );
 
         // Act - dec
-        account.dec_storage_usage(1000.into());
+        account.decr_storage_usage(1000.into());
         account.save();
 
         // Assert
         let mut account = AccountNearDataObject::load(account_id).unwrap();
         assert_eq!(account.storage_usage(), initial_storage_usage);
 
-        // Act - set near balance
-        account.set_storage_usage(2000.into());
+        // Act - incr near balance
+        account.incr_storage_usage(2000.into());
         account.save();
 
         // Assert
@@ -281,7 +265,7 @@ mod tests {
         assert_eq!(account.storage_usage(), 2000.into());
 
         // Act - update near balance
-        account.update_storage_usage(1000_u64.into());
+        account.incr_storage_usage(1000_u64.into());
         account.save();
 
         // Assert
@@ -289,7 +273,7 @@ mod tests {
         assert_eq!(account.storage_usage(), 3000.into());
 
         // Act - update near balance
-        account.update_storage_usage(StorageUsageChange(-1000));
+        account.decr_storage_usage(1000_u64.into());
         account.save();
 
         // Assert
@@ -297,7 +281,11 @@ mod tests {
         assert_eq!(account.storage_usage(), 2000.into());
 
         // Act - update near balance
-        account.update_storage_usage(0_u64.into());
+        account.incr_storage_usage(0_u64.into());
+        account.save();
+
+        // Act - update near balance
+        account.decr_storage_usage(0_u64.into());
         account.save();
 
         // Assert

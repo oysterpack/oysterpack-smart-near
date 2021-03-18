@@ -15,7 +15,8 @@ type DAO<T> = Object<AccountIdHash, T>;
 /// Generic persistent account data
 ///
 /// ## Notes
-/// - keeps track of its own storage usage
+/// - keeps track of its own storage usage, i.e., emits [`AccountStorageEvent::StorageUsageChanged`]
+///   events when the object is saved or deleted
 /// - any account storage usage that is outside of this Account object must be tracked externally
 #[derive(Clone, Debug, PartialEq)]
 pub struct AccountDataObject<T>(DAO<T>)
@@ -34,6 +35,17 @@ where
         Self(DAO::<T>::new(AccountIdHash(key), data))
     }
 
+    /// tries to load the account from storage
+    pub fn load(account_id: &str) -> Option<Self> {
+        let key = Hash::from(account_id);
+        DAO::load(&AccountIdHash(key)).map(|account| Self(account))
+    }
+
+    pub fn exists(account_id: &str) -> bool {
+        let key = Hash::from(account_id);
+        DAO::<T>::exists(&AccountIdHash(key))
+    }
+
     /// tracks storage usage changes - emits [`AccountStorageEvent::StorageUsageChanged`] event
     pub fn save(&mut self) {
         let storage_usage_before_save = env::storage_usage();
@@ -46,7 +58,7 @@ where
                 storage_usage_change.into(),
             ));
         } else {
-            let storage_usage_change = storage_usage_after_save - storage_usage_before_save;
+            let storage_usage_change = storage_usage_before_save - storage_usage_after_save;
             if storage_usage_change > 0 {
                 eventbus::post(&AccountStorageEvent::StorageUsageChanged(
                     self.key().clone(),
@@ -54,17 +66,6 @@ where
                 ));
             }
         }
-    }
-
-    /// tries to load the account from storage
-    pub fn load(account_id: &str) -> Option<Self> {
-        let key = Hash::from(account_id);
-        DAO::load(&AccountIdHash(key)).map(|account| Self(account))
-    }
-
-    pub fn exists(account_id: &str) -> bool {
-        let key = Hash::from(account_id);
-        DAO::<T>::exists(&AccountIdHash(key))
     }
 
     /// tracks storage usage - emits [`AccountStorageEvent::StorageUsageChanged`] event

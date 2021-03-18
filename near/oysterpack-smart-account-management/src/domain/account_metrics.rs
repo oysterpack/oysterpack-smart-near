@@ -39,7 +39,7 @@ impl AccountMetrics {
         *stats
     }
 
-    pub fn save(&self) {
+    fn save(&self) {
         DAO::new(ACCOUNT_STATS_KEY, *self).save();
     }
 
@@ -115,7 +115,7 @@ impl AccountMetrics {
                         if change.is_positive() {
                             account.incr_storage_usage((change.value() as u64).into())
                         } else {
-                            account.dec_storage_usage((change.value().abs() as u64).into())
+                            account.decr_storage_usage((change.value().abs() as u64).into())
                         }
                         account.save();
                     }

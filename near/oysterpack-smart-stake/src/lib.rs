@@ -30,5 +30,3 @@ impl Contract {
         Self
     }
 }
-
-near_sdk::metadata!();
