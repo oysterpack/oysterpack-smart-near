@@ -22,7 +22,7 @@ impl Contract {
         assert!(!env::state_exists(), "contract is already initialized");
 
         let config = config.unwrap_or_else(|| StorageUsageBounds {
-            min: 1000.into(),
+            min: AccountManager::measure_storage_usage(()),
             max: None,
         });
         AccountManager::deploy(Some(config));

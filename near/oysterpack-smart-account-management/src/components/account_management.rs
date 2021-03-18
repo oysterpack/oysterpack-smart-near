@@ -28,7 +28,7 @@ use teloc::*;
 use crate::components::account_storage_usage::AccountStorageUsageComponent;
 use crate::AccountNearDataObject;
 use oysterpack_smart_near::component::Deploy;
-use oysterpack_smart_near::domain::ZERO_NEAR;
+use oysterpack_smart_near::domain::{StorageUsage, ZERO_NEAR};
 use std::marker::PhantomData;
 
 pub const ERR_INSUFFICIENT_STORAGE_BALANCE: ErrorConst = ErrorConst(
@@ -100,6 +100,35 @@ where
             account_storage_usage: Default::default(),
             _phantom_data: Default::default(),
         }
+    }
+}
+
+impl<T> AccountManagementComponent<T>
+where
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+{
+    /// helper method used to measure the amount of storage needed to store the specified data.
+    pub fn measure_storage_usage(account_data: T) -> StorageUsage {
+        let mut account_manager: Self = Self::new(Box::new(UnregisterAccountNOOP));
+
+        // seeds the storage required to store metrics
+        {
+            let account_id = "1953717115592535419708657925195464285";
+            account_manager.create_account(account_id, 0.into(), Some(account_data.clone()));
+            account_manager.delete_account(account_id);
+        }
+
+        let account_id = "1953718041838591893489340663938715635";
+        let initial_storage_usage = env::storage_usage();
+        account_manager.create_account(account_id, 0.into(), Some(account_data));
+        let storage_usage = env::storage_usage() - initial_storage_usage;
+
+        // clean up storage
+        account_manager.delete_account(account_id);
+        // ensure all data is cleaned up
+        assert_eq!(initial_storage_usage, env::storage_usage());
+
+        storage_usage.into()
     }
 }
 
@@ -2299,5 +2328,45 @@ mod tests_storage_management {
                 .storage_balance_of(to_valid_account_id(account))
                 .is_none());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests_account_storage_usage {
+    use super::*;
+    use oysterpack_smart_near::YOCTO;
+    use oysterpack_smart_near_test::*;
+
+    type AccountManager = AccountManagementComponent<()>;
+
+    #[test]
+    fn test() {
+        let account = "alfio";
+        let mut ctx = new_context(account);
+        testing_env!(ctx.clone());
+
+        let storage_usage_bounds = StorageUsageBounds {
+            min: AccountManager::measure_storage_usage(()),
+            max: None,
+        };
+        println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
+        AccountManager::deploy(Some(storage_usage_bounds));
+
+        let mut service = AccountManager::new(Box::new(UnregisterAccountNOOP));
+        assert_eq!(storage_usage_bounds, service.storage_usage_bounds());
+
+        assert!(service
+            .storage_balance_of(to_valid_account_id(account))
+            .is_none());
+
+        ctx.attached_deposit = YOCTO;
+        testing_env!(ctx.clone());
+        let storage_balance = service.storage_deposit(None, None);
+        assert_eq!(
+            service
+                .storage_balance_of(to_valid_account_id(account))
+                .unwrap(),
+            storage_balance
+        );
     }
 }
