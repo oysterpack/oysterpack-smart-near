@@ -2462,3 +2462,87 @@ mod tests_account_metrics {
         );
     }
 }
+
+#[cfg(test)]
+mod tests_account_repository {
+    use super::*;
+    use oysterpack_smart_near::YOCTO;
+    use oysterpack_smart_near_test::*;
+
+    type AccountManager = AccountManagementComponent<String>;
+
+    #[test]
+    fn crud() {
+        let account = "alfio";
+        let ctx = new_context(account);
+        testing_env!(ctx);
+
+        let storage_usage_bounds = StorageUsageBounds {
+            min: AccountManager::measure_storage_usage("".to_string()),
+            max: None,
+        };
+        println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
+        AccountManager::deploy(Some(storage_usage_bounds));
+
+        let mut service: Box<dyn AccountRepository<String>> =
+            Box::new(AccountManager::new(Box::new(UnregisterAccountNOOP)));
+        assert!(service.load_account(account).is_none());
+        assert!(service.load_account_near_data(account).is_none());
+        assert!(service.load_account_near_data(account).is_none());
+
+        let (account_near_data, account_data) = service.create_account(account, YOCTO.into(), None);
+        assert!(account_data.is_none());
+        assert_eq!(account_near_data.near_balance(), YOCTO.into());
+
+        let mut account_data = AccountDataObject::<String>::new(account, "data".to_string());
+        account_data.save();
+
+        let (account_near_data, account_data) = service.load_account(account).unwrap();
+        assert_eq!(account_data.as_ref().unwrap().deref().as_str(), "data");
+        assert_eq!(account_near_data.near_balance(), YOCTO.into());
+
+        let (account_near_data2, account_data2) = service.registered_account(account);
+        assert_eq!(account_near_data, account_near_data2);
+        assert_eq!(
+            account_data.as_ref().unwrap(),
+            account_data2.as_ref().unwrap()
+        );
+
+        assert_eq!(
+            account_near_data2,
+            service.registered_account_near_data(account)
+        );
+        assert_eq!(
+            account_data2.unwrap(),
+            service.registered_account_data(account)
+        );
+
+        assert!(service.account_exists(account));
+        service.delete_account(account);
+        assert!(!service.account_exists(account));
+
+        service.delete_account(account);
+        assert!(!service.account_exists(account));
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [ACCOUNT_ALREADY_REGISTERED]")]
+    fn create_account_already_exists() {
+        let account = "alfio";
+        let ctx = new_context(account);
+        testing_env!(ctx);
+
+        let storage_usage_bounds = StorageUsageBounds {
+            min: AccountManager::measure_storage_usage("".to_string()),
+            max: None,
+        };
+        println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
+        AccountManager::deploy(Some(storage_usage_bounds));
+
+        let mut service: Box<dyn AccountRepository<String>> =
+            Box::new(AccountManager::new(Box::new(UnregisterAccountNOOP)));
+
+        service.create_account(account, YOCTO.into(), None);
+        service.create_account(account, YOCTO.into(), None);
+    }
+}
