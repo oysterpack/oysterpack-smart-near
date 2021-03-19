@@ -403,7 +403,7 @@ mod tests {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         let mut service = ContractSaleComponent;
         assert!(ContractSaleComponent::contract_sale_price().is_none());
@@ -596,7 +596,7 @@ mod tests_sell_contract {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
         ContractSaleComponent.sell_contract(YOCTO.into());
@@ -622,7 +622,7 @@ mod tests_sell_contract {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
         ContractSaleComponent.sell_contract(YOCTO.into());
@@ -653,7 +653,7 @@ mod tests_sell_contract {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
         ContractSaleComponent.sell_contract(YOCTO.into());
@@ -681,7 +681,7 @@ mod tests_sell_contract {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(owner)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(owner));
         ctx.attached_deposit = 100;
         ctx.predecessor_account_id = buyer.to_string();
         testing_env!(ctx.clone());
@@ -715,7 +715,7 @@ mod tests_sell_contract {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(owner)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(owner));
         ctx.attached_deposit = YOCTO;
         ctx.predecessor_account_id = buyer.to_string();
         testing_env!(ctx.clone());
@@ -752,7 +752,7 @@ mod tests_sell_contract {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(owner)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(owner));
         ctx.attached_deposit = 2 * YOCTO;
         ctx.predecessor_account_id = buyer.to_string();
         testing_env!(ctx.clone());
@@ -789,7 +789,7 @@ mod tests_sell_contract {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(owner)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(owner));
         ctx.attached_deposit = 2 * YOCTO;
         ctx.predecessor_account_id = buyer.to_string();
         ctx.epoch_height = 100;
@@ -837,7 +837,7 @@ mod tests_sell_contract {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(owner)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(owner));
         ctx.attached_deposit = YOCTO;
         ctx.predecessor_account_id = buyer.to_string();
         testing_env!(ctx.clone());
@@ -879,7 +879,7 @@ mod tests_sell_contract {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(owner)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(owner));
         ctx.attached_deposit = 2 * YOCTO;
         ctx.predecessor_account_id = buyer.to_string();
         testing_env!(ctx.clone());
@@ -924,7 +924,7 @@ mod tests_sell_contract {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(owner)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(owner));
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
         ContractOwnershipComponent.transfer_ownership(to_valid_account_id(buyer));
@@ -946,7 +946,7 @@ mod tests_sell_contract {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(owner)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(owner));
 
         // Act
         ctx.attached_deposit = 1;
@@ -965,7 +965,7 @@ mod tests_sell_contract {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(owner)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(owner));
 
         // Act
         ctx.attached_deposit = 0;
@@ -983,7 +983,7 @@ mod tests_sell_contract {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(owner)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(owner));
 
         // Act
         ctx.attached_deposit = 2;
@@ -1001,7 +1001,7 @@ mod tests_sell_contract {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(owner)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(owner));
 
         // Act
         ctx.attached_deposit = 1;
@@ -1030,7 +1030,7 @@ mod tests_buy_contract {
             ctx.attached_deposit = 1;
             testing_env!(ctx.clone());
 
-            ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+            ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
             if let Some(sale_price) = sale_price {
                 ContractSaleComponent.sell_contract(sale_price);
             }
@@ -1444,7 +1444,7 @@ mod tests_cancel_contract_sale {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ContractSaleComponent.sell_contract(YOCTO.into());
 
@@ -1471,7 +1471,7 @@ mod tests_cancel_contract_sale {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         // Act
         ContractSaleComponent.cancel_contract_sale();
@@ -1500,7 +1500,7 @@ mod tests_raise_contract_bid {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = YOCTO;
@@ -1515,7 +1515,7 @@ mod tests_raise_contract_bid {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = YOCTO;
@@ -1537,7 +1537,7 @@ mod tests_raise_contract_bid {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 1000;
@@ -1554,7 +1554,7 @@ mod tests_raise_contract_bid {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 1000;
@@ -1577,7 +1577,7 @@ mod tests_raise_contract_bid {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 1000;
@@ -1609,7 +1609,7 @@ mod tests_raise_contract_bid {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 1000;
@@ -1637,7 +1637,7 @@ mod tests_raise_contract_bid {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 1000;
@@ -1666,7 +1666,7 @@ mod tests_raise_contract_bid {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 1000;
@@ -1696,7 +1696,7 @@ mod tests_raise_contract_bid {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 1000;
@@ -1730,7 +1730,7 @@ mod tests_lower_contract_bid {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
@@ -1758,7 +1758,7 @@ mod tests_lower_contract_bid {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
@@ -1796,7 +1796,7 @@ mod tests_lower_contract_bid {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 1;
@@ -1811,7 +1811,7 @@ mod tests_lower_contract_bid {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = YOCTO;
@@ -1836,7 +1836,7 @@ mod tests_lower_contract_bid {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = YOCTO;
@@ -1862,7 +1862,7 @@ mod tests_lower_contract_bid {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
@@ -1882,7 +1882,7 @@ mod tests_lower_contract_bid {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
@@ -1902,7 +1902,7 @@ mod tests_lower_contract_bid {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
@@ -1922,7 +1922,7 @@ mod tests_lower_contract_bid {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
@@ -1942,7 +1942,7 @@ mod tests_lower_contract_bid {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
@@ -1973,7 +1973,7 @@ mod tests_contract_bid_expiration {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
@@ -1998,7 +1998,7 @@ mod tests_contract_bid_expiration {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
@@ -2019,7 +2019,7 @@ mod tests_contract_bid_expiration {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
@@ -2040,7 +2040,7 @@ mod tests_contract_bid_expiration {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
@@ -2062,7 +2062,7 @@ mod tests_contract_bid_expiration {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
@@ -2083,7 +2083,7 @@ mod tests_contract_bid_expiration {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
@@ -2109,7 +2109,7 @@ mod tests_contract_bid_expiration {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
@@ -2130,7 +2130,7 @@ mod tests_contract_bid_expiration {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
@@ -2151,7 +2151,7 @@ mod tests_contract_bid_expiration {
         // Arrange
         let mut ctx = new_context(OWNER);
         testing_env!(ctx.clone());
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(OWNER)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;

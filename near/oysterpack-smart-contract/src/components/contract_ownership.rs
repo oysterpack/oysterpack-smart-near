@@ -24,8 +24,7 @@ impl Deploy for ContractOwnershipComponent {
     /// owner account ID
     type Config = ValidAccountId;
 
-    fn deploy(config: Option<Self::Config>) {
-        let owner = config.expect("owner account ID is required");
+    fn deploy(owner: Self::Config) {
         ContractOwnerObject::initialize_contract(owner);
     }
 }
@@ -173,7 +172,7 @@ mod tests {
         testing_env!(ctx.clone());
 
         // Set alfio as owner at deployment
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
         // Assert
         assert_eq!(alfio, ContractOwnershipComponent::owner().as_str());
         assert!(ContractOwnershipComponent::prospective_owner().is_none());
@@ -295,7 +294,7 @@ mod tests_transfer_ownership {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
@@ -317,7 +316,7 @@ mod tests_transfer_ownership {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
@@ -350,7 +349,7 @@ mod tests_transfer_ownership {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         ctx.attached_deposit = YOCTO;
         ctx.predecessor_account_id = "bob".to_string();
@@ -388,7 +387,7 @@ mod tests_transfer_ownership {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
@@ -433,7 +432,7 @@ mod tests_transfer_ownership {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
         ctx.attached_deposit = 1;
@@ -450,7 +449,7 @@ mod tests_transfer_ownership {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
         ctx.attached_deposit = 1;
@@ -466,7 +465,7 @@ mod tests_transfer_ownership {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
         ctx.attached_deposit = 0;
@@ -482,7 +481,7 @@ mod tests_transfer_ownership {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
         ctx.attached_deposit = 2;
@@ -505,7 +504,7 @@ mod tests_finalize_transfer_ownership {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
@@ -532,7 +531,7 @@ mod tests_finalize_transfer_ownership {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
@@ -552,7 +551,7 @@ mod tests_finalize_transfer_ownership {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
         ctx.attached_deposit = 1;
@@ -570,7 +569,7 @@ mod tests_finalize_transfer_ownership {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
@@ -592,7 +591,7 @@ mod tests_finalize_transfer_ownership {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
@@ -620,7 +619,7 @@ mod tests_cancel_ownership_transfer {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
@@ -646,7 +645,7 @@ mod tests_cancel_ownership_transfer {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
@@ -673,7 +672,7 @@ mod tests_cancel_ownership_transfer {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
         ctx.attached_deposit = 1;
@@ -692,7 +691,7 @@ mod tests_cancel_ownership_transfer {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
         ctx.attached_deposit = 1;
@@ -713,7 +712,7 @@ mod tests_cancel_ownership_transfer {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
@@ -741,7 +740,7 @@ mod tests_cancel_ownership_transfer {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
@@ -769,7 +768,7 @@ mod tests_cancel_ownership_transfer {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
@@ -798,7 +797,7 @@ mod tests_cancel_ownership_transfer {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
@@ -832,7 +831,7 @@ mod owner_balance {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         let owner_balance_1 = ContractOwnershipComponent::owner_balance();
         assert!(owner_balance_1.available > ZERO_NEAR);
@@ -862,7 +861,7 @@ mod owner_balance {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
         ctx.attached_deposit = 1;
@@ -893,7 +892,7 @@ mod owner_balance {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
         ctx.attached_deposit = 1;
@@ -911,7 +910,7 @@ mod owner_balance {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
         ctx.attached_deposit = 1;
@@ -927,7 +926,7 @@ mod owner_balance {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
         ctx.attached_deposit = 1;
@@ -944,7 +943,7 @@ mod owner_balance {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
         ctx.attached_deposit = 1;
@@ -963,7 +962,7 @@ mod owner_balance {
         let ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
         testing_env!(ctx.clone());
@@ -980,7 +979,7 @@ mod owner_balance {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
         ctx.attached_deposit = 2;
@@ -998,7 +997,7 @@ mod owner_balance {
         let ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
         testing_env!(ctx.clone());
@@ -1015,7 +1014,7 @@ mod owner_balance {
         let mut ctx = new_context(alfio);
         testing_env!(ctx.clone());
 
-        ContractOwnershipComponent::deploy(Some(to_valid_account_id(alfio)));
+        ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
         ctx.attached_deposit = 2;

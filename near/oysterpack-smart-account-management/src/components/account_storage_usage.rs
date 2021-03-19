@@ -27,9 +27,8 @@ impl Component for AccountStorageUsageComponent {
 impl Deploy for AccountStorageUsageComponent {
     type Config = StorageUsageBounds;
 
-    fn deploy(config: Option<Self::Config>) {
-        let state = config.expect("storage usage bounds is required");
-        let state = Self::new_state(state);
+    fn deploy(config: Self::Config) {
+        let state = Self::new_state(config);
         state.save();
     }
 }

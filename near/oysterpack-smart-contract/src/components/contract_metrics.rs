@@ -67,10 +67,10 @@ mod tests {
     pub type AccountManager = AccountManagementComponent<()>;
 
     fn deploy_account_service() {
-        AccountManager::deploy(Some(StorageUsageBounds {
+        AccountManager::deploy(StorageUsageBounds {
             min: 1000.into(),
             max: None,
-        }));
+        });
     }
 
     fn run_test<F>(test: F)

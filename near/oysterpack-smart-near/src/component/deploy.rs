@@ -7,5 +7,5 @@ pub trait Deploy {
 
     /// invoked when the contract is first deployed
     /// - main use case is to initialize any service state
-    fn deploy(config: Option<Self::Config>);
+    fn deploy(config: Self::Config);
 }

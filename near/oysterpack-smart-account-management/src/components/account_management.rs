@@ -140,7 +140,7 @@ where
 {
     type Config = StorageUsageBounds;
 
-    fn deploy(config: Option<Self::Config>) {
+    fn deploy(config: Self::Config) {
         AccountStorageUsageComponent::deploy(config)
     }
 }
@@ -481,10 +481,10 @@ mod tests_service {
     use oysterpack_smart_near_test::*;
 
     fn deploy_account_service() {
-        AccountStorageUsageComponent::deploy(Some(StorageUsageBounds {
+        AccountStorageUsageComponent::deploy(StorageUsageBounds {
             min: 1000.into(),
             max: None,
-        }));
+        });
     }
 
     #[test]
@@ -519,10 +519,10 @@ mod tests_teloc {
     pub type AccountManager = AccountManagementComponent<()>;
 
     fn deploy_account_service() {
-        AccountManager::deploy(Some(StorageUsageBounds {
+        AccountManager::deploy(StorageUsageBounds {
             min: 1000.into(),
             max: None,
-        }));
+        });
     }
 
     #[test]
@@ -585,7 +585,7 @@ mod tests_storage_management {
         AccountMetrics::register_account_storage_event_handler();
         AccountMetrics::reset();
 
-        AccountStorageUsageComponent::deploy(Some(storage_usage_bounds));
+        AccountStorageUsageComponent::deploy(storage_usage_bounds);
 
         let mut service: AccountManagementComponent<()> =
             AccountManagementComponent::new(Box::new(UnregisterAccountNOOP));
@@ -1193,10 +1193,10 @@ mod tests_storage_management {
                 let mut ctx = new_context(account);
                 testing_env!(ctx.clone());
 
-                AccountManagementComponent::<()>::deploy(Some(StorageUsageBounds {
+                AccountManagementComponent::<()>::deploy(StorageUsageBounds {
                     min: 1000.into(),
                     max: Some(2000.into()),
-                }));
+                });
 
                 let mut service =
                     AccountManagementComponent::<()>::new(Box::new(UnregisterAccountNOOP));
@@ -1943,7 +1943,7 @@ mod tests_storage_management {
             AccountMetrics::register_account_storage_event_handler();
             AccountMetrics::reset();
 
-            AccountStorageUsageComponent::deploy(Some(storage_usage_bounds));
+            AccountStorageUsageComponent::deploy(storage_usage_bounds);
 
             let mut service: AccountManagementComponent<()> =
                 AccountManagementComponent::new(Box::new(UnregisterAccountNOOP));
@@ -2133,7 +2133,7 @@ mod tests_storage_management {
             AccountMetrics::register_account_storage_event_handler();
             AccountMetrics::reset();
 
-            AccountStorageUsageComponent::deploy(Some(storage_usage_bounds));
+            AccountStorageUsageComponent::deploy(storage_usage_bounds);
 
             let mut service: AccountManagementComponent<()> =
                 AccountManagementComponent::new(Box::new(UnregisterAccountNOOP));
@@ -2293,10 +2293,10 @@ mod tests_storage_management {
             let mut ctx = new_context(account);
             testing_env!(ctx.clone());
 
-            AccountManager::deploy(Some(StorageUsageBounds {
+            AccountManager::deploy(StorageUsageBounds {
                 min: 1000.into(),
                 max: None,
-            }));
+            });
 
             let mut service = AccountManager::new(Box::new(UnregisterMock { fail: true }));
             ctx.attached_deposit = YOCTO;
@@ -2316,10 +2316,10 @@ mod tests_storage_management {
             let mut ctx = new_context(account);
             testing_env!(ctx.clone());
 
-            AccountManager::deploy(Some(StorageUsageBounds {
+            AccountManager::deploy(StorageUsageBounds {
                 min: 1000.into(),
                 max: None,
-            }));
+            });
 
             let mut service = AccountManager::new(Box::new(UnregisterMock { fail: true }));
             ctx.attached_deposit = YOCTO;
@@ -2356,7 +2356,7 @@ mod tests_account_storage_usage {
             max: None,
         };
         println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
-        AccountManager::deploy(Some(storage_usage_bounds));
+        AccountManager::deploy(storage_usage_bounds);
 
         let mut service = AccountManager::new(Box::new(UnregisterAccountNOOP));
         assert_eq!(storage_usage_bounds, service.storage_usage_bounds());
@@ -2406,7 +2406,7 @@ mod tests_account_metrics {
             max: None,
         };
         println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
-        AccountManager::deploy(Some(storage_usage_bounds));
+        AccountManager::deploy(storage_usage_bounds);
 
         let mut service = AccountManager::new(Box::new(UnregisterAccountNOOP));
         // Act
@@ -2497,7 +2497,7 @@ mod tests_account_repository {
             max: None,
         };
         println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
-        AccountManager::deploy(Some(storage_usage_bounds));
+        AccountManager::deploy(storage_usage_bounds);
 
         let mut service: Box<dyn AccountRepository<String>> =
             Box::new(AccountManager::new(Box::new(UnregisterAccountNOOP)));
@@ -2552,7 +2552,7 @@ mod tests_account_repository {
             max: None,
         };
         println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
-        AccountManager::deploy(Some(storage_usage_bounds));
+        AccountManager::deploy(storage_usage_bounds);
 
         let mut service: Box<dyn AccountRepository<String>> =
             Box::new(AccountManager::new(Box::new(UnregisterAccountNOOP)));
