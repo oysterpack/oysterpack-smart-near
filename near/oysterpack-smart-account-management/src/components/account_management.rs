@@ -38,8 +38,7 @@ pub const ERR_INSUFFICIENT_STORAGE_BALANCE: ErrorConst = ErrorConst(
 /// Core account management component implements the following interfaces:
 /// 1. [`AccountRepository`]
 /// 2. [`StorageManagement`] - NEP-145
-/// 3. [`GetAccountMetrics`]
-/// 4. [`AccountStorageUsage`]
+/// 3. [`AccountStorageUsage`]
 pub struct AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
@@ -2497,8 +2496,8 @@ mod tests_account_repository {
         println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
         AccountManager::deploy(storage_usage_bounds);
 
-        let mut service: Box<dyn AccountRepository<String>> =
-            Box::new(AccountManager::new(Box::new(UnregisterAccountNOOP)));
+        let mut account_manager = AccountManager::new(Box::new(UnregisterAccountNOOP));
+        let service: &mut dyn AccountRepository<String> = &mut account_manager;
         assert!(service.load_account(account).is_none());
         assert!(service.load_account_near_data(account).is_none());
         assert!(service.load_account_near_data(account).is_none());
@@ -2552,8 +2551,8 @@ mod tests_account_repository {
         println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
         AccountManager::deploy(storage_usage_bounds);
 
-        let mut service: Box<dyn AccountRepository<String>> =
-            Box::new(AccountManager::new(Box::new(UnregisterAccountNOOP)));
+        let mut account_manager = AccountManager::new(Box::new(UnregisterAccountNOOP));
+        let service: &mut dyn AccountRepository<String> = &mut account_manager;
 
         service.create_account(account, YOCTO.into(), None);
         service.create_account(account, YOCTO.into(), None);

@@ -1,0 +1,12 @@
+[package]
+name = "oysterpack-smart-fungible-token"
+version = "0.1.0"
+authors = ["oysterpack.inc <2zP6OaymGZhJTHFvQMzp6Ze>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+near-sdk = "=3.0.0-pre.2"
+oysterpack-smart-near = { path = "../oysterpack-smart-near" }
+oysterpack-smart-account-management = { path = "../oysterpack-smart-account-management" }

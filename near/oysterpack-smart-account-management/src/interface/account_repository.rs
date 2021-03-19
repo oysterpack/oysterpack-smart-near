@@ -13,7 +13,7 @@ where
 {
     /// Creates a new account.
     ///
-    /// - tracks storage usage - emits [`AccountStorageEvent::StorageUsageChanged`]
+    /// - tracks storage usage - emits [`crate::AccountStorageEvent::StorageUsageChanged`]
     ///
     /// # Panics
     /// if the account already is registered
@@ -49,7 +49,7 @@ where
     fn account_exists(&self, account_id: &str) -> bool;
 
     /// Deletes [AccountNearDataObject] and [AccountDataObject] for the specified  account ID
-    /// - tracks storage usage - emits [`AccountStorageEvent::StorageUsageChanged`]
+    /// - tracks storage usage - emits [`crate::AccountStorageEvent::StorageUsageChanged`]
     fn delete_account(&mut self, account_id: &str);
 }
 
