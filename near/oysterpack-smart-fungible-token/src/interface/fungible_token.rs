@@ -1,7 +1,7 @@
 use crate::*;
 use near_sdk::json_types::ValidAccountId;
 use near_sdk::{Promise, PromiseOrValue};
-use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
+use oysterpack_smart_near::{Level, LogEvent};
 
 /// Defines the standard interface for the core Fungible Token contract
 /// - [NEP-141](https://github.com/near/NEPs/issues/141)

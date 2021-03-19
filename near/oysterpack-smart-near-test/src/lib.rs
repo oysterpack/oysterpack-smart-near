@@ -6,11 +6,10 @@ use near_sdk::{
     AccountId, Balance, Gas, PromiseResult, PublicKey, VMContext,
 };
 use oysterpack_smart_near::YOCTO;
-use std::convert::TryFrom;
 
-use near_sdk::json_types::ValidAccountId;
 pub use near_sdk::{testing_env, MockedBlockchain};
 pub use near_vm_logic;
+pub use oysterpack_smart_near::to_valid_account_id;
 
 pub const DEFAULT_CONTRACT_ACCOUNT_ID: &str = "contract.near";
 
@@ -25,12 +24,6 @@ pub fn new_context(predecessor_account_id: &str) -> VMContext {
         .predecessor_account_id(to_valid_account_id(&predecessor_account_id))
         .account_balance(DEFAULT_CONTRACT_ACCOUNT_BALANCE)
         .build()
-}
-
-/// ## Panics
-/// - if `account_id` is not valid
-pub fn to_valid_account_id(account_id: &str) -> ValidAccountId {
-    ValidAccountId::try_from(account_id).unwrap()
 }
 
 /// Used to inject `PromiseResult`s into the NEAR runtime test environment. This enables callbacks

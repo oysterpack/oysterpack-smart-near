@@ -178,7 +178,7 @@ pub enum AccountStorageEvent {
     StorageUsageChanged(AccountIdHash, StorageUsageChange),
     /// an account was unregistered
     /// - its NEAR balance was refunded
-    Unregistered(YoctoNear),
+    Unregistered(AccountIdHash, YoctoNear),
 }
 
 impl Display for AccountStorageEvent {

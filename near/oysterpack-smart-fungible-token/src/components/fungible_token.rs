@@ -1,51 +1,45 @@
+#![allow(unused_variables)]
+
 use crate::{
     FungibleToken, FungibleTokenMetadataProvider, Memo, Metadata, TokenAmount, TransferCallMessage,
     LOG_EVENT_FT_TRANSFER,
 };
 use near_sdk::{
-    borsh::{self, BorshDeserialize, BorshSerialize},
+    borsh::{BorshDeserialize, BorshSerialize},
     env,
     json_types::ValidAccountId,
     serde::{Deserialize, Serialize},
     Promise, PromiseOrValue,
 };
 use oysterpack_smart_account_management::components::account_management::AccountManagementComponent;
-use oysterpack_smart_account_management::AccountRepository;
+use oysterpack_smart_account_management::{AccountRepository, ERR_ACCOUNT_NOT_REGISTERED};
 use oysterpack_smart_near::asserts::{
     assert_yocto_near_attached, ERR_CODE_BAD_REQUEST, ERR_INSUFFICIENT_FUNDS,
 };
-use oysterpack_smart_near::{component::Deploy, data::Object};
+use oysterpack_smart_near::{component::Deploy, data::Object, to_valid_account_id, Hash};
 use std::{fmt::Debug, ops::Deref};
+use teloc::*;
 
 pub struct FungibleTokenComponent<T>
 where
-    T: BorshSerialize
-        + BorshDeserialize
-        + Clone
-        + Debug
-        + PartialEq
-        + Default
-        + HasFungibleTokenBalance,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     account_manager: AccountManagementComponent<T>,
 }
 
-/// Account data type must implement [`AccountFungibleTokenBalance`]
-pub trait HasFungibleTokenBalance {
-    fn ft_balance(&self) -> u128;
-
-    fn set_ft_balance(&mut self, balance: u128);
+#[inject]
+impl<T> FungibleTokenComponent<T>
+where
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+{
+    pub fn new(account_manager: AccountManagementComponent<T>) -> Self {
+        Self { account_manager }
+    }
 }
 
 impl<T> Deploy for FungibleTokenComponent<T>
 where
-    T: BorshSerialize
-        + BorshDeserialize
-        + Clone
-        + Debug
-        + PartialEq
-        + Default
-        + HasFungibleTokenBalance,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     type Config = Config;
 
@@ -64,13 +58,7 @@ pub struct Config {
 
 impl<T> FungibleToken for FungibleTokenComponent<T>
 where
-    T: BorshSerialize
-        + BorshDeserialize
-        + Clone
-        + Debug
-        + PartialEq
-        + Default
-        + HasFungibleTokenBalance,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     fn ft_transfer(
         &mut self,
@@ -80,26 +68,24 @@ where
     ) {
         assert_yocto_near_attached();
         ERR_CODE_BAD_REQUEST.assert(|| *amount > 0, || "transfer amount cannot be zero");
-        let sender_id = env::predecessor_account_id();
+
+        let sender_id = &env::predecessor_account_id();
         ERR_CODE_BAD_REQUEST.assert(
-            || &sender_id != receiver_id.as_ref(),
+            || sender_id != receiver_id.as_ref(),
             || "sender and receiver cannot be the same",
         );
-        let mut sender = self
-            .account_manager
-            .registered_account_data(&env::predecessor_account_id());
-        let sender_balance = sender.ft_balance();
-        ERR_INSUFFICIENT_FUNDS.assert(|| sender_balance >= *amount);
-        let mut receiver = self
-            .account_manager
-            .registered_account_data(receiver_id.as_ref());
+        ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(sender_id));
 
-        sender.set_ft_balance(sender_balance - *amount);
-        sender.save();
+        let sender_balance = self.ft_balance_of(to_valid_account_id(sender_id));
+        ERR_INSUFFICIENT_FUNDS.assert(|| *sender_balance >= *amount);
 
-        let receiver_balance = receiver.ft_balance();
-        receiver.set_ft_balance(receiver_balance + *amount);
-        receiver.save();
+        ERR_ACCOUNT_NOT_REGISTERED
+            .assert(|| self.account_manager.account_exists(receiver_id.as_ref()));
+
+        // transfer the tokens
+        ft_set_balance(sender_id, *sender_balance - *amount);
+        let receiver_balance = self.ft_balance_of(receiver_id.clone());
+        ft_set_balance(receiver_id.as_ref(), *receiver_balance + *amount);
 
         if let Some(memo) = memo {
             LOG_EVENT_FT_TRANSFER.log(memo);
@@ -121,7 +107,8 @@ where
     }
 
     fn ft_balance_of(&self, account_id: ValidAccountId) -> TokenAmount {
-        unimplemented!()
+        let account_hash_id = Hash::from((account_id.clone(), FT_ACCOUNT_KEY));
+        AccountFTBalance::load(&account_hash_id).map_or(0.into(), |balance| (*balance).into())
     }
 }
 
@@ -133,17 +120,19 @@ type MetadataObject = Object<u128, Metadata>;
 
 impl<T> FungibleTokenMetadataProvider for FungibleTokenComponent<T>
 where
-    T: BorshSerialize
-        + BorshDeserialize
-        + Clone
-        + Debug
-        + PartialEq
-        + Default
-        + HasFungibleTokenBalance,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     fn ft_metadata(&self) -> Metadata {
         MetadataObject::load(&METADATA_KEY).unwrap().deref().clone()
     }
+}
+
+const FT_ACCOUNT_KEY: u128 = 1953845438124731969041175284518648060;
+type AccountFTBalance = Object<Hash, u128>;
+
+pub(crate) fn ft_set_balance(account_id: &str, balance: u128) {
+    let account_hash_id = Hash::from((account_id, FT_ACCOUNT_KEY));
+    AccountFTBalance::new(account_hash_id, balance).save();
 }
 
 /// Callback on fungible token contract to resolve transfer.
@@ -189,29 +178,73 @@ pub trait ResolveTransferCall {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::FungibleToken;
+    use crate::*;
+    use oysterpack_smart_account_management::components::account_management::UnregisterAccountNOOP;
+    use oysterpack_smart_account_management::{StorageManagement, StorageUsageBounds};
+    use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
-    #[derive(BorshSerialize, BorshDeserialize, Clone, Debug, PartialEq, Default)]
-    struct Account {
-        ft_balance: u128,
-    }
-
-    impl HasFungibleTokenBalance for Account {
-        fn ft_balance(&self) -> u128 {
-            self.ft_balance
-        }
-
-        fn set_ft_balance(&mut self, balance: u128) {
-            self.ft_balance = balance
-        }
-    }
-
-    type AccountManager = AccountManagementComponent<Account>;
+    type AccountDataType = ();
+    type AccountManager = AccountManagementComponent<AccountDataType>;
+    type Stake = FungibleTokenComponent<AccountDataType>;
 
     #[test]
     fn total_supply() {
         // Arrange
-        let account = "alfio";
-        let mut ctx = new_context(account);
+        let sender = "sender";
+        let receiver = "receiver";
+        let mut ctx = new_context(sender);
+        testing_env!(ctx.clone());
+
+        AccountManager::deploy(StorageUsageBounds {
+            min: AccountManager::measure_storage_usage(()),
+            max: None,
+        });
+
+        Stake::deploy(Config {
+            metadata: Metadata {
+                spec: Spec(FT_METADATA_SPEC.to_string()),
+                name: Name("STAKE".to_string()),
+                symbol: Symbol("STAKE".to_string()),
+                icon: None,
+                reference: None,
+                reference_hash: None,
+                decimals: 24,
+            },
+            token_supply: YOCTO,
+        });
+
+        let mut account_manager = AccountManager::new(Box::new(UnregisterAccountNOOP));
+
+        // register accounts
+        {
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx.clone());
+            account_manager.storage_deposit(None, None);
+
+            ctx.attached_deposit = YOCTO;
+            ctx.predecessor_account_id = receiver.to_string();
+            testing_env!(ctx.clone());
+            account_manager.storage_deposit(None, None);
+        }
+
+        let mut stake = Stake::new(account_manager);
+        ft_set_balance(sender, 100);
+        println!(
+            "sender balance = {:?}",
+            stake.ft_balance_of(to_valid_account_id(sender))
+        );
+
+        // Act
+        ctx.predecessor_account_id = sender.to_string();
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        stake.ft_transfer(to_valid_account_id(receiver), 50.into(), None);
+        stake.ft_transfer(
+            to_valid_account_id(receiver),
+            50.into(),
+            Some("memo".into()),
+        );
     }
 }

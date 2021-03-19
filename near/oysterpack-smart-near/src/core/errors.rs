@@ -74,6 +74,16 @@ impl ErrorConst {
             self.panic();
         }
     }
+
+    /// uses the supplied message instead of the preset message
+    pub fn assert_with_message<F, MsgF, Msg>(&self, check: F, msg: MsgF)
+    where
+        F: FnOnce() -> bool,
+        MsgF: FnOnce() -> Msg,
+        Msg: Display,
+    {
+        self.0.assert(check, msg)
+    }
 }
 
 #[cfg(test)]

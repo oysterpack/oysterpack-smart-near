@@ -347,7 +347,10 @@ where
                 let account_near_balance = account.near_balance();
                 self.unregister.unregister_account(force.unwrap_or(false));
                 self.delete_account(&account_id);
-                eventbus::post(&AccountStorageEvent::Unregistered(account_near_balance));
+                eventbus::post(&AccountStorageEvent::Unregistered(
+                    account.key().account_id_hash(),
+                    account_near_balance,
+                ));
                 send_refund(account_near_balance + 1);
                 true
             })

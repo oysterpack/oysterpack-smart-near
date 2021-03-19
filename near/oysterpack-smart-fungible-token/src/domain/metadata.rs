@@ -38,7 +38,7 @@ impl Metadata {
 
 #[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize, PartialEq, Debug)]
 #[serde(crate = "near_sdk::serde")]
-pub struct Spec(String);
+pub struct Spec(pub String);
 
 impl Deref for Spec {
     type Target = str;
@@ -68,7 +68,7 @@ impl Display for Spec {
 
 #[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize, PartialEq, Debug)]
 #[serde(crate = "near_sdk::serde")]
-pub struct Name(String);
+pub struct Name(pub String);
 
 impl Deref for Name {
     type Target = str;
@@ -98,7 +98,7 @@ impl Display for Name {
 
 #[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize, PartialEq, Debug)]
 #[serde(crate = "near_sdk::serde")]
-pub struct Symbol(String);
+pub struct Symbol(pub String);
 
 impl Deref for Symbol {
     type Target = str;
@@ -128,7 +128,7 @@ impl Display for Symbol {
 
 #[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize, PartialEq, Debug)]
 #[serde(crate = "near_sdk::serde")]
-pub struct Icon(String);
+pub struct Icon(pub String);
 
 impl Deref for Icon {
     type Target = str;
@@ -158,7 +158,7 @@ impl Display for Icon {
 
 #[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize, PartialEq, Debug)]
 #[serde(crate = "near_sdk::serde")]
-pub struct Reference(String);
+pub struct Reference(pub String);
 
 impl Deref for Reference {
     type Target = str;

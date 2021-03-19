@@ -122,7 +122,7 @@ impl AccountMetrics {
                 }
             }
 
-            AccountStorageEvent::Unregistered(account_near_balance) => {
+            AccountStorageEvent::Unregistered(_account_id_hash, account_near_balance) => {
                 stats.total_registered_accounts = stats
                     .total_registered_accounts
                     .checked_sub(1)
@@ -233,7 +233,10 @@ mod test {
         assert_eq!(account.storage_usage(), initial_account_storage_usage);
 
         // Act - account unregistered
-        eventbus::post(&AccountStorageEvent::Unregistered(YOCTO.into()));
+        eventbus::post(&AccountStorageEvent::Unregistered(
+            "account_id".into(),
+            YOCTO.into(),
+        ));
 
         // Assert
         let stats = AccountMetrics::load();
