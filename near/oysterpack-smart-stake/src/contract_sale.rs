@@ -13,22 +13,27 @@ impl ContractSale for Contract {
         ContractSaleComponent::contract_bid()
     }
 
+    #[payable]
     fn sell_contract(&mut self, price: YoctoNear) {
         ContractSaleComponent.sell_contract(price);
     }
 
+    #[payable]
     fn cancel_contract_sale(&mut self) {
         ContractSaleComponent.cancel_contract_sale();
     }
 
+    #[payable]
     fn buy_contract(&mut self, expiration: Option<ExpirationSetting>) {
         ContractSaleComponent.buy_contract(expiration)
     }
 
+    #[payable]
     fn raise_contract_bid(&mut self, expiration: Option<ExpirationSetting>) -> ContractBid {
         ContractSaleComponent.raise_contract_bid(expiration)
     }
 
+    #[payable]
     fn lower_contract_bid(
         &mut self,
         amount: YoctoNear,
@@ -37,14 +42,17 @@ impl ContractSale for Contract {
         ContractSaleComponent.lower_contract_bid(amount, expiration)
     }
 
+    #[payable]
     fn update_contract_bid_expiration(&mut self, expiration: ExpirationSetting) {
         ContractSaleComponent.update_contract_bid_expiration(expiration)
     }
 
+    #[payable]
     fn clear_contract_bid_expiration(&mut self) {
         ContractSaleComponent.clear_contract_bid_expiration()
     }
 
+    #[payable]
     fn cancel_contract_bid(&mut self) {
         ContractSaleComponent.cancel_contract_bid()
     }
