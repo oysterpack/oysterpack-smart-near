@@ -67,11 +67,9 @@ mod tests {
     impl Deploy for Foo {
         type Config = u128;
 
-        fn deploy(config: Option<Self::Config>) {
-            if let Some(config) = config {
-                let state = Self::new_state(config);
-                state.save();
-            }
+        fn deploy(config: Self::Config) {
+            let state = Self::new_state(config);
+            state.save();
         }
     }
 
@@ -81,7 +79,7 @@ mod tests {
         let ctx = new_context("bob");
         testing_env!(ctx);
 
-        Foo::deploy(None);
+        Foo::deploy(0);
 
         // Act
         {

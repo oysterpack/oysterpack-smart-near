@@ -1,3 +1,10 @@
+mod components;
+mod domain;
+mod interface;
+
+pub use domain::*;
+pub use interface::*;
+
 #[cfg(test)]
 mod tests {
     #[test]

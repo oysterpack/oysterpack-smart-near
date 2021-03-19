@@ -1,4 +1,5 @@
 use near_sdk::json_types::ValidAccountId;
+use near_sdk::serde::{self, de, Deserialize, Deserializer, Serialize, Serializer};
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
@@ -6,6 +7,7 @@ use near_sdk::{
 use std::convert::TryInto;
 
 /// sha256 hashed data
+/// - JSON serialization format is Base64 encoded bytes
 ///
 /// The main use case is to use Hash to hash keys for NEAR Trie storage, which provides the following
 /// benefits
@@ -140,10 +142,43 @@ fn u128_to_bytes(value: u128) -> [u8; 16] {
     ]
 }
 
+impl Serialize for Hash {
+    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&base64::encode(&self.0))
+    }
+}
+
+impl<'de> Deserialize<'de> for Hash {
+    fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: String = serde::Deserialize::deserialize(deserializer)?;
+        base64::decode(&s)
+            .map_err(|err| de::Error::custom(err.to_string()))
+            .map(|hash| Self(hash.try_into().unwrap()))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use near_sdk::test_utils::test_env;
+    use near_sdk::{serde_json, test_utils::test_env};
+
+    #[test]
+    fn serde_json() {
+        test_env::setup();
+        let data = "Alfio Zappala II";
+        let hash = Hash::from(data.as_bytes());
+
+        let json = serde_json::to_string(&hash).unwrap();
+        println!("json hash: {}", json);
+        let hash2: Hash = serde_json::from_str(&json).unwrap();
+        assert_eq!(hash, hash2);
+    }
 
     #[test]
     fn hash_from_string() {
