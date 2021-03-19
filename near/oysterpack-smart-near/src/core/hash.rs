@@ -1,3 +1,4 @@
+use crate::ErrCode;
 use near_sdk::json_types::ValidAccountId;
 use near_sdk::serde::{self, de, Deserialize, Deserializer, Serialize, Serializer};
 use near_sdk::{
@@ -158,10 +159,23 @@ impl<'de> Deserialize<'de> for Hash {
     {
         let s: String = serde::Deserialize::deserialize(deserializer)?;
         base64::decode(&s)
-            .map_err(|err| de::Error::custom(err.to_string()))
-            .map(|hash| Self(hash.try_into().unwrap()))
+            .map_err(|err| de::Error::custom(ERR_INVALID_HASH.error(err.to_string())))
+            .map(|hash| {
+                ERR_INVALID_HASH.assert(
+                    || hash.len() == Hash::LENGTH,
+                    || "hash length must be 32 bytes",
+                );
+                Self(
+                    hash.try_into()
+                        .map_err(|_err| ERR_INVALID_HASH.error(""))
+                        .unwrap(),
+                )
+            })
     }
 }
+
+/// Error is used when trying to deserialize HASH from JSON
+pub const ERR_INVALID_HASH: ErrCode = ErrCode("INVALID_HASH");
 
 #[cfg(test)]
 mod test {
@@ -178,6 +192,34 @@ mod test {
         println!("json hash: {}", json);
         let hash2: Hash = serde_json::from_str(&json).unwrap();
         assert_eq!(hash, hash2);
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [INVALID_HASH] hash length must be 32 bytes")]
+    fn serde_json_33_char_string() {
+        test_env::setup();
+        let data = "Alfio Zappala II";
+        let hash = Hash::from(data.as_bytes());
+
+        let json = serde_json::to_string(&hash).unwrap();
+        let invalid_hash = format!("\"{}", json.split_at(33).0);
+        let invalid_hash = format!("{}a\"", invalid_hash);
+        println!("{}", invalid_hash);
+        let _hash: Hash = serde_json::from_str(&invalid_hash).unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [INVALID_HASH] Invalid last symbol 115")]
+    fn serde_json_31_char_string() {
+        test_env::setup();
+        let data = "Alfio Zappala II";
+        let hash = Hash::from(data.as_bytes());
+
+        let json = serde_json::to_string(&hash).unwrap();
+        println!("{}", json);
+        let invalid_hash = format!("\"{}", json.split_at(2).1);
+        println!("{}", invalid_hash);
+        let _hash: Hash = serde_json::from_str(&invalid_hash).unwrap();
     }
 
     #[test]
