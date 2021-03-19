@@ -7,9 +7,8 @@
 
 use crate::{
     Account, AccountDataObject, AccountMetrics, AccountRepository, AccountStorageEvent,
-    AccountStorageUsage, GetAccountMetrics, StorageBalance, StorageBalanceBounds,
-    StorageManagement, StorageUsageBounds, ERR_ACCOUNT_ALREADY_REGISTERED,
-    ERR_ACCOUNT_NOT_REGISTERED,
+    AccountStorageUsage, StorageBalance, StorageBalanceBounds, StorageManagement,
+    StorageUsageBounds, ERR_ACCOUNT_ALREADY_REGISTERED, ERR_ACCOUNT_NOT_REGISTERED,
 };
 use near_sdk::{
     borsh::{BorshDeserialize, BorshSerialize},
@@ -132,6 +131,10 @@ where
 
         storage_usage.into()
     }
+
+    pub fn account_metrics() -> AccountMetrics {
+        AccountMetrics::load()
+    }
 }
 
 impl<T> Deploy for AccountManagementComponent<T>
@@ -241,11 +244,6 @@ where
             }
         }
     }
-}
-
-impl<T> GetAccountMetrics for AccountManagementComponent<T> where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default
-{
 }
 
 /// exposes [`AccountStorageUsage`] interface on the component

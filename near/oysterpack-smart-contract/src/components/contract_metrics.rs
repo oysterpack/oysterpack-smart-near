@@ -1,7 +1,7 @@
 use crate::{ContractMetrics, ContractMetricsSnapshot};
 use crate::{ContractNearBalances, ContractStorageUsage, ContractStorageUsageCosts};
 use near_sdk::env;
-use oysterpack_smart_account_management::GetAccountMetrics;
+use oysterpack_smart_account_management::AccountMetrics;
 use oysterpack_smart_near::data::numbers::U128;
 use oysterpack_smart_near::domain::BlockTime;
 
@@ -12,7 +12,7 @@ impl ContractMetrics for ContractMetricsComponent {
         Self::account_metrics().total_registered_accounts
     }
 
-    fn storage_usage() -> ContractStorageUsage {
+    fn contract_storage_usage() -> ContractStorageUsage {
         let account_metrics = Self::account_metrics();
         ContractStorageUsage::new(account_metrics.total_storage_usage)
     }
@@ -33,11 +33,11 @@ impl ContractMetrics for ContractMetricsComponent {
     }
 
     fn storage_usage_costs() -> ContractStorageUsageCosts {
-        Self::storage_usage().into()
+        Self::contract_storage_usage().into()
     }
 
     fn metrics() -> ContractMetricsSnapshot {
-        let storage_usage = Self::storage_usage();
+        let storage_usage = Self::contract_storage_usage();
         ContractMetricsSnapshot {
             block_time: BlockTime::from_env(),
             total_registered_accounts: Self::total_registered_accounts(),
@@ -46,9 +46,11 @@ impl ContractMetrics for ContractMetricsComponent {
             storage_usage_costs: storage_usage.into(),
         }
     }
-}
 
-impl GetAccountMetrics for ContractMetricsComponent {}
+    fn account_metrics() -> AccountMetrics {
+        AccountMetrics::load()
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -119,7 +121,7 @@ mod tests {
     fn storage_usage() {
         run_test(|mut ctx, mut account_manager| {
             // Act - no accounts registered
-            let storage_usage = ContractMetricsComponent::storage_usage();
+            let storage_usage = ContractMetricsComponent::contract_storage_usage();
             println!("{:?}", storage_usage);
             assert_eq!(storage_usage.accounts(), 0.into());
 
@@ -129,7 +131,7 @@ mod tests {
             account_manager.storage_deposit(None, None);
 
             // Act
-            let storage_usage = ContractMetricsComponent::storage_usage();
+            let storage_usage = ContractMetricsComponent::contract_storage_usage();
             println!("{:?}", storage_usage);
             // Assert
             assert!(storage_usage.accounts().value() > 0);

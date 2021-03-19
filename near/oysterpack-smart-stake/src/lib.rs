@@ -1,7 +1,8 @@
-mod account_metrics;
 mod account_storage_usage;
 mod components;
+mod contract_metrics;
 mod contract_ownership;
+mod contract_sale;
 mod storage_management;
 
 use components::*;
