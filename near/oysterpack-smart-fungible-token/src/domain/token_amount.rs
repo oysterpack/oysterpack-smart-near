@@ -19,3 +19,9 @@ impl DerefMut for TokenAmount {
         self.0.deref_mut()
     }
 }
+
+impl From<u128> for TokenAmount {
+    fn from(amount: u128) -> Self {
+        TokenAmount(amount.into())
+    }
+}

@@ -18,6 +18,11 @@ pub const ERR_YOCTONEAR_DEPOSIT_REQUIRED: ErrorConst = ErrorConst(
 pub const ERR_NEAR_DEPOSIT_REQUIRED: ErrorConst =
     ErrorConst(ErrCode("NEAR_DEPOSIT_REQUIRED"), "NEAR deposit is required");
 
+pub const ERR_INSUFFICIENT_FUNDS: ErrorConst = ErrorConst(
+    ErrCode("INSUFFICIENT_FUNDS"),
+    "account has insufficient funds to fulfill request",
+);
+
 pub fn assert_request<F, Msg, MsgF>(check: F, msg: MsgF)
 where
     F: FnOnce() -> bool,

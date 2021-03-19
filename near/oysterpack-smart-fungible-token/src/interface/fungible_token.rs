@@ -1,6 +1,7 @@
 use crate::*;
 use near_sdk::json_types::ValidAccountId;
 use near_sdk::{Promise, PromiseOrValue};
+use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 
 /// Defines the standard interface for the core Fungible Token contract
 /// - [NEP-141](https://github.com/near/NEPs/issues/141)
@@ -112,6 +113,8 @@ pub trait FungibleToken {
     /// If the account doesn't exist, then zero is returned.
     fn ft_balance_of(&self, account_id: ValidAccountId) -> TokenAmount;
 }
+
+pub const LOG_EVENT_FT_TRANSFER: LogEvent = LogEvent(Level::INFO, "FT_TRANSFER");
 
 /// Callback on fungible token contract to resolve transfer.
 pub trait ResolveTransferCall {
