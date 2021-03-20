@@ -65,6 +65,7 @@ where
 #[serde(crate = "near_sdk::serde")]
 pub struct Config {
     pub metadata: Metadata,
+    /// initial token supply
     pub token_supply: u128,
 }
 
