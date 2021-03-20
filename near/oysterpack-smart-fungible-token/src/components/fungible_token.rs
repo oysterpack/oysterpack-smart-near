@@ -9,14 +9,17 @@
 
 use crate::{
     FungibleToken, FungibleTokenMetadataProvider, Memo, Metadata, TokenAmount, TransferCallMessage,
-    LOG_EVENT_FT_TRANSFER,
+    LOG_EVENT_FT_TRANSFER, LOG_EVENT_FT_TRANSFER_CALL_FAILURE,
+    LOG_EVENT_FT_TRANSFER_CALL_PARTIAL_REFUND, LOG_EVENT_FT_TRANSFER_CALL_RECEIVER_DEBIT,
+    LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED, LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT,
+    LOG_EVENT_FT_TRANSFER_CALL_TOKEN_BURN,
 };
 use near_sdk::{
     borsh::{BorshDeserialize, BorshSerialize},
     env,
     json_types::ValidAccountId,
     serde::{Deserialize, Serialize},
-    serde_json, AccountId, Gas, Promise, PromiseOrValue, RuntimeFeesConfig,
+    serde_json, AccountId, Gas, Promise, PromiseResult, RuntimeFeesConfig,
 };
 use oysterpack_smart_account_management::components::account_management::{
     AccountManagementComponent, UnregisterAccount, ERR_CODE_UNREGISTER_FAILURE,
@@ -26,7 +29,7 @@ use oysterpack_smart_near::asserts::{
     assert_yocto_near_attached, ERR_CODE_BAD_REQUEST, ERR_INSUFFICIENT_FUNDS,
 };
 use oysterpack_smart_near::{component::Deploy, data::Object, to_valid_account_id, Hash, TERA};
-use std::{fmt::Debug, ops::Deref};
+use std::{cmp::min, fmt::Debug, ops::Deref};
 use teloc::*;
 
 pub struct FungibleTokenComponent<T>
@@ -262,6 +265,12 @@ pub struct ResolveTransferArgs {
 const TOKEN_SUPPLY: u128 = 1953830723745925743018307013370321490;
 type TokenSupply = Object<u128, u128>;
 
+fn burn_tokens(amount: u128) {
+    let mut supply = TokenSupply::load(&TOKEN_SUPPLY).unwrap();
+    *supply = supply.saturating_sub(amount);
+    supply.save();
+}
+
 const METADATA_KEY: u128 = 1953827270399390220126384465824835887;
 type MetadataObject = Object<u128, Metadata>;
 
@@ -284,21 +293,84 @@ where
         receiver_id: ValidAccountId,
         amount: TokenAmount,
     ) -> TokenAmount {
-        unimplemented!()
+        // Get the unused amount from the `ft_on_transfer` call result.
+        let unused_amount = match env::promise_result(0) {
+            PromiseResult::NotReady => unreachable!(),
+            PromiseResult::Successful(value) => {
+                if let Ok(unused_amount) = near_sdk::serde_json::from_slice::<TokenAmount>(&value) {
+                    min(amount, unused_amount)
+                } else {
+                    amount
+                }
+            }
+            PromiseResult::Failed => {
+                LOG_EVENT_FT_TRANSFER_CALL_FAILURE.log("");
+                amount
+            }
+        };
+
+        if *unused_amount > 0 {
+            // try to refund the unused amount from the receiver back to the sender
+            if let Some(mut receiver_account_balance) =
+                ft_load_account_balance(receiver_id.as_ref())
+            {
+                let receiver_balance = *receiver_account_balance;
+                if receiver_balance > 0 {
+                    let refund_amount = min(receiver_balance, *unused_amount);
+                    if refund_amount < *unused_amount {
+                        LOG_EVENT_FT_TRANSFER_CALL_PARTIAL_REFUND.log("partial refund will be applied because receiver account has insufficient fund");
+                    }
+                    *receiver_account_balance -= refund_amount;
+                    receiver_account_balance.save();
+                    LOG_EVENT_FT_TRANSFER_CALL_RECEIVER_DEBIT.log(refund_amount);
+
+                    match ft_load_account_balance(sender_id.as_ref()) {
+                        Some(mut sender_account_balance) => {
+                            *sender_account_balance += refund_amount;
+                            sender_account_balance.save();
+                            LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT.log(refund_amount);
+                        }
+                        None => {
+                            burn_tokens(refund_amount);
+                            LOG_EVENT_FT_TRANSFER_CALL_TOKEN_BURN
+                                .log(format!(
+                                "tokens were burned because sender account is not registered: {}"
+                            ,refund_amount));
+                        }
+                    }
+                } else {
+                    LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED
+                        .log("receiver account has zero balance");
+                }
+            } else {
+                LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED
+                    .log("receiver account not registered");
+            }
+        }
+
+        unused_amount
     }
 }
 
 const FT_ACCOUNT_KEY: u128 = 1953845438124731969041175284518648060;
 type AccountFTBalance = Object<Hash, u128>;
 
-pub(crate) fn ft_set_balance(account_id: &str, balance: u128) {
-    let account_hash_id = Hash::from((account_id, FT_ACCOUNT_KEY));
+fn ft_set_balance(account_id: &str, balance: u128) {
+    let account_hash_id = ft_account_id_hash(account_id);
     AccountFTBalance::new(account_hash_id, balance).save();
 }
 
-pub(crate) fn ft_balance_of(account_id: &str) -> TokenAmount {
-    let account_hash_id = Hash::from((account_id, FT_ACCOUNT_KEY));
-    AccountFTBalance::load(&account_hash_id).map_or(0.into(), |balance| (*balance).into())
+fn ft_balance_of(account_id: &str) -> TokenAmount {
+    ft_load_account_balance(account_id).map_or(0.into(), |balance| (*balance).into())
+}
+
+fn ft_load_account_balance(account_id: &str) -> Option<AccountFTBalance> {
+    let account_hash_id = ft_account_id_hash(account_id);
+    AccountFTBalance::load(&account_hash_id)
+}
+
+fn ft_account_id_hash(account_id: &str) -> Hash {
+    Hash::from((account_id, FT_ACCOUNT_KEY))
 }
 
 /// Must be registered with [`AccountManagementComponent`]
@@ -338,7 +410,7 @@ impl UnregisterAccount for UnregisterFungibleTokenAccount {
     }
 }
 
-/// Callback on fungible token contract to resolve transfer.
+/// Private callback on fungible token contract to resolve transfer.
 pub trait ResolveTransferCall {
     /// Callback to resolve transfer.
     /// Private method (`env::predecessor_account_id == env::current_account_id`).
@@ -362,38 +434,14 @@ pub trait ResolveTransferCall {
     /// Returns amount that was refunded back to the sender.
     ///
     /// The callback should be designed to never panic.
-    /// - if the `sender_id` is not registered, then refunded STAKE tokens will be burned
-    /// - if the `receiver_id` is not registered, then the contract should be handle it
+    /// - if the `sender_id` is not registered, then refunded tokens will be burned
+    /// - if the `receiver_id` is not registered, then the contract should be able to handle it
     ///
     /// #\[private\]
     fn ft_resolve_transfer_call(
         &mut self,
         sender_id: ValidAccountId,
         receiver_id: ValidAccountId,
-        amount: TokenAmount,
-        // NOTE: #[callback_result] is not supported yet and has to be handled using lower level interface.
-        //
-        // #[callback_result]
-        // unused_amount: CallbackResult<TokenAmount>,
-    ) -> TokenAmount;
-}
-
-// #[ext_contract(ext_transfer_receiver)]
-trait ExtTransferReceiver {
-    fn ft_on_transfer(
-        &mut self,
-        sender_id: AccountId,
-        amount: TokenAmount,
-        msg: TransferCallMessage,
-    ) -> PromiseOrValue<TokenAmount>;
-}
-
-// #[ext_contract(ext_resolve_transfer_call)]
-trait ExtResolveTransferCall {
-    fn ft_resolve_transfer_call(
-        &mut self,
-        sender_id: AccountId,
-        receiver_id: AccountId,
         amount: TokenAmount,
     ) -> TokenAmount;
 }
@@ -403,6 +451,7 @@ mod tests {
     use super::*;
     use crate::FungibleToken;
     use crate::*;
+    use near_sdk::test_utils;
     use oysterpack_smart_account_management::components::account_management::UnregisterAccountNOOP;
     use oysterpack_smart_account_management::{StorageManagement, StorageUsageBounds};
     use oysterpack_smart_near::YOCTO;
@@ -473,6 +522,30 @@ mod tests {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
         stake.ft_transfer_call(to_valid_account_id(sender), 50.into(), None, "msg".into());
+
         let receipts = deserialize_receipts();
+        assert_eq!(receipts.len(), 2);
+
+        ctx.predecessor_account_id = receiver.to_string();
+        ctx.attached_deposit = 0;
+        testing_env_with_promise_results(
+            ctx.clone(),
+            vec![PromiseResult::Successful(
+                serde_json::to_vec(&TokenAmount::from(10)).unwrap(),
+            )],
+        );
+        stake.ft_resolve_transfer_call(
+            to_valid_account_id(sender),
+            to_valid_account_id(receiver),
+            50.into(),
+        );
+        let logs = test_utils::get_logs();
+        println!("logs: {:#?}", logs);
+
+        assert_eq!(stake.ft_balance_of(to_valid_account_id(sender)), 60.into());
+        assert_eq!(
+            stake.ft_balance_of(to_valid_account_id(receiver)),
+            40.into()
+        );
     }
 }

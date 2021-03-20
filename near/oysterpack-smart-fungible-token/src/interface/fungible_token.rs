@@ -118,6 +118,24 @@ pub trait FungibleToken {
 
 pub const LOG_EVENT_FT_TRANSFER: LogEvent = LogEvent(Level::INFO, "FT_TRANSFER");
 
+pub const LOG_EVENT_FT_TRANSFER_CALL_FAILURE: LogEvent =
+    LogEvent(Level::WARN, "FT_TRANSFER_CALL_FAILURE");
+
+pub const LOG_EVENT_FT_TRANSFER_CALL_PARTIAL_REFUND: LogEvent =
+    LogEvent(Level::WARN, "FT_TRANSFER_CALL_PARTIAL_REFUND");
+
+pub const LOG_EVENT_FT_TRANSFER_CALL_RECEIVER_DEBIT: LogEvent =
+    LogEvent(Level::INFO, "FT_TRANSFER_CALL_RECEIVER_DEBIT");
+
+pub const LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT: LogEvent =
+    LogEvent(Level::INFO, "FT_TRANSFER_CALL_SENDER_CREDIT");
+
+pub const LOG_EVENT_FT_TRANSFER_CALL_TOKEN_BURN: LogEvent =
+    LogEvent(Level::WARN, "FT_TRANSFER_CALL_TOKEN_BURN");
+
+pub const LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED: LogEvent =
+    LogEvent(Level::WARN, "FT_TRANSFER_CALL_REFUND_NOT_APPLIED");
+
 /// Callback on fungible token contract to resolve transfer.
 pub trait ResolveTransferCall {
     /// Callback to resolve transfer.
