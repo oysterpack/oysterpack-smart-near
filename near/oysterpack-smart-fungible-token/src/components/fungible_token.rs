@@ -1,3 +1,10 @@
+//! [`FungibleTokenComponent`]
+//! - constructor: [`FungibleTokenComponent::new`]
+//!   - [`AccountManagementComponent`]
+//! - deployment: [`FungibleTokenComponent::deploy`]
+//!   - config: [`Config`]
+//! - [`UnregisterAccount`] -> [`UnregisterFungibleTokenAccount`]
+
 #![allow(unused_variables)]
 
 use crate::{
@@ -11,7 +18,9 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
     Promise, PromiseOrValue,
 };
-use oysterpack_smart_account_management::components::account_management::AccountManagementComponent;
+use oysterpack_smart_account_management::components::account_management::{
+    AccountManagementComponent, UnregisterAccount, ERR_CODE_UNREGISTER_FAILURE,
+};
 use oysterpack_smart_account_management::{AccountRepository, ERR_ACCOUNT_NOT_REGISTERED};
 use oysterpack_smart_near::asserts::{
     assert_yocto_near_attached, ERR_CODE_BAD_REQUEST, ERR_INSUFFICIENT_FUNDS,
@@ -74,13 +83,18 @@ where
             || sender_id != receiver_id.as_ref(),
             || "sender and receiver cannot be the same",
         );
-        ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(sender_id));
+        ERR_ACCOUNT_NOT_REGISTERED.assert_with_message(
+            || self.account_manager.account_exists(sender_id),
+            || "sender account is not registered",
+        );
 
         let sender_balance = self.ft_balance_of(to_valid_account_id(sender_id));
         ERR_INSUFFICIENT_FUNDS.assert(|| *sender_balance >= *amount);
 
-        ERR_ACCOUNT_NOT_REGISTERED
-            .assert(|| self.account_manager.account_exists(receiver_id.as_ref()));
+        ERR_ACCOUNT_NOT_REGISTERED.assert_with_message(
+            || self.account_manager.account_exists(receiver_id.as_ref()),
+            || "receiver account is not registered",
+        );
 
         // transfer the tokens
         ft_set_balance(sender_id, *sender_balance - *amount);
@@ -107,8 +121,7 @@ where
     }
 
     fn ft_balance_of(&self, account_id: ValidAccountId) -> TokenAmount {
-        let account_hash_id = Hash::from((account_id.clone(), FT_ACCOUNT_KEY));
-        AccountFTBalance::load(&account_hash_id).map_or(0.into(), |balance| (*balance).into())
+        ft_balance_of(account_id.as_ref())
     }
 }
 
@@ -133,6 +146,48 @@ type AccountFTBalance = Object<Hash, u128>;
 pub(crate) fn ft_set_balance(account_id: &str, balance: u128) {
     let account_hash_id = Hash::from((account_id, FT_ACCOUNT_KEY));
     AccountFTBalance::new(account_hash_id, balance).save();
+}
+
+pub(crate) fn ft_balance_of(account_id: &str) -> TokenAmount {
+    let account_hash_id = Hash::from((account_id, FT_ACCOUNT_KEY));
+    AccountFTBalance::load(&account_hash_id).map_or(0.into(), |balance| (*balance).into())
+}
+
+/// Must be registered with [`AccountManagementComponent`]
+///
+/// When an account is forced unregistered, any tokens it owned will be burned, which reduces the total
+/// token supply.
+#[derive(Dependency)]
+pub struct UnregisterFungibleTokenAccount;
+
+impl UnregisterAccount for UnregisterFungibleTokenAccount {
+    /// if force = true, then any tokens that the account owned will be burned, which will reduce
+    /// the total token supply
+    fn unregister_account(&mut self, force: bool) {
+        let delete_account = || {
+            let account_hash_id =
+                Hash::from((env::predecessor_account_id().as_str(), FT_ACCOUNT_KEY));
+            AccountFTBalance::delete_by_key(&account_hash_id);
+        };
+
+        if force {
+            // burn any account token balance
+            let token_balance = *ft_balance_of(&env::predecessor_account_id());
+            if token_balance > 0 {
+                let mut token_supply = TokenSupply::load(&TOKEN_SUPPLY).unwrap();
+                *token_supply -= token_balance;
+                token_supply.save();
+            }
+
+            delete_account();
+        } else {
+            ERR_CODE_UNREGISTER_FAILURE.assert(
+                || *ft_balance_of(&env::predecessor_account_id()) == 0,
+                || "account failed to unregister because the account has a token balance",
+            );
+            delete_account();
+        }
+    }
 }
 
 /// Callback on fungible token contract to resolve transfer.
@@ -187,10 +242,10 @@ mod tests {
 
     type AccountDataType = ();
     type AccountManager = AccountManagementComponent<AccountDataType>;
-    type Stake = FungibleTokenComponent<AccountDataType>;
+    type STAKE = FungibleTokenComponent<AccountDataType>;
 
     #[test]
-    fn total_supply() {
+    fn ft_transfer() {
         // Arrange
         let sender = "sender";
         let receiver = "receiver";
@@ -202,11 +257,11 @@ mod tests {
             max: None,
         });
 
-        Stake::deploy(Config {
+        STAKE::deploy(Config {
             metadata: Metadata {
-                spec: Spec(FT_METADATA_SPEC.to_string()),
-                name: Name("STAKE".to_string()),
-                symbol: Symbol("STAKE".to_string()),
+                spec: FT_METADATA_SPEC.into(),
+                name: "STAKE".into(),
+                symbol: "STAKE".into(),
                 icon: None,
                 reference: None,
                 reference_hash: None,
@@ -229,12 +284,8 @@ mod tests {
             account_manager.storage_deposit(None, None);
         }
 
-        let mut stake = Stake::new(account_manager);
+        let mut stake = STAKE::new(account_manager);
         ft_set_balance(sender, 100);
-        println!(
-            "sender balance = {:?}",
-            stake.ft_balance_of(to_valid_account_id(sender))
-        );
 
         // Act
         ctx.predecessor_account_id = sender.to_string();
@@ -246,5 +297,7 @@ mod tests {
             50.into(),
             Some("memo".into()),
         );
+        assert_eq!(*stake.ft_balance_of(to_valid_account_id(sender)), 0);
+        assert_eq!(*stake.ft_balance_of(to_valid_account_id(receiver)), 100);
     }
 }

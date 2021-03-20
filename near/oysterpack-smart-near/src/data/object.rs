@@ -59,7 +59,13 @@ where
     ///
     /// Returns true if the object existed.
     pub fn delete(self) -> bool {
-        let key = object_serialize_key(&self.0);
+        Self::delete_by_key(&self.0)
+    }
+
+    /// Removes the value stored under the given key.
+    /// If key-value existed returns `true`, otherwise `false`.
+    pub fn delete_by_key(key: &K) -> bool {
+        let key = object_serialize_key(key);
         env::storage_remove(&key)
     }
 }

@@ -3,7 +3,6 @@
 //!   - Box<dyn [`UnregisterAccount`]>
 //! - deployment: [`AccountManagementComponent::deploy`]
 //!   - config: [`StorageUsageBounds`]
-//!
 
 use crate::{
     Account, AccountDataObject, AccountMetrics, AccountRepository, AccountStorageEvent,
@@ -51,6 +50,8 @@ where
     _phantom_data: PhantomData<T>,
 }
 
+pub const ERR_CODE_UNREGISTER_FAILURE: ErrCode = ErrCode("UNREGISTER_FAILURE");
+
 /// Contract is required to provide implementation that applies contract specific business logic.
 /// - see [`StorageManagement::storage_unregister`]
 pub trait UnregisterAccount {
@@ -64,6 +65,10 @@ pub trait UnregisterAccount {
     ///   business logic, e.g., for FT, the account cannot unregister if it has a token balance
     /// - delete any account data outside of the [`AccountNearDataObject`] and [`crate::AccountDataObject`] objects
     /// - apply any contract specific business logic
+    ///
+    /// ##NOTES
+    ///- the predecessor account is being unregistered
+    /// - implementations should use [`ERR_CODE_UNREGISTER_FAILURE`] for failures
     fn unregister_account(&mut self, force: bool);
 }
 
@@ -347,10 +352,7 @@ where
                 let account_near_balance = account.near_balance();
                 self.unregister.unregister_account(force.unwrap_or(false));
                 self.delete_account(&account_id);
-                eventbus::post(&AccountStorageEvent::Unregistered(
-                    account.key().account_id_hash(),
-                    account_near_balance,
-                ));
+                eventbus::post(&AccountStorageEvent::Unregistered(account_near_balance));
                 send_refund(account_near_balance + 1);
                 true
             })
