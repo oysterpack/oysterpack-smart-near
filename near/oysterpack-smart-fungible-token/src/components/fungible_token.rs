@@ -16,7 +16,7 @@ use near_sdk::{
     env,
     json_types::ValidAccountId,
     serde::{Deserialize, Serialize},
-    Promise, PromiseOrValue,
+    serde_json, AccountId, Gas, Promise, PromiseOrValue, RuntimeFeesConfig,
 };
 use oysterpack_smart_account_management::components::account_management::{
     AccountManagementComponent, UnregisterAccount, ERR_CODE_UNREGISTER_FAILURE,
@@ -25,7 +25,7 @@ use oysterpack_smart_account_management::{AccountRepository, ERR_ACCOUNT_NOT_REG
 use oysterpack_smart_near::asserts::{
     assert_yocto_near_attached, ERR_CODE_BAD_REQUEST, ERR_INSUFFICIENT_FUNDS,
 };
-use oysterpack_smart_near::{component::Deploy, data::Object, to_valid_account_id, Hash};
+use oysterpack_smart_near::{component::Deploy, data::Object, to_valid_account_id, Hash, TERA};
 use std::{fmt::Debug, ops::Deref};
 use teloc::*;
 
@@ -113,7 +113,14 @@ where
         memo: Option<Memo>,
         msg: TransferCallMessage,
     ) -> Promise {
-        unimplemented!()
+        self.ft_transfer(receiver_id.clone(), amount, memo);
+
+        self.create_promise_transfer_receiver_ft_on_transfer(
+            &env::predecessor_account_id(),
+            receiver_id.as_ref(),
+            amount,
+            msg,
+        )
     }
 
     fn ft_total_supply(&self) -> TokenAmount {
@@ -123,6 +130,133 @@ where
     fn ft_balance_of(&self, account_id: ValidAccountId) -> TokenAmount {
         ft_balance_of(account_id.as_ref())
     }
+}
+
+impl<T> FungibleTokenComponent<T>
+where
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+{
+    fn create_promise_transfer_receiver_ft_on_transfer(
+        &self,
+        sender_id: &str,
+        receiver_id: &str,
+        amount: TokenAmount,
+        msg: TransferCallMessage,
+    ) -> Promise {
+        let ft_on_transfer = b"ft_on_transfer".to_vec();
+        let ft_on_transfer_args = serde_json::to_vec(&OnTransferArgs {
+            sender_id: env::predecessor_account_id(),
+            amount,
+            msg,
+        })
+        .expect("");
+
+        let ft_resolve_transfer_call = b"ft_resolve_transfer_call".to_vec();
+        let ft_resolve_transfer_call_args = serde_json::to_vec(&ResolveTransferArgs {
+            sender_id: sender_id.to_string(),
+            receiver_id: receiver_id.to_string(),
+            amount,
+        })
+        .expect("");
+        let ft_resolve_transfer_call_bytes: u64 =
+            (ft_resolve_transfer_call.len() + ft_resolve_transfer_call_args.len()) as u64;
+        let ft_resolve_transfer_call_promise = Promise::new(env::current_account_id())
+            .function_call(
+                ft_resolve_transfer_call,
+                ft_resolve_transfer_call_args,
+                0,
+                self.ft_resolve_transfer_call_gas(),
+            );
+
+        // compute how much gas is needed to complete this call and the resolve transfer callback
+        // and then give the rest of the gas to the transfer receiver call
+        let runtime_fees = RuntimeFeesConfig::default();
+        let ft_on_transfer_receipt_action_cost = {
+            let action_receipt_creation_cost =
+                runtime_fees.action_receipt_creation_config.send_not_sir
+                    + runtime_fees.action_receipt_creation_config.execution;
+
+            let function_call_cost_per_byte = runtime_fees
+                .action_creation_config
+                .function_call_cost_per_byte
+                .send_not_sir
+                + runtime_fees
+                    .action_creation_config
+                    .function_call_cost_per_byte
+                    .execution;
+            let func_call_bytes: u64 = (ft_on_transfer.len() + ft_on_transfer_args.len()) as u64;
+            let func_call_cost = function_call_cost_per_byte * func_call_bytes;
+
+            runtime_fees.min_receipt_with_function_call_gas()
+                + action_receipt_creation_cost
+                + func_call_cost
+        };
+        let ft_resolve_transfer_call_receipt_action_cost = {
+            let action_receipt_creation_cost = runtime_fees.action_receipt_creation_config.send_sir
+                + runtime_fees.action_receipt_creation_config.execution;
+
+            let function_call_cost_per_byte = runtime_fees
+                .action_creation_config
+                .function_call_cost_per_byte
+                .send_sir
+                + runtime_fees
+                    .action_creation_config
+                    .function_call_cost_per_byte
+                    .execution;
+
+            let func_call_cost = function_call_cost_per_byte * ft_resolve_transfer_call_bytes;
+
+            let data_receipt_cost_per_byte = runtime_fees
+                .data_receipt_creation_config
+                .cost_per_byte
+                .send_sir
+                + runtime_fees
+                    .data_receipt_creation_config
+                    .cost_per_byte
+                    .execution;
+            let data_receipt_cost = runtime_fees.data_receipt_creation_config.base_cost.send_sir
+                + runtime_fees
+                    .data_receipt_creation_config
+                    .base_cost
+                    .execution
+                + (data_receipt_cost_per_byte * 100);
+
+            runtime_fees.min_receipt_with_function_call_gas()
+                + action_receipt_creation_cost
+                + func_call_cost
+                + data_receipt_cost
+        };
+        let ft_on_transfer_gas = env::prepaid_gas()
+            - env::used_gas()
+            - self.ft_resolve_transfer_call_gas()
+            - ft_on_transfer_receipt_action_cost
+            - ft_resolve_transfer_call_receipt_action_cost;
+
+        Promise::new(receiver_id.to_string())
+            .function_call(ft_on_transfer, ft_on_transfer_args, 0, ft_on_transfer_gas)
+            .then(ft_resolve_transfer_call_promise)
+    }
+
+    // TODO: make configurable
+    fn ft_resolve_transfer_call_gas(&self) -> Gas {
+        5 * TERA
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct OnTransferArgs {
+    sender_id: AccountId,
+    amount: TokenAmount,
+    msg: TransferCallMessage,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct ResolveTransferArgs {
+    sender_id: AccountId,
+    receiver_id: AccountId,
+    amount: TokenAmount,
 }
 
 const TOKEN_SUPPLY: u128 = 1953830723745925743018307013370321490;
@@ -137,6 +271,20 @@ where
 {
     fn ft_metadata(&self) -> Metadata {
         MetadataObject::load(&METADATA_KEY).unwrap().deref().clone()
+    }
+}
+
+impl<T> ResolveTransferCall for FungibleTokenComponent<T>
+where
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+{
+    fn ft_resolve_transfer_call(
+        &mut self,
+        sender_id: ValidAccountId,
+        receiver_id: ValidAccountId,
+        amount: TokenAmount,
+    ) -> TokenAmount {
+        unimplemented!()
     }
 }
 
@@ -227,7 +375,27 @@ pub trait ResolveTransferCall {
         //
         // #[callback_result]
         // unused_amount: CallbackResult<TokenAmount>,
+    ) -> TokenAmount;
+}
+
+// #[ext_contract(ext_transfer_receiver)]
+trait ExtTransferReceiver {
+    fn ft_on_transfer(
+        &mut self,
+        sender_id: AccountId,
+        amount: TokenAmount,
+        msg: TransferCallMessage,
     ) -> PromiseOrValue<TokenAmount>;
+}
+
+// #[ext_contract(ext_resolve_transfer_call)]
+trait ExtResolveTransferCall {
+    fn ft_resolve_transfer_call(
+        &mut self,
+        sender_id: AccountId,
+        receiver_id: AccountId,
+        amount: TokenAmount,
+    ) -> TokenAmount;
 }
 
 #[cfg(test)]
@@ -245,7 +413,7 @@ mod tests {
     type STAKE = FungibleTokenComponent<AccountDataType>;
 
     #[test]
-    fn ft_transfer() {
+    fn basic_workflow() {
         // Arrange
         let sender = "sender";
         let receiver = "receiver";
@@ -285,6 +453,7 @@ mod tests {
         }
 
         let mut stake = STAKE::new(account_manager);
+        // mint some new stake for the sender
         ft_set_balance(sender, 100);
 
         // Act
@@ -299,5 +468,11 @@ mod tests {
         );
         assert_eq!(*stake.ft_balance_of(to_valid_account_id(sender)), 0);
         assert_eq!(*stake.ft_balance_of(to_valid_account_id(receiver)), 100);
+
+        ctx.predecessor_account_id = receiver.to_string();
+        ctx.attached_deposit = 1;
+        testing_env!(ctx.clone());
+        stake.ft_transfer_call(to_valid_account_id(sender), 50.into(), None, "msg".into());
+        let receipts = deserialize_receipts();
     }
 }

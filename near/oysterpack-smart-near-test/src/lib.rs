@@ -90,8 +90,8 @@ pub struct DeployContractAction {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
 pub struct FunctionCallAction {
-    pub method_name: Vec<u8>,
-    pub args: Vec<u8>,
+    pub method_name: String,
+    pub args: String,
     pub gas: Gas,
     pub deposit: Balance,
 }

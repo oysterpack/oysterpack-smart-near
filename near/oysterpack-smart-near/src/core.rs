@@ -13,7 +13,7 @@ use near_sdk::json_types::ValidAccountId;
 pub const YOCTO: u128 = 1_000_000_000_000_000_000_000_000;
 
 /// TERA = 10^12
-pub const TERA: u128 = 1_000_000_000_000;
+pub const TERA: u64 = 1_000_000_000_000;
 
 use std::convert::TryFrom;
 
