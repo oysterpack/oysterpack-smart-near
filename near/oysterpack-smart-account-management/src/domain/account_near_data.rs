@@ -1,4 +1,7 @@
-use crate::{AccountIdHash, AccountStorageEvent, StorageBalance, ERR_ACCOUNT_NOT_REGISTERED};
+use crate::{
+    AccountIdHash, AccountStorageEvent, Permissions, StorageBalance, ERR_ACCOUNT_NOT_REGISTERED,
+};
+use enumflags2::bitflags;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
@@ -85,12 +88,25 @@ impl DerefMut for AccountNearDataObject {
     }
 }
 
-/// All accounts must pay for their own storage. Thus, NEAR balance and storage usage must be tracked
-/// for all accounts.
+/// Predefined standard account roles
+#[bitflags]
+#[repr(u64)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum AccountRoles {
+    Admin = 1 << 0,
+    Operator = 1 << 1,
+}
+
+/// Provides the basic fields that all accounts need:
+/// - [`AccountNearData::near_balance`] - all accounts must pay for their own storage and thus need a NEAR balance
+/// - [`AccountNearData::storage_usage`] - used to track account storage usage
+/// - [`AccountNearData::bitflags`] - many contracts will require access control. bitflags provides the ability
+///   to support up to 64 roles / permission bits.
 #[derive(BorshSerialize, BorshDeserialize, Clone, Copy, Debug, PartialEq)]
 pub struct AccountNearData {
     near_balance: YoctoNear,
     storage_usage: StorageUsage,
+    permissions: Option<Permissions>,
 }
 
 impl AccountNearData {
@@ -99,6 +115,7 @@ impl AccountNearData {
         Self {
             near_balance,
             storage_usage,
+            permissions: None,
         }
     }
 
@@ -157,6 +174,68 @@ impl AccountNearData {
     pub(crate) fn decr_storage_usage(&mut self, amount: StorageUsage) {
         *self.storage_usage = self.storage_usage.checked_sub(amount.value()).unwrap();
     }
+
+    pub fn set_bitflags(&mut self, bitflags: Permissions) {
+        self.permissions = Some(bitflags)
+    }
+
+    pub fn is_admin(&self) -> bool {
+        self.permissions
+            .map_or(false, |permissions| permissions.is_admin())
+    }
+
+    pub fn grant_admin(&mut self) {
+        let mut permissions = self.permissions.take().unwrap_or_else(Default::default);
+        permissions.grant_admin();
+        self.permissions = Some(permissions);
+    }
+
+    pub fn revoke_admin(&mut self) {
+        if let Some(mut permissions) = self.permissions.take() {
+            permissions.revoke_admin();
+            self.permissions = Some(permissions);
+        }
+    }
+
+    pub fn is_operator(&self) -> bool {
+        self.permissions
+            .map_or(false, |permissions| permissions.is_operator())
+    }
+
+    pub fn grant_operator(&mut self) {
+        let mut permissions = self.permissions.take().unwrap_or_else(Default::default);
+        permissions.grant_operator();
+        self.permissions = Some(permissions);
+    }
+
+    pub fn revoke_operator(&mut self) {
+        if let Some(mut permissions) = self.permissions.take() {
+            permissions.revoke_operator();
+            self.permissions = Some(permissions);
+        }
+    }
+
+    pub fn grant_access(&mut self, access: Permissions) {
+        let mut permissions = self.permissions.take().unwrap_or_else(Default::default);
+        permissions.grant_access(access);
+        self.permissions = Some(permissions);
+    }
+
+    pub fn revoke_access(&mut self, access: Permissions) {
+        if let Some(mut permissions) = self.permissions.take() {
+            permissions.revoke_access(access);
+            self.permissions = Some(permissions);
+        }
+    }
+
+    pub fn revoke_all_access(&mut self) {
+        self.permissions = None;
+    }
+
+    pub fn has_access(&self, permissions: Permissions) -> bool {
+        self.permissions
+            .map_or(false, |perms| perms.has_access(permissions))
+    }
 }
 
 type AccountNearDataKey = u128;
@@ -191,6 +270,23 @@ mod tests {
     use oysterpack_smart_near::domain::ZERO_NEAR;
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
+
+    #[test]
+    fn bitflags() {
+        let mut account = AccountNearData::new(ZERO_NEAR, 0.into());
+
+        assert!(!account.is_admin());
+        account.grant_admin();
+        assert!(account.is_admin());
+        account.revoke_admin();
+        assert!(!account.is_admin());
+
+        assert!(!account.is_operator());
+        account.grant_operator();
+        assert!(account.is_operator());
+        account.revoke_operator();
+        assert!(!account.is_operator());
+    }
 
     #[test]
     fn update_near_balance() {
