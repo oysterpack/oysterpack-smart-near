@@ -474,7 +474,7 @@ where
 
         let mut account = self.registered_account_near_data(account_id.as_ref());
         if !account.is_operator() {
-            account.grant_admin();
+            account.grant_operator();
             account.save();
             LOG_EVENT_PERMISSIONS_GRANT.log("operator")
         }
@@ -2840,14 +2840,25 @@ mod test_permission_management {
                     testing_env!(ctx.clone());
                     account_manager.storage_deposit(None, None);
 
-                    // Act
                     ctx.predecessor_account_id = PREDECESSOR_ACCOUNT.to_string();
                     ctx.attached_deposit = 0;
                     testing_env!(ctx.clone());
-                    account_manager.ops_permissions_grant_admin(to_valid_account_id(bob));
 
-                    // Assert
+                    // Act - Assert
+                    account_manager.ops_permissions_grant_admin(to_valid_account_id(bob));
                     assert!(account_manager.ops_permissions_is_admin(to_valid_account_id(bob)));
+                    assert!(account_manager.ops_permissions_is_operator(to_valid_account_id(bob)));
+
+                    account_manager.ops_permissions_revoke_admin(to_valid_account_id(bob));
+                    assert!(!account_manager.ops_permissions_is_admin(to_valid_account_id(bob)));
+                    assert!(!account_manager.ops_permissions_is_operator(to_valid_account_id(bob)));
+
+                    account_manager.ops_permissions_grant_operator(to_valid_account_id(bob));
+                    assert!(account_manager.ops_permissions_is_operator(to_valid_account_id(bob)));
+                    assert!(!account_manager.ops_permissions_is_admin(to_valid_account_id(bob)));
+
+                    account_manager.ops_permissions_revoke_operator(to_valid_account_id(bob));
+                    assert!(!account_manager.ops_permissions_is_operator(to_valid_account_id(bob)));
                 });
             }
 
