@@ -21,11 +21,11 @@ use oysterpack_smart_near::{
 pub struct ContractSaleComponent;
 
 impl ContractSale for ContractSaleComponent {
-    fn contract_sale_price() -> Option<YoctoNear> {
+    fn ops_contract_sale_price() -> Option<YoctoNear> {
         ContractOwnerObject::load().contract_sale_price()
     }
 
-    fn contract_bid() -> Option<ContractBuyerBid> {
+    fn ops_contract_bid() -> Option<ContractBuyerBid> {
         ContractOwnerObject::load()
             .bid()
             .map(|bid| bid.1)
@@ -42,7 +42,7 @@ impl ContractSale for ContractSaleComponent {
             })
     }
 
-    fn sell_contract(&mut self, price: YoctoNear) {
+    fn ops_contract_sell(&mut self, price: YoctoNear) {
         let mut contract_owner = Self::validate_sell_contract_request(price);
         match contract_owner.bid() {
             None => match contract_owner.sale_price {
@@ -73,7 +73,7 @@ impl ContractSale for ContractSaleComponent {
         contract_owner.save();
     }
 
-    fn cancel_contract_sale(&mut self) {
+    fn ops_contract_cancel_sale(&mut self) {
         assert_yocto_near_attached();
         let mut contract_owner = ContractOwnerObject::assert_owner_access();
         if contract_owner.sale_price.take().is_some() {
@@ -82,7 +82,7 @@ impl ContractSale for ContractSaleComponent {
         }
     }
 
-    fn buy_contract(&mut self, expiration: Option<ExpirationSetting>) {
+    fn ops_contract_buy(&mut self, expiration: Option<ExpirationSetting>) {
         assert_near_attached("contract bid cannot be zero");
         let expiration = Self::assert_not_expired(expiration);
 
@@ -109,7 +109,7 @@ impl ContractSale for ContractSaleComponent {
         account_ids.save();
     }
 
-    fn raise_contract_bid(&mut self, expiration: Option<ExpirationSetting>) -> ContractBid {
+    fn ops_contract_raise_bid(&mut self, expiration: Option<ExpirationSetting>) -> ContractBid {
         assert_near_attached("bid raise cannot be zero");
         Self::assert_not_expired(expiration);
 
@@ -150,7 +150,7 @@ impl ContractSale for ContractSaleComponent {
         bid
     }
 
-    fn lower_contract_bid(
+    fn ops_contract_lower_bid(
         &mut self,
         amount: YoctoNear,
         expiration: Option<ExpirationSetting>,
@@ -187,7 +187,7 @@ impl ContractSale for ContractSaleComponent {
         bid
     }
 
-    fn update_contract_bid_expiration(&mut self, expiration: ExpirationSetting) {
+    fn ops_contract_update_bid_expiration(&mut self, expiration: ExpirationSetting) {
         assert_yocto_near_attached();
         let expiration: Expiration = expiration.into();
         ERR_CODE_BAD_REQUEST.assert(
@@ -211,7 +211,7 @@ impl ContractSale for ContractSaleComponent {
         owner.save();
     }
 
-    fn clear_contract_bid_expiration(&mut self) {
+    fn ops_contract_clear_bid_expiration(&mut self) {
         assert_yocto_near_attached();
 
         let mut owner = ContractOwnerObject::load();
@@ -230,7 +230,7 @@ impl ContractSale for ContractSaleComponent {
         owner.save();
     }
 
-    fn cancel_contract_bid(&mut self) {
+    fn ops_contract_cancel_bid(&mut self) {
         assert_yocto_near_attached();
 
         let mut owner = ContractOwnerObject::load();
@@ -360,7 +360,7 @@ impl ContractSaleComponent {
         ContractBid::clear_near_balance();
 
         // transfer the owner's NEAR funds out to the owner's account
-        let owner_balance = ContractOwnershipComponent::owner_balance();
+        let owner_balance = ContractOwnershipComponent::ops_owner_balance();
         Promise::new(account_ids.owner.clone()).transfer(owner_balance.available.value());
 
         // update the contract owner
@@ -406,22 +406,22 @@ mod tests {
         ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         let mut service = ContractSaleComponent;
-        assert!(ContractSaleComponent::contract_sale_price().is_none());
+        assert!(ContractSaleComponent::ops_contract_sale_price().is_none());
         // should be harmless to call by the owner - should have no effect
-        service.cancel_contract_sale();
-        assert!(ContractSaleComponent::contract_bid().is_none());
+        service.ops_contract_cancel_sale();
+        assert!(ContractSaleComponent::ops_contract_bid().is_none());
         // should have no effect and should be harmless to call when there is no bid
-        service.cancel_contract_bid();
+        service.ops_contract_cancel_bid();
 
         // Act - Bob will submit a bid to buy the contract
         ctx.predecessor_account_id = bob.to_string();
         ctx.attached_deposit = 1000;
         testing_env!(ctx.clone());
-        service.buy_contract(None);
+        service.ops_contract_buy(None);
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        let bid = ContractSaleComponent::contract_bid().unwrap();
+        let bid = ContractSaleComponent::ops_contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 1000);
         assert_eq!(ContractBid::near_balance(), bid.bid.amount);
@@ -429,11 +429,11 @@ mod tests {
 
         // Act - Bob raises the bid
         testing_env!(ctx.clone());
-        service.raise_contract_bid(None);
+        service.ops_contract_raise_bid(None);
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        let bid = ContractSaleComponent::contract_bid().unwrap();
+        let bid = ContractSaleComponent::ops_contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 2000);
         assert_eq!(ContractBid::near_balance(), bid.bid.amount);
@@ -441,11 +441,11 @@ mod tests {
 
         // Act - Bob raises the bid and updates expiration
         testing_env!(ctx.clone());
-        service.raise_contract_bid(None);
+        service.ops_contract_raise_bid(None);
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        let bid = ContractSaleComponent::contract_bid().unwrap();
+        let bid = ContractSaleComponent::ops_contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 3000);
         assert_eq!(ContractBid::near_balance(), bid.bid.amount);
@@ -454,13 +454,13 @@ mod tests {
         // Act - Bob sets an expiration
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        service.update_contract_bid_expiration(ExpirationSetting::Relative(
+        service.ops_contract_update_bid_expiration(ExpirationSetting::Relative(
             ExpirationDuration::Epochs(10),
         ));
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        let bid = ContractSaleComponent::contract_bid().unwrap();
+        let bid = ContractSaleComponent::ops_contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 3000);
         assert_eq!(ContractBid::near_balance(), bid.bid.amount);
@@ -471,11 +471,11 @@ mod tests {
 
         // Act - Bob clears the expiration
         testing_env!(ctx.clone());
-        service.clear_contract_bid_expiration();
+        service.ops_contract_clear_bid_expiration();
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        let bid = ContractSaleComponent::contract_bid().unwrap();
+        let bid = ContractSaleComponent::ops_contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 3000);
         assert_eq!(ContractBid::near_balance(), bid.bid.amount);
@@ -483,11 +483,11 @@ mod tests {
 
         // Act - Bob lowers the bid
         testing_env!(ctx.clone());
-        service.lower_contract_bid(1000.into(), None);
+        service.ops_contract_lower_bid(1000.into(), None);
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        let bid = ContractSaleComponent::contract_bid().unwrap();
+        let bid = ContractSaleComponent::ops_contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 2000);
         assert_eq!(ContractBid::near_balance(), bid.bid.amount);
@@ -504,15 +504,15 @@ mod tests {
         // Act - owner sells contract
         ctx.predecessor_account_id = alfio.to_string();
         testing_env!(ctx.clone());
-        service.sell_contract(YOCTO.into());
+        service.ops_contract_sell(YOCTO.into());
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
         assert_eq!(
-            ContractSaleComponent::contract_sale_price(),
+            ContractSaleComponent::ops_contract_sale_price(),
             Some(YOCTO.into())
         );
-        let bid = ContractSaleComponent::contract_bid().unwrap();
+        let bid = ContractSaleComponent::ops_contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 2000);
         assert_eq!(ContractBid::near_balance(), bid.bid.amount);
@@ -520,37 +520,40 @@ mod tests {
 
         // Act - owner cancels sale
         testing_env!(ctx.clone());
-        service.cancel_contract_sale();
+        service.ops_contract_cancel_sale();
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        assert!(ContractSaleComponent::contract_sale_price().is_none());
-        let bid = ContractSaleComponent::contract_bid().unwrap();
+        assert!(ContractSaleComponent::ops_contract_sale_price().is_none());
+        let bid = ContractSaleComponent::ops_contract_bid().unwrap();
         assert_eq!(bid.buyer.as_str(), bob);
         assert_eq!(bid.bid.amount.value(), 2000);
         assert_eq!(ContractBid::near_balance(), bid.bid.amount);
         assert!(bid.bid.expiration.is_none());
 
         // Act - buyer cancels bid
-        ctx.predecessor_account_id = ContractSaleComponent::contract_bid().unwrap().buyer.clone();
+        ctx.predecessor_account_id = ContractSaleComponent::ops_contract_bid()
+            .unwrap()
+            .buyer
+            .clone();
         testing_env!(ctx.clone());
-        service.cancel_contract_bid();
+        service.ops_contract_cancel_bid();
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        assert!(ContractSaleComponent::contract_sale_price().is_none());
-        assert!(ContractSaleComponent::contract_bid().is_none());
+        assert!(ContractSaleComponent::ops_contract_sale_price().is_none());
+        assert!(ContractSaleComponent::ops_contract_bid().is_none());
         assert_eq!(ContractBid::near_balance(), ZERO_NEAR);
 
         // Act - owner sells contract
         ctx.predecessor_account_id = alfio.to_string();
         testing_env!(ctx.clone());
-        service.sell_contract(YOCTO.into());
+        service.ops_contract_sell(YOCTO.into());
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
         assert_eq!(
-            ContractSaleComponent::contract_sale_price(),
+            ContractSaleComponent::ops_contract_sale_price(),
             Some(YOCTO.into())
         );
 
@@ -558,13 +561,13 @@ mod tests {
         ctx.predecessor_account_id = bob.to_string();
         ctx.attached_deposit = YOCTO;
         testing_env!(ctx.clone());
-        let previous_owner = ContractOwnershipComponent::owner();
-        let owner_balance = ContractOwnershipComponent::owner_balance();
-        service.buy_contract(None);
+        let previous_owner = ContractOwnershipComponent::ops_owner();
+        let owner_balance = ContractOwnershipComponent::ops_owner_balance();
+        service.ops_contract_buy(None);
         // Assert
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
-        assert_eq!(ContractOwnershipComponent::owner().as_str(), bob);
+        assert_eq!(ContractOwnershipComponent::ops_owner().as_str(), bob);
         assert_eq!(ContractBid::near_balance(), ZERO_NEAR);
         let receipts = deserialize_receipts();
         assert_eq!(&previous_owner, &receipts[0].receiver_id.as_str());
@@ -599,10 +602,10 @@ mod tests_sell_contract {
         ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
-        ContractSaleComponent.sell_contract(YOCTO.into());
+        ContractSaleComponent.ops_contract_sell(YOCTO.into());
         // Assert
         assert_eq!(
-            ContractSaleComponent::contract_sale_price(),
+            ContractSaleComponent::ops_contract_sale_price(),
             Some(YOCTO.into())
         );
         let logs = test_utils::get_logs();
@@ -625,11 +628,11 @@ mod tests_sell_contract {
         ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
-        ContractSaleComponent.sell_contract(YOCTO.into());
-        ContractSaleComponent.sell_contract((2 * YOCTO).into());
+        ContractSaleComponent.ops_contract_sell(YOCTO.into());
+        ContractSaleComponent.ops_contract_sell((2 * YOCTO).into());
         // Assert
         assert_eq!(
-            ContractSaleComponent::contract_sale_price(),
+            ContractSaleComponent::ops_contract_sale_price(),
             Some((2 * YOCTO).into())
         );
         let logs = test_utils::get_logs();
@@ -656,11 +659,11 @@ mod tests_sell_contract {
         ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         // Act
-        ContractSaleComponent.sell_contract(YOCTO.into());
-        ContractSaleComponent.sell_contract(YOCTO.into());
+        ContractSaleComponent.ops_contract_sell(YOCTO.into());
+        ContractSaleComponent.ops_contract_sell(YOCTO.into());
         // Assert
         assert_eq!(
-            ContractSaleComponent::contract_sale_price(),
+            ContractSaleComponent::ops_contract_sale_price(),
             Some(YOCTO.into())
         );
         let logs = test_utils::get_logs();
@@ -685,16 +688,16 @@ mod tests_sell_contract {
         ctx.attached_deposit = 100;
         ctx.predecessor_account_id = buyer.to_string();
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         // Act
         ctx.attached_deposit = 1;
         ctx.predecessor_account_id = owner.to_string();
         testing_env!(ctx.clone());
-        ContractSaleComponent.sell_contract(YOCTO.into());
+        ContractSaleComponent.ops_contract_sell(YOCTO.into());
         // Assert
         assert_eq!(
-            ContractSaleComponent::contract_sale_price(),
+            ContractSaleComponent::ops_contract_sale_price(),
             Some(YOCTO.into())
         );
         let logs = test_utils::get_logs();
@@ -719,18 +722,18 @@ mod tests_sell_contract {
         ctx.attached_deposit = YOCTO;
         ctx.predecessor_account_id = buyer.to_string();
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         // Act
         ctx.attached_deposit = 1;
         ctx.predecessor_account_id = owner.to_string();
         testing_env!(ctx.clone());
-        ContractSaleComponent.sell_contract(YOCTO.into());
+        ContractSaleComponent.ops_contract_sell(YOCTO.into());
         // Assert
-        assert!(ContractSaleComponent::contract_sale_price().is_none());
-        assert!(ContractSaleComponent::contract_bid().is_none());
+        assert!(ContractSaleComponent::ops_contract_sale_price().is_none());
+        assert!(ContractSaleComponent::ops_contract_bid().is_none());
         assert!(ContractOwnershipAccountIdsObject::load().buyer.is_none());
-        assert_eq!(ContractOwnershipComponent::owner(), buyer.to_string());
+        assert_eq!(ContractOwnershipComponent::ops_owner(), buyer.to_string());
 
         let logs = test_utils::get_logs();
 
@@ -756,18 +759,18 @@ mod tests_sell_contract {
         ctx.attached_deposit = 2 * YOCTO;
         ctx.predecessor_account_id = buyer.to_string();
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         // Act
         ctx.attached_deposit = 1;
         ctx.predecessor_account_id = owner.to_string();
         testing_env!(ctx.clone());
-        ContractSaleComponent.sell_contract(YOCTO.into());
+        ContractSaleComponent.ops_contract_sell(YOCTO.into());
         // Assert
-        assert!(ContractSaleComponent::contract_sale_price().is_none());
-        assert!(ContractSaleComponent::contract_bid().is_none());
+        assert!(ContractSaleComponent::ops_contract_sale_price().is_none());
+        assert!(ContractSaleComponent::ops_contract_bid().is_none());
         assert!(ContractOwnershipAccountIdsObject::load().buyer.is_none());
-        assert_eq!(ContractOwnershipComponent::owner(), buyer.to_string());
+        assert_eq!(ContractOwnershipComponent::ops_owner(), buyer.to_string());
 
         let logs = test_utils::get_logs();
 
@@ -794,24 +797,24 @@ mod tests_sell_contract {
         ctx.predecessor_account_id = buyer.to_string();
         ctx.epoch_height = 100;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(Some(ExpirationSetting::Absolute(Expiration::Epoch(
-            200.into(),
-        ))));
+        ContractSaleComponent.ops_contract_buy(Some(ExpirationSetting::Absolute(
+            Expiration::Epoch(200.into()),
+        )));
 
         // Act
         ctx.attached_deposit = 1;
         ctx.predecessor_account_id = owner.to_string();
         ctx.epoch_height = 201;
         testing_env!(ctx.clone());
-        ContractSaleComponent.sell_contract(YOCTO.into());
+        ContractSaleComponent.ops_contract_sell(YOCTO.into());
         // Assert
         assert_eq!(
-            ContractSaleComponent::contract_sale_price(),
+            ContractSaleComponent::ops_contract_sale_price(),
             Some(YOCTO.into())
         );
-        assert!(ContractSaleComponent::contract_bid().is_none());
+        assert!(ContractSaleComponent::ops_contract_bid().is_none());
         assert!(ContractOwnershipAccountIdsObject::load().buyer.is_none());
-        assert_eq!(ContractOwnershipComponent::owner(), owner.to_string());
+        assert_eq!(ContractOwnershipComponent::ops_owner(), owner.to_string());
 
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
@@ -841,19 +844,19 @@ mod tests_sell_contract {
         ctx.attached_deposit = YOCTO;
         ctx.predecessor_account_id = buyer.to_string();
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         // Act
         ctx.attached_deposit = 1;
         ctx.predecessor_account_id = owner.to_string();
         testing_env!(ctx.clone());
-        ContractSaleComponent.sell_contract((5 * YOCTO).into());
-        ContractSaleComponent.sell_contract(YOCTO.into());
+        ContractSaleComponent.ops_contract_sell((5 * YOCTO).into());
+        ContractSaleComponent.ops_contract_sell(YOCTO.into());
         // Assert
-        assert!(ContractSaleComponent::contract_sale_price().is_none());
-        assert!(ContractSaleComponent::contract_bid().is_none());
+        assert!(ContractSaleComponent::ops_contract_sale_price().is_none());
+        assert!(ContractSaleComponent::ops_contract_bid().is_none());
         assert!(ContractOwnershipAccountIdsObject::load().buyer.is_none());
-        assert_eq!(ContractOwnershipComponent::owner(), buyer.to_string());
+        assert_eq!(ContractOwnershipComponent::ops_owner(), buyer.to_string());
 
         let logs = test_utils::get_logs();
 
@@ -883,19 +886,19 @@ mod tests_sell_contract {
         ctx.attached_deposit = 2 * YOCTO;
         ctx.predecessor_account_id = buyer.to_string();
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         // Act
         ctx.attached_deposit = 1;
         ctx.predecessor_account_id = owner.to_string();
         testing_env!(ctx.clone());
-        ContractSaleComponent.sell_contract((5 * YOCTO).into());
-        ContractSaleComponent.sell_contract(YOCTO.into());
+        ContractSaleComponent.ops_contract_sell((5 * YOCTO).into());
+        ContractSaleComponent.ops_contract_sell(YOCTO.into());
         // Assert
-        assert!(ContractSaleComponent::contract_sale_price().is_none());
-        assert!(ContractSaleComponent::contract_bid().is_none());
+        assert!(ContractSaleComponent::ops_contract_sale_price().is_none());
+        assert!(ContractSaleComponent::ops_contract_bid().is_none());
         assert!(ContractOwnershipAccountIdsObject::load().buyer.is_none());
-        assert_eq!(ContractOwnershipComponent::owner(), buyer.to_string());
+        assert_eq!(ContractOwnershipComponent::ops_owner(), buyer.to_string());
 
         let logs = test_utils::get_logs();
 
@@ -927,13 +930,13 @@ mod tests_sell_contract {
         ContractOwnershipComponent::deploy(to_valid_account_id(owner));
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(buyer));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id(buyer));
 
         // Act
         ctx.attached_deposit = 1;
         ctx.predecessor_account_id = owner.to_string();
         testing_env!(ctx.clone());
-        ContractSaleComponent.sell_contract(YOCTO.into());
+        ContractSaleComponent.ops_contract_sell(YOCTO.into());
     }
 
     #[test]
@@ -952,7 +955,7 @@ mod tests_sell_contract {
         ctx.attached_deposit = 1;
         ctx.predecessor_account_id = "bob".to_string();
         testing_env!(ctx.clone());
-        ContractSaleComponent.sell_contract(YOCTO.into());
+        ContractSaleComponent.ops_contract_sell(YOCTO.into());
     }
 
     #[test]
@@ -970,7 +973,7 @@ mod tests_sell_contract {
         // Act
         ctx.attached_deposit = 0;
         testing_env!(ctx.clone());
-        ContractSaleComponent.sell_contract(YOCTO.into());
+        ContractSaleComponent.ops_contract_sell(YOCTO.into());
     }
 
     #[test]
@@ -988,7 +991,7 @@ mod tests_sell_contract {
         // Act
         ctx.attached_deposit = 2;
         testing_env!(ctx.clone());
-        ContractSaleComponent.sell_contract(YOCTO.into());
+        ContractSaleComponent.ops_contract_sell(YOCTO.into());
     }
 
     #[test]
@@ -1006,7 +1009,7 @@ mod tests_sell_contract {
         // Act
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractSaleComponent.sell_contract(ZERO_NEAR);
+        ContractSaleComponent.ops_contract_sell(ZERO_NEAR);
     }
 }
 
@@ -1032,7 +1035,7 @@ mod tests_buy_contract {
 
             ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
             if let Some(sale_price) = sale_price {
-                ContractSaleComponent.sell_contract(sale_price);
+                ContractSaleComponent.ops_contract_sell(sale_price);
             }
 
             if let Some(bid) = bid {
@@ -1040,10 +1043,10 @@ mod tests_buy_contract {
                 ctx.attached_deposit = bid.bid.amount.value();
                 testing_env!(ctx.clone());
                 ContractSaleComponent
-                    .buy_contract(bid.bid.expiration.as_ref().cloned().map(Into::into));
+                    .ops_contract_buy(bid.bid.expiration.as_ref().cloned().map(Into::into));
             }
         }
-        assert_eq!(ContractOwnershipComponent::owner(), OWNER.to_string());
+        assert_eq!(ContractOwnershipComponent::ops_owner(), OWNER.to_string());
         ctx
     }
 
@@ -1054,7 +1057,7 @@ mod tests_buy_contract {
         ctx.attached_deposit = 0;
         ctx.predecessor_account_id = BUYER_1.to_string();
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
     }
 
     #[test]
@@ -1072,13 +1075,13 @@ mod tests_buy_contract {
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractSaleComponent.sell_contract(YOCTO.into());
+        ContractSaleComponent.ops_contract_sell(YOCTO.into());
 
         ctx.predecessor_account_id = BUYER_1.to_string();
         ctx.attached_deposit = 1001;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
-        let bid = ContractSaleComponent::contract_bid().unwrap();
+        ContractSaleComponent.ops_contract_buy(None);
+        let bid = ContractSaleComponent::ops_contract_bid().unwrap();
         assert_eq!(bid.buyer, ctx.predecessor_account_id);
         assert_eq!(bid.bid.amount, ctx.attached_deposit.into());
 
@@ -1107,12 +1110,12 @@ mod tests_buy_contract {
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(BUYER_2));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id(BUYER_2));
 
         ctx.predecessor_account_id = BUYER_1.to_string();
         ctx.attached_deposit = 10000;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
     }
 
     #[cfg(test)]
@@ -1127,9 +1130,9 @@ mod tests_buy_contract {
             ctx.predecessor_account_id = BUYER_1.to_string();
             ctx.attached_deposit = 100;
             testing_env!(ctx.clone());
-            ContractSaleComponent.buy_contract(None);
+            ContractSaleComponent.ops_contract_buy(None);
 
-            let bid = ContractSaleComponent::contract_bid().unwrap();
+            let bid = ContractSaleComponent::ops_contract_bid().unwrap();
             assert_eq!(bid.buyer, BUYER_1.to_string());
             assert_eq!(bid.bid.amount, 100.into());
             assert!(bid.bid.expiration.is_none());
@@ -1151,9 +1154,9 @@ mod tests_buy_contract {
             ctx.epoch_height = 10;
             testing_env!(ctx.clone());
             let expiration = Expiration::Epoch(20.into());
-            ContractSaleComponent.buy_contract(Some(expiration.into()));
+            ContractSaleComponent.ops_contract_buy(Some(expiration.into()));
 
-            let bid = ContractSaleComponent::contract_bid().unwrap();
+            let bid = ContractSaleComponent::ops_contract_bid().unwrap();
             assert_eq!(bid.buyer, BUYER_1.to_string());
             assert_eq!(bid.bid.amount, 100.into());
             assert_eq!(bid.bid.expiration.unwrap(), expiration);
@@ -1177,11 +1180,11 @@ mod tests_buy_contract {
             ctx.epoch_height = 10;
             testing_env!(ctx.clone());
             let expiration = Expiration::Epoch(20.into());
-            ContractSaleComponent.buy_contract(Some(ExpirationSetting::Relative(
+            ContractSaleComponent.ops_contract_buy(Some(ExpirationSetting::Relative(
                 ExpirationDuration::Epochs(10),
             )));
 
-            let bid = ContractSaleComponent::contract_bid().unwrap();
+            let bid = ContractSaleComponent::ops_contract_bid().unwrap();
             assert_eq!(bid.buyer, BUYER_1.to_string());
             assert_eq!(bid.bid.amount, 100.into());
             assert_eq!(bid.bid.expiration.unwrap(), expiration);
@@ -1206,7 +1209,7 @@ mod tests_buy_contract {
             ctx.epoch_height = 10;
             testing_env!(ctx.clone());
             let expiration = Expiration::Epoch(5.into());
-            ContractSaleComponent.buy_contract(Some(expiration.into()));
+            ContractSaleComponent.ops_contract_buy(Some(expiration.into()));
         }
     }
 
@@ -1222,9 +1225,9 @@ mod tests_buy_contract {
             ctx.predecessor_account_id = BUYER_1.to_string();
             ctx.attached_deposit = 100;
             testing_env!(ctx.clone());
-            ContractSaleComponent.buy_contract(None);
+            ContractSaleComponent.ops_contract_buy(None);
 
-            let bid = ContractSaleComponent::contract_bid().unwrap();
+            let bid = ContractSaleComponent::ops_contract_bid().unwrap();
             assert_eq!(bid.buyer, BUYER_1.to_string());
             assert_eq!(bid.bid.amount, 100.into());
             assert!(bid.bid.expiration.is_none());
@@ -1244,7 +1247,7 @@ mod tests_buy_contract {
             ctx.predecessor_account_id = BUYER_1.to_string();
             ctx.attached_deposit = YOCTO * 1_000_000;
             testing_env!(ctx.clone());
-            ContractSaleComponent.buy_contract(None);
+            ContractSaleComponent.ops_contract_buy(None);
             let logs = test_utils::get_logs();
             println!("{:#?}", logs);
             assert_eq!(
@@ -1253,9 +1256,9 @@ mod tests_buy_contract {
                     .message("buyer=buyer1, price=1000000000000000000000000000000")
                     .as_str()
             );
-            assert_eq!(ContractOwnershipComponent::owner(), BUYER_1.to_string());
-            assert!(ContractSaleComponent::contract_sale_price().is_none());
-            assert!(ContractSaleComponent::contract_bid().is_none());
+            assert_eq!(ContractOwnershipComponent::ops_owner(), BUYER_1.to_string());
+            assert!(ContractSaleComponent::ops_contract_sale_price().is_none());
+            assert!(ContractSaleComponent::ops_contract_bid().is_none());
 
             let receipts = deserialize_receipts();
             assert_eq!(&receipts[0].receiver_id, OWNER);
@@ -1272,7 +1275,7 @@ mod tests_buy_contract {
             ctx.predecessor_account_id = BUYER_1.to_string();
             ctx.attached_deposit = YOCTO * 1_000_000;
             testing_env!(ctx.clone());
-            ContractSaleComponent.buy_contract(None);
+            ContractSaleComponent.ops_contract_buy(None);
             let logs = test_utils::get_logs();
             println!("{:#?}", logs);
             assert_eq!(
@@ -1281,9 +1284,9 @@ mod tests_buy_contract {
                     .message("buyer=buyer1, price=1000000000000000000000000000000")
                     .as_str()
             );
-            assert_eq!(ContractOwnershipComponent::owner(), BUYER_1.to_string());
-            assert!(ContractSaleComponent::contract_sale_price().is_none());
-            assert!(ContractSaleComponent::contract_bid().is_none());
+            assert_eq!(ContractOwnershipComponent::ops_owner(), BUYER_1.to_string());
+            assert!(ContractSaleComponent::ops_contract_sale_price().is_none());
+            assert!(ContractSaleComponent::ops_contract_bid().is_none());
 
             let receipts = deserialize_receipts();
             assert_eq!(&receipts[0].receiver_id, OWNER);
@@ -1316,7 +1319,7 @@ mod tests_buy_contract {
             ctx.predecessor_account_id = BUYER_1.to_string();
             ctx.attached_deposit = 999;
             testing_env!(ctx.clone());
-            ContractSaleComponent.buy_contract(None);
+            ContractSaleComponent.ops_contract_buy(None);
         }
 
         #[test]
@@ -1335,7 +1338,7 @@ mod tests_buy_contract {
                 }),
             );
 
-            let bid = ContractSaleComponent::contract_bid().unwrap();
+            let bid = ContractSaleComponent::ops_contract_bid().unwrap();
 
             ctx.predecessor_account_id = BUYER_1.to_string();
             ctx.attached_deposit = 999;
@@ -1343,8 +1346,8 @@ mod tests_buy_contract {
                 ctx.epoch_height = epoch.value() + 1; // expires the bid
             }
             testing_env!(ctx.clone());
-            ContractSaleComponent.buy_contract(None);
-            let bid = ContractSaleComponent::contract_bid().unwrap();
+            ContractSaleComponent.ops_contract_buy(None);
+            let bid = ContractSaleComponent::ops_contract_bid().unwrap();
             assert_eq!(bid.buyer, ctx.predecessor_account_id);
             assert_eq!(bid.bid.amount, ctx.attached_deposit.into());
 
@@ -1383,7 +1386,7 @@ mod tests_buy_contract {
             ctx.predecessor_account_id = BUYER_1.to_string();
             ctx.attached_deposit = 999;
             testing_env!(ctx.clone());
-            ContractSaleComponent.buy_contract(None);
+            ContractSaleComponent.ops_contract_buy(None);
         }
 
         #[test]
@@ -1402,8 +1405,8 @@ mod tests_buy_contract {
             ctx.predecessor_account_id = BUYER_1.to_string();
             ctx.attached_deposit = 1001;
             testing_env!(ctx.clone());
-            ContractSaleComponent.buy_contract(None);
-            let bid = ContractSaleComponent::contract_bid().unwrap();
+            ContractSaleComponent.ops_contract_buy(None);
+            let bid = ContractSaleComponent::ops_contract_bid().unwrap();
             assert_eq!(bid.buyer, ctx.predecessor_account_id);
             assert_eq!(bid.bid.amount, ctx.attached_deposit.into());
 
@@ -1446,13 +1449,13 @@ mod tests_cancel_contract_sale {
 
         ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
-        ContractSaleComponent.sell_contract(YOCTO.into());
+        ContractSaleComponent.ops_contract_sell(YOCTO.into());
 
         // Act
-        ContractSaleComponent.cancel_contract_sale();
+        ContractSaleComponent.ops_contract_cancel_sale();
 
         // Assert
-        assert!(ContractSaleComponent::contract_sale_price().is_none());
+        assert!(ContractSaleComponent::ops_contract_sale_price().is_none());
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
         assert_eq!(
@@ -1474,10 +1477,10 @@ mod tests_cancel_contract_sale {
         ContractOwnershipComponent::deploy(to_valid_account_id(OWNER));
 
         // Act
-        ContractSaleComponent.cancel_contract_sale();
+        ContractSaleComponent.ops_contract_cancel_sale();
 
         // Assert
-        assert!(ContractSaleComponent::contract_sale_price().is_none());
+        assert!(ContractSaleComponent::ops_contract_sale_price().is_none());
         let logs = test_utils::get_logs();
         assert!(logs.is_empty());
     }
@@ -1506,7 +1509,7 @@ mod tests_raise_contract_bid {
         ctx.attached_deposit = YOCTO;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.raise_contract_bid(None);
+        ContractSaleComponent.ops_contract_raise_bid(None);
     }
 
     #[test]
@@ -1520,13 +1523,13 @@ mod tests_raise_contract_bid {
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = YOCTO;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         ctx.predecessor_account_id = "BUYER2".to_string();
         ctx.attached_deposit = YOCTO;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.raise_contract_bid(None);
+        ContractSaleComponent.ops_contract_raise_bid(None);
     }
 
     #[test]
@@ -1542,11 +1545,11 @@ mod tests_raise_contract_bid {
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 1000;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         ctx.attached_deposit = 0;
         testing_env!(ctx.clone());
-        ContractSaleComponent.raise_contract_bid(None);
+        ContractSaleComponent.ops_contract_raise_bid(None);
     }
 
     #[test]
@@ -1559,15 +1562,15 @@ mod tests_raise_contract_bid {
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 1000;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         ctx.attached_deposit = 500;
         testing_env!(ctx.clone());
         // Act
-        let raised_bid = ContractSaleComponent.raise_contract_bid(None);
+        let raised_bid = ContractSaleComponent.ops_contract_raise_bid(None);
 
         // Assert
-        let bid = ContractSaleComponent::contract_bid().unwrap();
+        let bid = ContractSaleComponent::ops_contract_bid().unwrap();
         assert_eq!(bid.bid.amount, 1500.into());
         assert_eq!(raised_bid, bid.bid);
     }
@@ -1582,24 +1585,24 @@ mod tests_raise_contract_bid {
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 1000;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         ctx.predecessor_account_id = OWNER.to_string();
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractSaleComponent.sell_contract(1500.into());
+        ContractSaleComponent.ops_contract_sell(1500.into());
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 500;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.raise_contract_bid(None);
+        ContractSaleComponent.ops_contract_raise_bid(None);
 
         // Assert
-        assert!(ContractSaleComponent::contract_bid().is_none());
-        assert!(ContractSaleComponent::contract_sale_price().is_none());
+        assert!(ContractSaleComponent::ops_contract_bid().is_none());
+        assert!(ContractSaleComponent::ops_contract_sale_price().is_none());
         assert_eq!(
-            ContractOwnershipComponent::owner(),
+            ContractOwnershipComponent::ops_owner(),
             ctx.predecessor_account_id
         );
     }
@@ -1614,21 +1617,21 @@ mod tests_raise_contract_bid {
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 1000;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         ctx.predecessor_account_id = OWNER.to_string();
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractSaleComponent.sell_contract(2500.into());
+        ContractSaleComponent.ops_contract_sell(2500.into());
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 500;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.raise_contract_bid(None);
+        ContractSaleComponent.ops_contract_raise_bid(None);
 
         // Assert
-        let bid = ContractSaleComponent::contract_bid().unwrap();
+        let bid = ContractSaleComponent::ops_contract_bid().unwrap();
         assert_eq!(bid.bid.amount, 1500.into());
     }
 
@@ -1642,18 +1645,18 @@ mod tests_raise_contract_bid {
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 1000;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         ctx.attached_deposit = 500;
         ctx.epoch_height = 10;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.raise_contract_bid(Some(ExpirationSetting::Relative(
+        ContractSaleComponent.ops_contract_raise_bid(Some(ExpirationSetting::Relative(
             ExpirationDuration::Epochs(10),
         )));
 
         // Assert
-        let bid = ContractSaleComponent::contract_bid().unwrap();
+        let bid = ContractSaleComponent::ops_contract_bid().unwrap();
         assert_eq!(bid.bid.amount, 1500.into());
         match bid.bid.expiration.unwrap() {
             Expiration::Epoch(epoch) => assert_eq!(epoch, 20.into()),
@@ -1672,17 +1675,17 @@ mod tests_raise_contract_bid {
         ctx.attached_deposit = 1000;
         ctx.epoch_height = 10;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(Some(ExpirationSetting::Relative(
+        ContractSaleComponent.ops_contract_buy(Some(ExpirationSetting::Relative(
             ExpirationDuration::Epochs(10),
         )));
 
         ctx.attached_deposit = 500;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.raise_contract_bid(None);
+        ContractSaleComponent.ops_contract_raise_bid(None);
 
         // Assert
-        let bid = ContractSaleComponent::contract_bid().unwrap();
+        let bid = ContractSaleComponent::ops_contract_bid().unwrap();
         assert_eq!(bid.bid.amount, 1500.into());
         match bid.bid.expiration.unwrap() {
             Expiration::Epoch(epoch) => assert_eq!(epoch, 20.into()),
@@ -1702,7 +1705,7 @@ mod tests_raise_contract_bid {
         ctx.attached_deposit = 1000;
         ctx.epoch_height = 10;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(Some(ExpirationSetting::Relative(
+        ContractSaleComponent.ops_contract_buy(Some(ExpirationSetting::Relative(
             ExpirationDuration::Epochs(10),
         )));
 
@@ -1710,7 +1713,7 @@ mod tests_raise_contract_bid {
         ctx.epoch_height = 100;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.raise_contract_bid(None);
+        ContractSaleComponent.ops_contract_raise_bid(None);
     }
 }
 
@@ -1735,21 +1738,24 @@ mod tests_lower_contract_bid {
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
         // Act
-        let lowered_bid = ContractSaleComponent.lower_contract_bid(YOCTO.into(), None);
+        let lowered_bid = ContractSaleComponent.ops_contract_lower_bid(YOCTO.into(), None);
 
         // Assert
         assert_eq!(
-            ContractSaleComponent::contract_bid().unwrap().bid.amount,
+            ContractSaleComponent::ops_contract_bid()
+                .unwrap()
+                .bid
+                .amount,
             (9 * YOCTO).into()
         );
         assert_eq!(
             lowered_bid,
-            ContractSaleComponent::contract_bid().unwrap().bid
+            ContractSaleComponent::ops_contract_bid().unwrap().bid
         );
     }
 
@@ -1763,23 +1769,26 @@ mod tests_lower_contract_bid {
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         ctx.attached_deposit = 1;
         ctx.block_index = 10;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.lower_contract_bid(
+        ContractSaleComponent.ops_contract_lower_bid(
             YOCTO.into(),
             Some(ExpirationSetting::Relative(ExpirationDuration::Blocks(10))),
         );
 
         // Assert
         assert_eq!(
-            ContractSaleComponent::contract_bid().unwrap().bid.amount,
+            ContractSaleComponent::ops_contract_bid()
+                .unwrap()
+                .bid
+                .amount,
             (9 * YOCTO).into()
         );
-        match ContractSaleComponent::contract_bid()
+        match ContractSaleComponent::ops_contract_bid()
             .unwrap()
             .bid
             .expiration
@@ -1802,7 +1811,7 @@ mod tests_lower_contract_bid {
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.lower_contract_bid(YOCTO.into(), None);
+        ContractSaleComponent.ops_contract_lower_bid(YOCTO.into(), None);
     }
 
     #[test]
@@ -1818,16 +1827,16 @@ mod tests_lower_contract_bid {
         ctx.epoch_height = 5;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.buy_contract(Some(ExpirationSetting::Absolute(Expiration::Epoch(
-            10.into(),
-        ))));
+        ContractSaleComponent.ops_contract_buy(Some(ExpirationSetting::Absolute(
+            Expiration::Epoch(10.into()),
+        )));
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 1;
         ctx.epoch_height = 11;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.lower_contract_bid(100.into(), None);
+        ContractSaleComponent.ops_contract_lower_bid(100.into(), None);
     }
 
     #[test]
@@ -1843,14 +1852,14 @@ mod tests_lower_contract_bid {
         ctx.epoch_height = 5;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 1;
         ctx.epoch_height = 11;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.lower_contract_bid(
+        ContractSaleComponent.ops_contract_lower_bid(
             100.into(),
             Some(ExpirationSetting::Absolute(Expiration::Epoch(10.into()))),
         );
@@ -1867,13 +1876,13 @@ mod tests_lower_contract_bid {
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         ctx.predecessor_account_id = "OTHER".to_string();
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.lower_contract_bid(YOCTO.into(), None);
+        ContractSaleComponent.ops_contract_lower_bid(YOCTO.into(), None);
     }
 
     #[test]
@@ -1887,13 +1896,13 @@ mod tests_lower_contract_bid {
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 0;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.lower_contract_bid(YOCTO.into(), None);
+        ContractSaleComponent.ops_contract_lower_bid(YOCTO.into(), None);
     }
 
     #[test]
@@ -1907,13 +1916,13 @@ mod tests_lower_contract_bid {
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 2;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.lower_contract_bid(YOCTO.into(), None);
+        ContractSaleComponent.ops_contract_lower_bid(YOCTO.into(), None);
     }
 
     #[test]
@@ -1927,13 +1936,13 @@ mod tests_lower_contract_bid {
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.lower_contract_bid((10 * YOCTO).into(), None);
+        ContractSaleComponent.ops_contract_lower_bid((10 * YOCTO).into(), None);
     }
 
     #[test]
@@ -1947,13 +1956,13 @@ mod tests_lower_contract_bid {
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.lower_contract_bid((11 * YOCTO).into(), None);
+        ContractSaleComponent.ops_contract_lower_bid((11 * YOCTO).into(), None);
     }
 }
 
@@ -1978,17 +1987,17 @@ mod tests_contract_bid_expiration {
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         ctx.attached_deposit = 1;
         ctx.block_timestamp = 100;
         testing_env!(ctx.clone());
         // Act
         let expiration = ExpirationSetting::Relative(ExpirationDuration::Seconds(60));
-        ContractSaleComponent.update_contract_bid_expiration(expiration);
+        ContractSaleComponent.ops_contract_update_bid_expiration(expiration);
 
         // Assert
-        let bid = ContractSaleComponent::contract_bid().unwrap();
+        let bid = ContractSaleComponent::ops_contract_bid().unwrap();
         assert_eq!(bid.bid.expiration, Some(expiration.into()));
     }
 
@@ -2003,14 +2012,14 @@ mod tests_contract_bid_expiration {
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         ctx.attached_deposit = 0;
         ctx.block_timestamp = 100;
         testing_env!(ctx.clone());
         // Act
         let expiration = ExpirationSetting::Relative(ExpirationDuration::Seconds(60));
-        ContractSaleComponent.update_contract_bid_expiration(expiration);
+        ContractSaleComponent.ops_contract_update_bid_expiration(expiration);
     }
 
     #[test]
@@ -2024,14 +2033,14 @@ mod tests_contract_bid_expiration {
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         ctx.attached_deposit = 2;
         ctx.block_timestamp = 100;
         testing_env!(ctx.clone());
         // Act
         let expiration = ExpirationSetting::Relative(ExpirationDuration::Seconds(60));
-        ContractSaleComponent.update_contract_bid_expiration(expiration);
+        ContractSaleComponent.ops_contract_update_bid_expiration(expiration);
     }
 
     #[test]
@@ -2045,7 +2054,7 @@ mod tests_contract_bid_expiration {
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         ctx.predecessor_account_id = "OTHER".to_string();
         ctx.attached_deposit = 1;
@@ -2053,7 +2062,7 @@ mod tests_contract_bid_expiration {
         testing_env!(ctx.clone());
         // Act
         let expiration = ExpirationSetting::Relative(ExpirationDuration::Seconds(60));
-        ContractSaleComponent.update_contract_bid_expiration(expiration);
+        ContractSaleComponent.ops_contract_update_bid_expiration(expiration);
     }
 
     #[test]
@@ -2067,7 +2076,7 @@ mod tests_contract_bid_expiration {
         ctx.predecessor_account_id = BUYER.to_string();
         ctx.attached_deposit = 10 * YOCTO;
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
+        ContractSaleComponent.ops_contract_buy(None);
 
         ctx.predecessor_account_id = "OTHER".to_string();
         ctx.attached_deposit = 1;
@@ -2075,7 +2084,7 @@ mod tests_contract_bid_expiration {
         testing_env!(ctx.clone());
         // Act
         let expiration = ExpirationSetting::Absolute(Expiration::Timestamp(60.into()));
-        ContractSaleComponent.update_contract_bid_expiration(expiration);
+        ContractSaleComponent.ops_contract_update_bid_expiration(expiration);
     }
 
     #[test]
@@ -2089,17 +2098,17 @@ mod tests_contract_bid_expiration {
         ctx.attached_deposit = 10 * YOCTO;
         testing_env!(ctx.clone());
         let expiration = ExpirationSetting::Relative(ExpirationDuration::Seconds(60));
-        ContractSaleComponent.buy_contract(Some(expiration));
+        ContractSaleComponent.ops_contract_buy(Some(expiration));
 
         ctx.attached_deposit = 1;
         ctx.block_timestamp = 100;
         testing_env!(ctx.clone());
         // Act
 
-        ContractSaleComponent.clear_contract_bid_expiration();
+        ContractSaleComponent.ops_contract_clear_bid_expiration();
 
         // Assert
-        let bid = ContractSaleComponent::contract_bid().unwrap();
+        let bid = ContractSaleComponent::ops_contract_bid().unwrap();
         assert!(bid.bid.expiration.is_none());
     }
 
@@ -2115,13 +2124,13 @@ mod tests_contract_bid_expiration {
         ctx.attached_deposit = 10 * YOCTO;
         testing_env!(ctx.clone());
         let expiration = ExpirationSetting::Relative(ExpirationDuration::Seconds(60));
-        ContractSaleComponent.buy_contract(Some(expiration));
+        ContractSaleComponent.ops_contract_buy(Some(expiration));
 
         ctx.attached_deposit = 0;
         ctx.block_timestamp = 100;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.clear_contract_bid_expiration();
+        ContractSaleComponent.ops_contract_clear_bid_expiration();
     }
 
     #[test]
@@ -2136,13 +2145,13 @@ mod tests_contract_bid_expiration {
         ctx.attached_deposit = 10 * YOCTO;
         testing_env!(ctx.clone());
         let expiration = ExpirationSetting::Relative(ExpirationDuration::Seconds(60));
-        ContractSaleComponent.buy_contract(Some(expiration));
+        ContractSaleComponent.ops_contract_buy(Some(expiration));
 
         ctx.attached_deposit = 2;
         ctx.block_timestamp = 100;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.clear_contract_bid_expiration();
+        ContractSaleComponent.ops_contract_clear_bid_expiration();
     }
 
     #[test]
@@ -2157,13 +2166,13 @@ mod tests_contract_bid_expiration {
         ctx.attached_deposit = 10 * YOCTO;
         testing_env!(ctx.clone());
         let expiration = ExpirationSetting::Relative(ExpirationDuration::Seconds(60));
-        ContractSaleComponent.buy_contract(Some(expiration));
+        ContractSaleComponent.ops_contract_buy(Some(expiration));
 
         ctx.predecessor_account_id = "BUYER2".to_string();
         ctx.attached_deposit = 1;
         ctx.block_timestamp = 100;
         testing_env!(ctx.clone());
         // Act
-        ContractSaleComponent.clear_contract_bid_expiration();
+        ContractSaleComponent.ops_contract_clear_bid_expiration();
     }
 }

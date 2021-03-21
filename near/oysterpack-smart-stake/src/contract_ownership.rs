@@ -5,35 +5,38 @@ use oysterpack_smart_near::domain::YoctoNear;
 
 #[near_bindgen]
 impl ContractOwnership for Contract {
-    fn owner() -> AccountId {
-        ContractOwnershipComponent::owner()
+    fn ops_owner() -> AccountId {
+        ContractOwnershipComponent::ops_owner()
     }
 
-    fn owner_balance() -> ContractOwnerNearBalance {
-        ContractOwnershipComponent::owner_balance()
+    fn ops_owner_balance() -> ContractOwnerNearBalance {
+        ContractOwnershipComponent::ops_owner_balance()
     }
 
-    fn prospective_owner() -> Option<AccountId> {
-        ContractOwnershipComponent::prospective_owner()
-    }
-
-    #[payable]
-    fn transfer_ownership(&mut self, new_owner: ValidAccountId) {
-        ContractOwnershipComponent.transfer_ownership(new_owner)
+    fn ops_owner_prospective() -> Option<AccountId> {
+        ContractOwnershipComponent::ops_owner_prospective()
     }
 
     #[payable]
-    fn cancel_ownership_transfer(&mut self) {
-        ContractOwnershipComponent.cancel_ownership_transfer()
+    fn ops_owner_transfer(&mut self, new_owner: ValidAccountId) {
+        ContractOwnershipComponent.ops_owner_transfer(new_owner)
     }
 
     #[payable]
-    fn finalize_ownership_transfer(&mut self) {
-        ContractOwnershipComponent.finalize_ownership_transfer()
+    fn ops_owner_cancel_transfer(&mut self) {
+        ContractOwnershipComponent.ops_owner_cancel_transfer()
     }
 
     #[payable]
-    fn withdraw_owner_balance(&mut self, amount: Option<YoctoNear>) -> ContractOwnerNearBalance {
-        ContractOwnershipComponent.withdraw_owner_balance(amount)
+    fn ops_owner_finalize_transfer(&mut self) {
+        ContractOwnershipComponent.ops_owner_finalize_transfer()
+    }
+
+    #[payable]
+    fn ops_owner_withdraw_balance(
+        &mut self,
+        amount: Option<YoctoNear>,
+    ) -> ContractOwnerNearBalance {
+        ContractOwnershipComponent.ops_owner_withdraw_balance(amount)
     }
 }

@@ -8,17 +8,17 @@ use oysterpack_smart_near::domain::BlockTime;
 pub struct ContractMetricsComponent;
 
 impl ContractMetrics for ContractMetricsComponent {
-    fn total_registered_accounts() -> U128 {
-        Self::account_metrics().total_registered_accounts
+    fn ops_metrics_total_registered_accounts() -> U128 {
+        Self::ops_metrics_accounts().total_registered_accounts
     }
 
-    fn contract_storage_usage() -> ContractStorageUsage {
-        let account_metrics = Self::account_metrics();
+    fn ops_metrics_contract_storage_usage() -> ContractStorageUsage {
+        let account_metrics = Self::ops_metrics_accounts();
         ContractStorageUsage::new(account_metrics.total_storage_usage)
     }
 
-    fn near_balances() -> ContractNearBalances {
-        let account_metrics = Self::account_metrics();
+    fn ops_metrics_near_balances() -> ContractNearBalances {
+        let account_metrics = Self::ops_metrics_accounts();
         let near_balances = ContractNearBalances::load_near_balances();
         let near_balances = if near_balances.is_empty() {
             None
@@ -32,22 +32,22 @@ impl ContractMetrics for ContractMetricsComponent {
         )
     }
 
-    fn storage_usage_costs() -> ContractStorageUsageCosts {
-        Self::contract_storage_usage().into()
+    fn ops_metrics_storage_usage_costs() -> ContractStorageUsageCosts {
+        Self::ops_metrics_contract_storage_usage().into()
     }
 
-    fn metrics() -> ContractMetricsSnapshot {
-        let storage_usage = Self::contract_storage_usage();
+    fn ops_metrics() -> ContractMetricsSnapshot {
+        let storage_usage = Self::ops_metrics_contract_storage_usage();
         ContractMetricsSnapshot {
             block_time: BlockTime::from_env(),
-            total_registered_accounts: Self::total_registered_accounts(),
+            total_registered_accounts: Self::ops_metrics_total_registered_accounts(),
             storage_usage,
-            near_balances: Self::near_balances(),
+            near_balances: Self::ops_metrics_near_balances(),
             storage_usage_costs: storage_usage.into(),
         }
     }
 
-    fn account_metrics() -> AccountMetrics {
+    fn ops_metrics_accounts() -> AccountMetrics {
         AccountMetrics::load()
     }
 }
@@ -100,7 +100,7 @@ mod tests {
         run_test(|mut ctx, mut account_manager| {
             // Assert - no accounts registered
             assert_eq!(
-                ContractMetricsComponent::total_registered_accounts(),
+                ContractMetricsComponent::ops_metrics_total_registered_accounts(),
                 0.into()
             );
 
@@ -111,7 +111,7 @@ mod tests {
 
             // Assert
             assert_eq!(
-                ContractMetricsComponent::total_registered_accounts(),
+                ContractMetricsComponent::ops_metrics_total_registered_accounts(),
                 1.into()
             );
         });
@@ -121,7 +121,7 @@ mod tests {
     fn storage_usage() {
         run_test(|mut ctx, mut account_manager| {
             // Act - no accounts registered
-            let storage_usage = ContractMetricsComponent::contract_storage_usage();
+            let storage_usage = ContractMetricsComponent::ops_metrics_contract_storage_usage();
             println!("{:?}", storage_usage);
             assert_eq!(storage_usage.accounts(), 0.into());
 
@@ -131,12 +131,12 @@ mod tests {
             account_manager.storage_deposit(None, None);
 
             // Act
-            let storage_usage = ContractMetricsComponent::contract_storage_usage();
+            let storage_usage = ContractMetricsComponent::ops_metrics_contract_storage_usage();
             println!("{:?}", storage_usage);
             // Assert
             assert!(storage_usage.accounts().value() > 0);
 
-            let storage_usage_costs = ContractMetricsComponent::storage_usage_costs();
+            let storage_usage_costs = ContractMetricsComponent::ops_metrics_storage_usage_costs();
             assert_eq!(storage_usage_costs, storage_usage.into());
         });
     }
@@ -145,7 +145,7 @@ mod tests {
     fn near_balances() {
         run_test(|mut ctx, mut account_manager| {
             // Act - no accounts registered
-            let balances1 = ContractMetricsComponent::near_balances();
+            let balances1 = ContractMetricsComponent::ops_metrics_near_balances();
             println!("{:?}", balances1);
             assert_eq!(balances1.total(), env::account_balance().into());
             assert_eq!(balances1.owner(), env::account_balance().into());
@@ -159,7 +159,7 @@ mod tests {
             account_manager.storage_deposit(None, None);
 
             // Act
-            let balances2 = ContractMetricsComponent::near_balances();
+            let balances2 = ContractMetricsComponent::ops_metrics_near_balances();
             println!("{:?}", balances2);
             // Assert
             assert_eq!(balances2.total(), env::account_balance().into());
@@ -173,7 +173,7 @@ mod tests {
     #[test]
     fn metrics() {
         run_test(|mut ctx, mut account_manager| {
-            let metrics = ContractMetricsComponent::metrics();
+            let metrics = ContractMetricsComponent::ops_metrics();
             println!("{:#?}", metrics);
 
             // Arrange - register an account
@@ -184,7 +184,7 @@ mod tests {
             testing_env!(ctx.clone());
             account_manager.storage_deposit(None, None);
 
-            let metrics = ContractMetricsComponent::metrics();
+            let metrics = ContractMetricsComponent::ops_metrics();
             println!("{:#?}", metrics);
             assert_eq!(metrics.block_time.timestamp.value(), 1);
             assert_eq!(metrics.block_time.height.value(), 2);

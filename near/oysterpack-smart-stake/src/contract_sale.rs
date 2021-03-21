@@ -5,55 +5,55 @@ use oysterpack_smart_near::domain::{ExpirationSetting, YoctoNear};
 
 #[near_bindgen]
 impl ContractSale for Contract {
-    fn contract_sale_price() -> Option<YoctoNear> {
-        ContractSaleComponent::contract_sale_price()
+    fn ops_contract_sale_price() -> Option<YoctoNear> {
+        ContractSaleComponent::ops_contract_sale_price()
     }
 
-    fn contract_bid() -> Option<ContractBuyerBid> {
-        ContractSaleComponent::contract_bid()
-    }
-
-    #[payable]
-    fn sell_contract(&mut self, price: YoctoNear) {
-        ContractSaleComponent.sell_contract(price);
+    fn ops_contract_bid() -> Option<ContractBuyerBid> {
+        ContractSaleComponent::ops_contract_bid()
     }
 
     #[payable]
-    fn cancel_contract_sale(&mut self) {
-        ContractSaleComponent.cancel_contract_sale();
+    fn ops_contract_sell(&mut self, price: YoctoNear) {
+        ContractSaleComponent.ops_contract_sell(price);
     }
 
     #[payable]
-    fn buy_contract(&mut self, expiration: Option<ExpirationSetting>) {
-        ContractSaleComponent.buy_contract(expiration)
+    fn ops_contract_cancel_sale(&mut self) {
+        ContractSaleComponent.ops_contract_cancel_sale();
     }
 
     #[payable]
-    fn raise_contract_bid(&mut self, expiration: Option<ExpirationSetting>) -> ContractBid {
-        ContractSaleComponent.raise_contract_bid(expiration)
+    fn ops_contract_buy(&mut self, expiration: Option<ExpirationSetting>) {
+        ContractSaleComponent.ops_contract_buy(expiration)
     }
 
     #[payable]
-    fn lower_contract_bid(
+    fn ops_contract_raise_bid(&mut self, expiration: Option<ExpirationSetting>) -> ContractBid {
+        ContractSaleComponent.ops_contract_raise_bid(expiration)
+    }
+
+    #[payable]
+    fn ops_contract_lower_bid(
         &mut self,
         amount: YoctoNear,
         expiration: Option<ExpirationSetting>,
     ) -> ContractBid {
-        ContractSaleComponent.lower_contract_bid(amount, expiration)
+        ContractSaleComponent.ops_contract_lower_bid(amount, expiration)
     }
 
     #[payable]
-    fn update_contract_bid_expiration(&mut self, expiration: ExpirationSetting) {
-        ContractSaleComponent.update_contract_bid_expiration(expiration)
+    fn ops_contract_update_bid_expiration(&mut self, expiration: ExpirationSetting) {
+        ContractSaleComponent.ops_contract_update_bid_expiration(expiration)
     }
 
     #[payable]
-    fn clear_contract_bid_expiration(&mut self) {
-        ContractSaleComponent.clear_contract_bid_expiration()
+    fn ops_contract_clear_bid_expiration(&mut self) {
+        ContractSaleComponent.ops_contract_clear_bid_expiration()
     }
 
     #[payable]
-    fn cancel_contract_bid(&mut self) {
-        ContractSaleComponent.cancel_contract_bid()
+    fn ops_contract_cancel_bid(&mut self) {
+        ContractSaleComponent.ops_contract_cancel_bid()
     }
 }

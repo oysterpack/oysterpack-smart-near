@@ -10,12 +10,12 @@ use oysterpack_smart_near::domain::StorageUsage;
 /// Used to lookup account storage usage info   
 pub trait AccountStorageUsage {
     /// returns the account storage use bounds set by the contract
-    fn storage_usage_bounds(&self) -> StorageUsageBounds;
+    fn ops_storage_usage_bounds(&self) -> StorageUsageBounds;
 
     /// Returns the account storage usage in bytes
     ///
     /// Returns None if the account is not registered
-    fn account_storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage>;
+    fn ops_storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage>;
 }
 
 /// Used to configure account storage usage

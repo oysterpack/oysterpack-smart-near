@@ -10,17 +10,17 @@ use oysterpack_smart_near::domain::BlockTime;
 /// # **Contract Interface**: Contract Metrics API
 /// Provides metrics that track storage usage and NEAR balances
 pub trait ContractMetrics {
-    fn total_registered_accounts() -> U128;
+    fn ops_metrics_total_registered_accounts() -> U128;
 
-    fn contract_storage_usage() -> ContractStorageUsage;
+    fn ops_metrics_contract_storage_usage() -> ContractStorageUsage;
 
-    fn near_balances() -> ContractNearBalances;
+    fn ops_metrics_near_balances() -> ContractNearBalances;
 
-    fn storage_usage_costs() -> ContractStorageUsageCosts;
+    fn ops_metrics_storage_usage_costs() -> ContractStorageUsageCosts;
 
-    fn metrics() -> ContractMetricsSnapshot;
+    fn ops_metrics() -> ContractMetricsSnapshot;
 
-    fn account_metrics() -> AccountMetrics;
+    fn ops_metrics_accounts() -> AccountMetrics;
 }
 
 /// Provides a point in time metrics snapshot

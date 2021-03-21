@@ -8,11 +8,11 @@ use oysterpack_smart_near::component::{Component, Deploy};
 pub(crate) struct AccountStorageUsageComponent;
 
 impl AccountStorageUsage for AccountStorageUsageComponent {
-    fn storage_usage_bounds(&self) -> StorageUsageBounds {
+    fn ops_storage_usage_bounds(&self) -> StorageUsageBounds {
         *Self::load_state().unwrap()
     }
 
-    fn account_storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage> {
+    fn ops_storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage> {
         AccountNearDataObject::load(account_id.as_ref().as_str())
             .map(|account| account.storage_usage())
     }

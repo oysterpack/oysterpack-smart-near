@@ -15,10 +15,10 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 /// TODO: enable buyers to pay with STAKE
 pub trait ContractSale {
     /// Returns None if the contract is not listed for sale
-    fn contract_sale_price() -> Option<YoctoNear>;
+    fn ops_contract_sale_price() -> Option<YoctoNear>;
 
     /// Returns None if there is no current bid on the contract
-    fn contract_bid() -> Option<ContractBuyerBid>;
+    fn ops_contract_bid() -> Option<ContractBuyerBid>;
 
     /// Puts up the contract for sale for the specified sale price.
     ///
@@ -38,7 +38,7 @@ pub trait ContractSale {
     /// - if contract transfer is in progress
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
-    fn sell_contract(&mut self, price: YoctoNear);
+    fn ops_contract_sell(&mut self, price: YoctoNear);
 
     /// Takes the contract off the market for selling.
     ///
@@ -49,7 +49,7 @@ pub trait ContractSale {
     /// - if 1 yoctoNEAR is not attached
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
-    fn cancel_contract_sale(&mut self);
+    fn ops_contract_cancel_sale(&mut self);
 
     /// Places an order to buy the contract for the specified bid.
     ///
@@ -68,7 +68,7 @@ pub trait ContractSale {
     /// - if the submitted bid price is not higher than the current bid price
     ///
     /// `#[payable]`
-    fn buy_contract(&mut self, expiration: Option<ExpirationSetting>);
+    fn ops_contract_buy(&mut self, expiration: Option<ExpirationSetting>);
 
     /// Enables the buyer to raise the contract bid and update the expiration.
     ///
@@ -78,7 +78,7 @@ pub trait ContractSale {
     /// - if no deposit is attached - at lease 1 yoctoNEAR must be attached
     ///
     /// `#[payable]`
-    fn raise_contract_bid(&mut self, expiration: Option<ExpirationSetting>) -> ContractBid;
+    fn ops_contract_raise_bid(&mut self, expiration: Option<ExpirationSetting>) -> ContractBid;
 
     /// Enables the buyer to lower the contract bid by the specified amount and update the expiration.
     ///
@@ -91,7 +91,7 @@ pub trait ContractSale {
     /// - if 1 yoctoNEAR deposit is not attached
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
-    fn lower_contract_bid(
+    fn ops_contract_lower_bid(
         &mut self,
         amount: YoctoNear,
         expiration: Option<ExpirationSetting>,
@@ -105,7 +105,7 @@ pub trait ContractSale {
     /// - if 1 yoctoNEAR deposit is not attached
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
-    fn update_contract_bid_expiration(&mut self, expiration: ExpirationSetting);
+    fn ops_contract_update_bid_expiration(&mut self, expiration: ExpirationSetting);
 
     /// Enables the buyer to clear the expiration.
     ///
@@ -115,7 +115,7 @@ pub trait ContractSale {
     /// - if 1 yoctoNEAR deposit is not attached
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
-    fn clear_contract_bid_expiration(&mut self);
+    fn ops_contract_clear_bid_expiration(&mut self);
 
     /// Cancels the buy order and withdraws the bid amount.
     ///
@@ -124,7 +124,7 @@ pub trait ContractSale {
     /// - if 1 yoctoNEAR is not attached
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
-    fn cancel_contract_bid(&mut self);
+    fn ops_contract_cancel_bid(&mut self);
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

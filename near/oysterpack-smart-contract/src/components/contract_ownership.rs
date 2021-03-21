@@ -30,14 +30,14 @@ impl Deploy for ContractOwnershipComponent {
 }
 
 impl ContractOwnership for ContractOwnershipComponent {
-    fn owner() -> AccountId {
+    fn ops_owner() -> AccountId {
         let account_ids = ContractOwnershipAccountIdsObject::load();
         account_ids.owner.clone()
     }
 
-    fn owner_balance() -> ContractOwnerNearBalance {
-        let near_balances = ContractMetricsComponent::near_balances();
-        let storage_usage_costs = ContractMetricsComponent::storage_usage_costs();
+    fn ops_owner_balance() -> ContractOwnerNearBalance {
+        let near_balances = ContractMetricsComponent::ops_metrics_near_balances();
+        let storage_usage_costs = ContractMetricsComponent::ops_metrics_storage_usage_costs();
         let available = near_balances
             .owner()
             .saturating_sub(storage_usage_costs.owner().value())
@@ -48,12 +48,12 @@ impl ContractOwnership for ContractOwnershipComponent {
         }
     }
 
-    fn prospective_owner() -> Option<AccountId> {
+    fn ops_owner_prospective() -> Option<AccountId> {
         let account_ids = ContractOwnershipAccountIdsObject::load();
         account_ids.prospective_owner.as_ref().cloned()
     }
 
-    fn transfer_ownership(&mut self, new_owner: ValidAccountId) {
+    fn ops_owner_transfer(&mut self, new_owner: ValidAccountId) {
         assert_yocto_near_attached();
 
         let mut owner = ContractOwnerObject::assert_owner_access();
@@ -99,7 +99,7 @@ impl ContractOwnership for ContractOwnershipComponent {
         }
     }
 
-    fn cancel_ownership_transfer(&mut self) {
+    fn ops_owner_cancel_transfer(&mut self) {
         assert_yocto_near_attached();
 
         let mut owner = ContractOwnerObject::assert_current_or_prospective_owner_access();
@@ -114,7 +114,7 @@ impl ContractOwnership for ContractOwnershipComponent {
         }
     }
 
-    fn finalize_ownership_transfer(&mut self) {
+    fn ops_owner_finalize_transfer(&mut self) {
         assert_yocto_near_attached();
 
         let mut owner = ContractOwnerObject::assert_prospective_owner_access();
@@ -133,11 +133,14 @@ impl ContractOwnership for ContractOwnershipComponent {
         LOG_EVENT_CONTRACT_TRANSFER_FINALIZED.log("");
     }
 
-    fn withdraw_owner_balance(&mut self, amount: Option<YoctoNear>) -> ContractOwnerNearBalance {
+    fn ops_owner_withdraw_balance(
+        &mut self,
+        amount: Option<YoctoNear>,
+    ) -> ContractOwnerNearBalance {
         assert_yocto_near_attached();
         ContractOwnerObject::assert_owner_access();
 
-        let mut owner_balance = Self::owner_balance();
+        let mut owner_balance = Self::ops_owner_balance();
         let amount = match amount {
             None => owner_balance.available,
             Some(amount) => {
@@ -174,107 +177,110 @@ mod tests {
         // Set alfio as owner at deployment
         ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
         // Assert
-        assert_eq!(alfio, ContractOwnershipComponent::owner().as_str());
-        assert!(ContractOwnershipComponent::prospective_owner().is_none());
-        let owner_balance = ContractOwnershipComponent::owner_balance();
+        assert_eq!(alfio, ContractOwnershipComponent::ops_owner().as_str());
+        assert!(ContractOwnershipComponent::ops_owner_prospective().is_none());
+        let owner_balance = ContractOwnershipComponent::ops_owner_balance();
         println!("{:?}", owner_balance);
 
         // Act - initiate transfer
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id(bob));
         // Assert
         assert_eq!(
             bob,
-            ContractOwnershipComponent::prospective_owner()
+            ContractOwnershipComponent::ops_owner_prospective()
                 .unwrap()
                 .as_str()
         );
-        let owner_balance = ContractOwnershipComponent::owner_balance();
+        let owner_balance = ContractOwnershipComponent::ops_owner_balance();
         println!("{:?}", owner_balance);
 
         // Act - initiate same transfer again
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id(bob));
         // Assert - should have no effect
         assert_eq!(
             bob,
-            ContractOwnershipComponent::prospective_owner()
+            ContractOwnershipComponent::ops_owner_prospective()
                 .unwrap()
                 .as_str()
         );
-        let owner_balance = ContractOwnershipComponent::owner_balance();
+        let owner_balance = ContractOwnershipComponent::ops_owner_balance();
         println!("{:?}", owner_balance);
 
         // Act - cancel the transfer
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.cancel_ownership_transfer();
+        ContractOwnershipComponent.ops_owner_cancel_transfer();
         // Assert
-        assert_eq!(alfio, ContractOwnershipComponent::owner().as_str());
-        assert!(ContractOwnershipComponent::prospective_owner().is_none());
-        let owner_balance = ContractOwnershipComponent::owner_balance();
+        assert_eq!(alfio, ContractOwnershipComponent::ops_owner().as_str());
+        assert!(ContractOwnershipComponent::ops_owner_prospective().is_none());
+        let owner_balance = ContractOwnershipComponent::ops_owner_balance();
         println!("{:?}", owner_balance);
 
         // Act - withdraw all owner available balance
         // Act - cancel the transfer
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        let owner_balance = ContractOwnershipComponent.withdraw_owner_balance(None);
+        let owner_balance = ContractOwnershipComponent.ops_owner_withdraw_balance(None);
         println!("after withdrawal: {:?}", owner_balance);
         // Assert
         assert_eq!(owner_balance.available, ZERO_NEAR);
-        assert_eq!(owner_balance, ContractOwnershipComponent::owner_balance());
+        assert_eq!(
+            owner_balance,
+            ContractOwnershipComponent::ops_owner_balance()
+        );
 
         // Act - initiate transfer again
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id(bob));
         // Assert
         assert_eq!(
             bob,
-            ContractOwnershipComponent::prospective_owner()
+            ContractOwnershipComponent::ops_owner_prospective()
                 .unwrap()
                 .as_str()
         );
-        let owner_balance = ContractOwnershipComponent::owner_balance();
+        let owner_balance = ContractOwnershipComponent::ops_owner_balance();
         println!("{:?}", owner_balance);
 
         // Act - prospective owner cancels transfer
         ctx.predecessor_account_id = bob.to_string();
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.cancel_ownership_transfer();
+        ContractOwnershipComponent.ops_owner_cancel_transfer();
         // Assert
-        assert_eq!(alfio, ContractOwnershipComponent::owner().as_str());
-        assert!(ContractOwnershipComponent::prospective_owner().is_none());
-        let owner_balance = ContractOwnershipComponent::owner_balance();
+        assert_eq!(alfio, ContractOwnershipComponent::ops_owner().as_str());
+        assert!(ContractOwnershipComponent::ops_owner_prospective().is_none());
+        let owner_balance = ContractOwnershipComponent::ops_owner_balance();
         println!("{:?}", owner_balance);
 
         // Act - initiate transfer again
         ctx.predecessor_account_id = alfio.to_string();
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id(bob));
         // Assert
         assert_eq!(
             bob,
-            ContractOwnershipComponent::prospective_owner()
+            ContractOwnershipComponent::ops_owner_prospective()
                 .unwrap()
                 .as_str()
         );
-        let owner_balance = ContractOwnershipComponent::owner_balance();
+        let owner_balance = ContractOwnershipComponent::ops_owner_balance();
         println!("{:?}", owner_balance);
 
         // Act - finalize the transfer
         ctx.predecessor_account_id = bob.to_string();
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.finalize_ownership_transfer();
+        ContractOwnershipComponent.ops_owner_finalize_transfer();
         // Assert
         // Assert
-        assert_eq!(bob, ContractOwnershipComponent::owner().as_str());
-        assert!(ContractOwnershipComponent::prospective_owner().is_none());
-        let owner_balance = ContractOwnershipComponent::owner_balance();
+        assert_eq!(bob, ContractOwnershipComponent::ops_owner().as_str());
+        assert!(ContractOwnershipComponent::ops_owner_prospective().is_none());
+        let owner_balance = ContractOwnershipComponent::ops_owner_balance();
         println!("{:?}", owner_balance);
     }
 }
@@ -298,13 +304,13 @@ mod tests_transfer_ownership {
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id("bob"));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id("bob"));
 
         // Act
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id("alice"));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id("alice"));
         // Assert
         assert_eq!(
-            ContractOwnershipComponent::prospective_owner().unwrap(),
+            ContractOwnershipComponent::ops_owner_prospective().unwrap(),
             "alice".to_string()
         );
     }
@@ -320,14 +326,14 @@ mod tests_transfer_ownership {
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractSaleComponent.sell_contract((1000 * YOCTO).into());
-        assert!(ContractSaleComponent::contract_sale_price().is_some());
+        ContractSaleComponent.ops_contract_sell((1000 * YOCTO).into());
+        assert!(ContractSaleComponent::ops_contract_sale_price().is_some());
 
         // Act
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id("bob"));
-        assert!(ContractSaleComponent::contract_sale_price().is_none());
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id("bob"));
+        assert!(ContractSaleComponent::ops_contract_sale_price().is_none());
         assert_eq!(
-            ContractOwnershipComponent::prospective_owner()
+            ContractOwnershipComponent::ops_owner_prospective()
                 .unwrap()
                 .as_str(),
             "bob"
@@ -354,17 +360,17 @@ mod tests_transfer_ownership {
         ctx.attached_deposit = YOCTO;
         ctx.predecessor_account_id = "bob".to_string();
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
-        assert!(ContractSaleComponent::contract_bid().is_some());
+        ContractSaleComponent.ops_contract_buy(None);
+        assert!(ContractSaleComponent::ops_contract_bid().is_some());
 
         // Act
         ctx.attached_deposit = 1;
         ctx.predecessor_account_id = alfio.to_string();
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id("bob"));
-        assert!(ContractSaleComponent::contract_bid().is_none());
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id("bob"));
+        assert!(ContractSaleComponent::ops_contract_bid().is_none());
         assert_eq!(
-            ContractOwnershipComponent::prospective_owner()
+            ContractOwnershipComponent::ops_owner_prospective()
                 .unwrap()
                 .as_str(),
             "bob"
@@ -391,24 +397,24 @@ mod tests_transfer_ownership {
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractSaleComponent.sell_contract((1000 * YOCTO).into());
-        assert!(ContractSaleComponent::contract_sale_price().is_some());
+        ContractSaleComponent.ops_contract_sell((1000 * YOCTO).into());
+        assert!(ContractSaleComponent::ops_contract_sale_price().is_some());
 
         ctx.attached_deposit = YOCTO;
         ctx.predecessor_account_id = "bob".to_string();
         testing_env!(ctx.clone());
-        ContractSaleComponent.buy_contract(None);
-        assert!(ContractSaleComponent::contract_bid().is_some());
+        ContractSaleComponent.ops_contract_buy(None);
+        assert!(ContractSaleComponent::ops_contract_bid().is_some());
 
         // Act
         ctx.attached_deposit = 1;
         ctx.predecessor_account_id = alfio.to_string();
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id("bob"));
-        assert!(ContractSaleComponent::contract_bid().is_none());
-        assert!(ContractSaleComponent::contract_sale_price().is_none());
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id("bob"));
+        assert!(ContractSaleComponent::ops_contract_bid().is_none());
+        assert!(ContractSaleComponent::ops_contract_sale_price().is_none());
         assert_eq!(
-            ContractOwnershipComponent::prospective_owner()
+            ContractOwnershipComponent::ops_owner_prospective()
                 .unwrap()
                 .as_str(),
             "bob"
@@ -438,7 +444,7 @@ mod tests_transfer_ownership {
         ctx.attached_deposit = 1;
         ctx.predecessor_account_id = "bob".to_string();
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(alfio));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id(alfio));
     }
 
     #[test]
@@ -454,7 +460,7 @@ mod tests_transfer_ownership {
         // Act
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(alfio));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id(alfio));
     }
 
     #[test]
@@ -470,7 +476,7 @@ mod tests_transfer_ownership {
         // Act
         ctx.attached_deposit = 0;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id("bob"));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id("bob"));
     }
 
     #[test]
@@ -486,7 +492,7 @@ mod tests_transfer_ownership {
         // Act
         ctx.attached_deposit = 2;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id("bob"));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id("bob"));
     }
 }
 
@@ -508,15 +514,15 @@ mod tests_finalize_transfer_ownership {
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id(bob));
 
         // Act
         ctx.predecessor_account_id = bob.to_string();
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.finalize_ownership_transfer();
+        ContractOwnershipComponent.ops_owner_finalize_transfer();
 
         // Assert
-        assert_eq!(ContractOwnershipComponent::owner().as_str(), bob);
+        assert_eq!(ContractOwnershipComponent::ops_owner().as_str(), bob);
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
         assert!(&logs[0].starts_with("[INFO] [CONTRACT_TRANSFER_FINALIZED]"));
@@ -535,12 +541,12 @@ mod tests_finalize_transfer_ownership {
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id(bob));
 
         // Act
         ctx.predecessor_account_id = "alice".to_string();
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.finalize_ownership_transfer();
+        ContractOwnershipComponent.ops_owner_finalize_transfer();
     }
 
     #[test]
@@ -557,7 +563,7 @@ mod tests_finalize_transfer_ownership {
         ctx.attached_deposit = 1;
         ctx.predecessor_account_id = "alice".to_string();
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.finalize_ownership_transfer();
+        ContractOwnershipComponent.ops_owner_finalize_transfer();
     }
 
     #[test]
@@ -573,13 +579,13 @@ mod tests_finalize_transfer_ownership {
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id(bob));
 
         // Act
         ctx.attached_deposit = 0;
         ctx.predecessor_account_id = bob.to_string();
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.finalize_ownership_transfer();
+        ContractOwnershipComponent.ops_owner_finalize_transfer();
     }
 
     #[test]
@@ -595,13 +601,13 @@ mod tests_finalize_transfer_ownership {
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id(bob));
 
         // Act
         ctx.attached_deposit = 2;
         ctx.predecessor_account_id = bob.to_string();
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.finalize_ownership_transfer();
+        ContractOwnershipComponent.ops_owner_finalize_transfer();
     }
 }
 
@@ -623,12 +629,12 @@ mod tests_cancel_ownership_transfer {
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id(bob));
 
         // Act
-        ContractOwnershipComponent.cancel_ownership_transfer();
+        ContractOwnershipComponent.ops_owner_cancel_transfer();
         // Assert
-        assert!(ContractOwnershipComponent::prospective_owner().is_none());
+        assert!(ContractOwnershipComponent::ops_owner_prospective().is_none());
         assert!(ContractOwnershipAccountIdsObject::load()
             .prospective_owner
             .is_none());
@@ -649,15 +655,15 @@ mod tests_cancel_ownership_transfer {
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id(bob));
 
         // Act
         ctx.attached_deposit = 1;
         ctx.predecessor_account_id = bob.to_string();
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.cancel_ownership_transfer();
+        ContractOwnershipComponent.ops_owner_cancel_transfer();
         // Assert
-        assert!(ContractOwnershipComponent::prospective_owner().is_none());
+        assert!(ContractOwnershipComponent::ops_owner_prospective().is_none());
         assert!(ContractOwnershipAccountIdsObject::load()
             .prospective_owner
             .is_none());
@@ -677,7 +683,7 @@ mod tests_cancel_ownership_transfer {
         // Act
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.cancel_ownership_transfer();
+        ContractOwnershipComponent.ops_owner_cancel_transfer();
         // Assert
         let logs = test_utils::get_logs();
         assert!(logs.is_empty());
@@ -697,7 +703,7 @@ mod tests_cancel_ownership_transfer {
         ctx.attached_deposit = 1;
         ctx.predecessor_account_id = "bob".to_string();
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.cancel_ownership_transfer();
+        ContractOwnershipComponent.ops_owner_cancel_transfer();
         // Assert
         let logs = test_utils::get_logs();
         assert!(logs.is_empty());
@@ -716,14 +722,14 @@ mod tests_cancel_ownership_transfer {
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id(bob));
 
         // Act
         ctx.attached_deposit = 0;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.cancel_ownership_transfer();
+        ContractOwnershipComponent.ops_owner_cancel_transfer();
         // Assert
-        assert!(ContractOwnershipComponent::prospective_owner().is_none());
+        assert!(ContractOwnershipComponent::ops_owner_prospective().is_none());
         assert!(ContractOwnershipAccountIdsObject::load()
             .prospective_owner
             .is_none());
@@ -744,14 +750,14 @@ mod tests_cancel_ownership_transfer {
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id(bob));
 
         // Act
         ctx.attached_deposit = 2;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.cancel_ownership_transfer();
+        ContractOwnershipComponent.ops_owner_cancel_transfer();
         // Assert
-        assert!(ContractOwnershipComponent::prospective_owner().is_none());
+        assert!(ContractOwnershipComponent::ops_owner_prospective().is_none());
         assert!(ContractOwnershipAccountIdsObject::load()
             .prospective_owner
             .is_none());
@@ -772,15 +778,15 @@ mod tests_cancel_ownership_transfer {
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id(bob));
 
         // Act
         ctx.attached_deposit = 0;
         ctx.predecessor_account_id = bob.to_string();
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.cancel_ownership_transfer();
+        ContractOwnershipComponent.ops_owner_cancel_transfer();
         // Assert
-        assert!(ContractOwnershipComponent::prospective_owner().is_none());
+        assert!(ContractOwnershipComponent::ops_owner_prospective().is_none());
         assert!(ContractOwnershipAccountIdsObject::load()
             .prospective_owner
             .is_none());
@@ -801,15 +807,15 @@ mod tests_cancel_ownership_transfer {
 
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.transfer_ownership(to_valid_account_id(bob));
+        ContractOwnershipComponent.ops_owner_transfer(to_valid_account_id(bob));
 
         // Act
         ctx.attached_deposit = 2;
         ctx.predecessor_account_id = bob.to_string();
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.cancel_ownership_transfer();
+        ContractOwnershipComponent.ops_owner_cancel_transfer();
         // Assert
-        assert!(ContractOwnershipComponent::prospective_owner().is_none());
+        assert!(ContractOwnershipComponent::ops_owner_prospective().is_none());
         assert!(ContractOwnershipAccountIdsObject::load()
             .prospective_owner
             .is_none());
@@ -833,17 +839,17 @@ mod owner_balance {
 
         ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
-        let owner_balance_1 = ContractOwnershipComponent::owner_balance();
+        let owner_balance_1 = ContractOwnershipComponent::ops_owner_balance();
         assert!(owner_balance_1.available > ZERO_NEAR);
         // Act
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        let owner_balance_2 = ContractOwnershipComponent.withdraw_owner_balance(None);
+        let owner_balance_2 = ContractOwnershipComponent.ops_owner_withdraw_balance(None);
         assert_eq!(owner_balance_2.available, ZERO_NEAR);
         let receipts = deserialize_receipts();
         assert_eq!(
             &receipts[0].receiver_id,
-            ContractOwnershipComponent::owner().as_str()
+            ContractOwnershipComponent::ops_owner().as_str()
         );
         match &receipts[0].actions[0] {
             Action::Transfer(transfer) => {
@@ -866,14 +872,15 @@ mod owner_balance {
         // Act
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        let initial_balance = ContractOwnershipComponent::owner_balance();
+        let initial_balance = ContractOwnershipComponent::ops_owner_balance();
         let amount = initial_balance.available.value() / 2;
-        let owner_balance = ContractOwnershipComponent.withdraw_owner_balance(Some(amount.into()));
+        let owner_balance =
+            ContractOwnershipComponent.ops_owner_withdraw_balance(Some(amount.into()));
         assert!(owner_balance.available < initial_balance.available);
         let receipts = deserialize_receipts();
         assert_eq!(
             &receipts[0].receiver_id,
-            ContractOwnershipComponent::owner().as_str()
+            ContractOwnershipComponent::ops_owner().as_str()
         );
         match &receipts[0].actions[0] {
             Action::Transfer(transfer) => {
@@ -897,9 +904,9 @@ mod owner_balance {
         // Act
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        let initial_balance = ContractOwnershipComponent::owner_balance();
+        let initial_balance = ContractOwnershipComponent::ops_owner_balance();
         let amount = initial_balance.available.value() + 1;
-        ContractOwnershipComponent.withdraw_owner_balance(Some(amount.into()));
+        ContractOwnershipComponent.ops_owner_withdraw_balance(Some(amount.into()));
     }
 
     #[test]
@@ -915,7 +922,7 @@ mod owner_balance {
         // Act
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.withdraw_owner_balance(Some(ZERO_NEAR));
+        ContractOwnershipComponent.ops_owner_withdraw_balance(Some(ZERO_NEAR));
     }
 
     #[test]
@@ -932,7 +939,7 @@ mod owner_balance {
         ctx.attached_deposit = 1;
         ctx.predecessor_account_id = "bob".to_string();
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.withdraw_owner_balance(Some(100.into()));
+        ContractOwnershipComponent.ops_owner_withdraw_balance(Some(100.into()));
     }
 
     #[test]
@@ -949,7 +956,7 @@ mod owner_balance {
         ctx.attached_deposit = 1;
         ctx.predecessor_account_id = "bob".to_string();
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.withdraw_owner_balance(None);
+        ContractOwnershipComponent.ops_owner_withdraw_balance(None);
     }
 
     #[test]
@@ -966,7 +973,7 @@ mod owner_balance {
 
         // Act
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.withdraw_owner_balance(None);
+        ContractOwnershipComponent.ops_owner_withdraw_balance(None);
     }
 
     #[test]
@@ -984,7 +991,7 @@ mod owner_balance {
         // Act
         ctx.attached_deposit = 2;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.withdraw_owner_balance(None);
+        ContractOwnershipComponent.ops_owner_withdraw_balance(None);
     }
 
     #[test]
@@ -1001,7 +1008,7 @@ mod owner_balance {
 
         // Act
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.withdraw_owner_balance(Some(100.into()));
+        ContractOwnershipComponent.ops_owner_withdraw_balance(Some(100.into()));
     }
 
     #[test]
@@ -1019,6 +1026,6 @@ mod owner_balance {
         // Act
         ctx.attached_deposit = 2;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.withdraw_owner_balance(Some(100.into()));
+        ContractOwnershipComponent.ops_owner_withdraw_balance(Some(100.into()));
     }
 }

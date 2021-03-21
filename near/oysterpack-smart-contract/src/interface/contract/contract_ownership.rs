@@ -11,19 +11,19 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 /// Every contract has an owner
 pub trait ContractOwnership {
     /// returns the contract owner account ID
-    fn owner() -> AccountId;
+    fn ops_owner() -> AccountId;
 
     /// Returns how much of the contract's NEAR balance is owned by the contract owner and what amount
     /// is available for withdrawal.
     ///
     /// The owner must retain enough NEAR deposit on the contract to cover storage costs that are
     /// the contract's responsibility to pay for, i.e., excluding account storage.
-    fn owner_balance() -> ContractOwnerNearBalance;
+    fn ops_owner_balance() -> ContractOwnerNearBalance;
 
     /// Returns the prospective owner that the transfer is waiting on for finalization.
     ///
     /// Returns None if there is no ownership transfer in progress.
-    fn prospective_owner() -> Option<AccountId>;
+    fn ops_owner_prospective() -> Option<AccountId>;
 
     /// Initiates the workflow to transfer contract ownership.
     ///
@@ -43,7 +43,7 @@ pub trait ContractOwnership {
     /// - if the new owner account ID is not valid
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
-    fn transfer_ownership(&mut self, new_owner: ValidAccountId);
+    fn ops_owner_transfer(&mut self, new_owner: ValidAccountId);
 
     /// Enables the transfer to be cancelled before it is finalized.
     ///
@@ -57,7 +57,7 @@ pub trait ContractOwnership {
     /// - `ERR_YOCTONEAR_DEPOSIT_REQUIRED` - if 1 yoctoNEAR is not attached
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
-    fn cancel_ownership_transfer(&mut self);
+    fn ops_owner_cancel_transfer(&mut self);
 
     /// Used to finalize the contract transfer to the new prospective owner
     ///
@@ -74,7 +74,7 @@ pub trait ContractOwnership {
     /// - `ERR_YOCTONEAR_DEPOSIT_REQUIRED` - if 1 yoctoNEAR is not attached
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
-    fn finalize_ownership_transfer(&mut self);
+    fn ops_owner_finalize_transfer(&mut self);
 
     /// Used by the contract owner to withdraw from the contract owner's available balance.
     ///
@@ -89,18 +89,19 @@ pub trait ContractOwnership {
     /// - `ERR_CODE_BAD_REQUEST` - if specified amount is zero
     ///
     /// `#[payable]` - requires exactly 1 yoctoNEAR to be attached
-    fn withdraw_owner_balance(&mut self, amount: Option<YoctoNear>) -> ContractOwnerNearBalance;
+    fn ops_owner_withdraw_balance(&mut self, amount: Option<YoctoNear>)
+        -> ContractOwnerNearBalance;
 }
 
-/// log event for [`ContractOwnership::transfer_ownership`]
+/// log event for [`ContractOwnership::ops_owner_transfer`]
 pub const LOG_EVENT_CONTRACT_TRANSFER_INITIATED: LogEvent =
     LogEvent(Level::INFO, "CONTRACT_TRANSFER_INITIATED");
 
-/// log event for [`ContractOwnership::cancel_ownership_transfer`]
+/// log event for [`ContractOwnership::ops_owner_cancel_transfer`]
 pub const LOG_EVENT_CONTRACT_TRANSFER_CANCELLED: LogEvent =
     LogEvent(Level::INFO, "CONTRACT_TRANSFER_CANCELLED");
 
-/// log event for [`ContractOwnership::finalize_ownership_transfer`]
+/// log event for [`ContractOwnership::ops_owner_finalize_transfer`]
 pub const LOG_EVENT_CONTRACT_TRANSFER_FINALIZED: LogEvent =
     LogEvent(Level::INFO, "CONTRACT_TRANSFER_FINALIZED");
 

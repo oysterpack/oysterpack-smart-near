@@ -250,12 +250,12 @@ impl<T> AccountStorageUsage for AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    fn storage_usage_bounds(&self) -> StorageUsageBounds {
-        self.account_storage_usage.storage_usage_bounds()
+    fn ops_storage_usage_bounds(&self) -> StorageUsageBounds {
+        self.account_storage_usage.ops_storage_usage_bounds()
     }
 
-    fn account_storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage> {
-        self.account_storage_usage.account_storage_usage(account_id)
+    fn ops_storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage> {
+        self.account_storage_usage.ops_storage_usage(account_id)
     }
 }
 
@@ -354,7 +354,7 @@ where
     }
 
     fn storage_balance_bounds(&self) -> StorageBalanceBounds {
-        self.account_storage_usage.storage_usage_bounds().into()
+        self.account_storage_usage.ops_storage_usage_bounds().into()
     }
 
     fn storage_balance_of(&self, account_id: ValidAccountId) -> Option<StorageBalance> {
@@ -2356,7 +2356,7 @@ mod tests_account_storage_usage {
         AccountManager::deploy(storage_usage_bounds);
 
         let mut service = AccountManager::new(Box::new(UnregisterAccountNOOP));
-        assert_eq!(storage_usage_bounds, service.storage_usage_bounds());
+        assert_eq!(storage_usage_bounds, service.ops_storage_usage_bounds());
 
         assert!(service
             .storage_balance_of(to_valid_account_id(account))
@@ -2372,7 +2372,7 @@ mod tests_account_storage_usage {
             storage_balance
         );
         let storage_usage = service
-            .account_storage_usage(to_valid_account_id(account))
+            .ops_storage_usage(to_valid_account_id(account))
             .unwrap();
         assert_eq!(
             storage_usage,
