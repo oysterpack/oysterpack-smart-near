@@ -90,6 +90,18 @@ impl ContractPermissions {
     }
 }
 
+impl From<Vec<(u8, &'static str)>> for ContractPermissions {
+    fn from(values: Vec<(u8, &'static str)>) -> Self {
+        let permissions = values
+            .iter()
+            .fold(HashMap::new(), |mut permissions, entry| {
+                permissions.insert(entry.0, entry.1);
+                permissions
+            });
+        ContractPermissions::new(permissions)
+    }
+}
+
 pub const ERR_CODE_UNREGISTER_FAILURE: ErrCode = ErrCode("UNREGISTER_FAILURE");
 
 /// Contract is required to provide implementation that applies contract specific business logic.
@@ -431,7 +443,7 @@ where
         assert_account_not_predecessor(account_id.as_ref());
         self.assert_predecessor_is_admin();
 
-        let mut account = self.registered_account_near_data(env::predecessor_account_id().as_str());
+        let mut account = self.registered_account_near_data(account_id.as_ref());
         if !account.is_admin() {
             account.grant_admin();
             account.save();
@@ -443,7 +455,7 @@ where
         assert_account_not_predecessor(account_id.as_ref());
         self.assert_predecessor_is_admin();
 
-        let mut account = self.registered_account_near_data(env::predecessor_account_id().as_str());
+        let mut account = self.registered_account_near_data(account_id.as_ref());
         if account.is_admin() {
             account.revoke_admin();
             account.save();
@@ -460,7 +472,7 @@ where
         assert_account_not_predecessor(account_id.as_ref());
         self.assert_predecessor_is_admin();
 
-        let mut account = self.registered_account_near_data(env::predecessor_account_id().as_str());
+        let mut account = self.registered_account_near_data(account_id.as_ref());
         if !account.is_operator() {
             account.grant_admin();
             account.save();
@@ -472,7 +484,7 @@ where
         assert_account_not_predecessor(account_id.as_ref());
         self.assert_predecessor_is_admin();
 
-        let mut account = self.registered_account_near_data(env::predecessor_account_id().as_str());
+        let mut account = self.registered_account_near_data(account_id.as_ref());
         if account.is_operator() {
             account.revoke_operator();
             account.save();
@@ -485,7 +497,7 @@ where
         assert_account_not_predecessor(account_id.as_ref());
         self.assert_predecessor_is_admin();
 
-        let mut account = self.registered_account_near_data(env::predecessor_account_id().as_str());
+        let mut account = self.registered_account_near_data(account_id.as_ref());
         if !account.contains_permissions(permissions) {
             account.grant(permissions);
             account.save();
@@ -501,7 +513,7 @@ where
         assert_account_not_predecessor(account_id.as_ref());
         self.assert_predecessor_is_admin();
 
-        let mut account = self.registered_account_near_data(env::predecessor_account_id().as_str());
+        let mut account = self.registered_account_near_data(account_id.as_ref());
         if account.permissions().is_some() {
             account.revoke(permissions);
             account.save();
@@ -515,7 +527,7 @@ where
     fn ops_permissions_revoke_all(&mut self, account_id: ValidAccountId) {
         assert_account_not_predecessor(account_id.as_ref());
         self.assert_predecessor_is_admin();
-        let mut account = self.registered_account_near_data(env::predecessor_account_id().as_str());
+        let mut account = self.registered_account_near_data(account_id.as_ref());
         if account.permissions().is_some() {
             account.revoke_all();
             account.save();
@@ -2818,9 +2830,39 @@ mod test_permission_management {
             use super::*;
 
             #[test]
+            fn grants_revokes() {
+                let permissions = vec![(0, "perm_0"), (1, "perm_1")];
+                test(true, permissions.into(), |mut ctx, mut account_manager| {
+                    // Arrange
+                    let bob = "bob";
+                    ctx.predecessor_account_id = bob.to_string();
+                    ctx.attached_deposit = YOCTO;
+                    testing_env!(ctx.clone());
+                    account_manager.storage_deposit(None, None);
+
+                    // Act
+                    ctx.predecessor_account_id = PREDECESSOR_ACCOUNT.to_string();
+                    ctx.attached_deposit = 0;
+                    testing_env!(ctx.clone());
+                    account_manager.ops_permissions_grant_admin(to_valid_account_id(bob));
+
+                    // Assert
+                    assert!(account_manager.ops_permissions_is_admin(to_valid_account_id(bob)));
+                });
+            }
+
+            #[test]
             fn account_not_registered() {
-                test(true, Default::default(), |ctx, account_manager| {
-                    assert!(!account_manager.ops_permissions_is_admin(to_valid_account_id("bob")))
+                test(true, Default::default(), |_ctx, account_manager| {
+                    assert!(!account_manager.ops_permissions_is_admin(to_valid_account_id("bob")));
+                    assert!(
+                        !account_manager.ops_permissions_is_operator(to_valid_account_id("bob"))
+                    );
+                    assert!(!account_manager
+                        .ops_permissions_contains(to_valid_account_id("bob"), (1 << 10).into()));
+                    assert!(account_manager
+                        .ops_permissions(to_valid_account_id("bob"))
+                        .is_none());
                 });
             }
         }
@@ -2828,7 +2870,7 @@ mod test_permission_management {
 
     #[cfg(test)]
     mod not_as_admin {
-        use super::*;
+        // use super::*;
     }
 
     #[test]
