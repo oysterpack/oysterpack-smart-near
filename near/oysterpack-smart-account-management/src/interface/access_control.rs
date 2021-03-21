@@ -1,3 +1,4 @@
+use crate::Permissions;
 use near_sdk::json_types::ValidAccountId;
 
 pub trait AccessControl {
@@ -40,12 +41,22 @@ pub trait AccessControl {
     /// ## Panics
     /// - if predecessor account is not owner or admin
     /// - if `account_id` is not registered
-    fn grant_access(&mut self, account_id: ValidAccountId, bitflags: u64);
+    fn grant_permissions(&mut self, account_id: ValidAccountId, permissions: Permissions);
 
     /// Is restricted to contract owner and admins
     ///
     /// ## Panics
     /// - if predecessor account is not owner or admin
     /// - if `account_id` is not registered
-    fn revoke_access(&mut self, account_id: ValidAccountId, bitflags: u64);
+    fn revoke_permissions(&mut self, account_id: ValidAccountId, permissions: Permissions);
+
+    /// Is restricted to contract owner and admins
+    ///
+    /// ## Panics
+    /// - if predecessor account is not owner or admin
+    /// - if `account_id` is not registered
+    fn revoke_all_permissions(&mut self, account_id: ValidAccountId);
+
+    /// returns true if the account has all of the specified permissions
+    fn has_permissions(&self, account_id: ValidAccountId, permissions: Permissions) -> bool;
 }

@@ -18,6 +18,7 @@ fn test() {
 
     let bits: u8 = a_b.bits();
     println!("a_b {}", bits);
+    println!("a_c {:?}", a_c);
     println!("b_c_d {}", b_c_d.bits());
 
     let bit_flags: BitFlags<Test> = BitFlags::from_bits(14).unwrap();

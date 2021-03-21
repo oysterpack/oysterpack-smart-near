@@ -1,11 +1,9 @@
-use crate::AccountRoles;
-use enumflags2::BitFlags;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
 };
 use oysterpack_smart_near::data::numbers::U64;
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
 use std::ops::{Deref, DerefMut};
 
 /// Permissions are modeled as bitflags.
@@ -49,64 +47,26 @@ impl From<u64> for Permissions {
 
 impl Display for Permissions {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        std::fmt::Display::fmt(&self.0, f)
     }
 }
 
 impl Permissions {
-    pub fn is_admin(&self) -> bool {
-        let acl: BitFlags<AccountRoles> = BitFlags::from_bits(*self.0).unwrap();
-        acl.contains(AccountRoles::Admin)
+    pub fn grant<T: Into<Permissions>>(&mut self, permissions: T) {
+        *self.0 |= *permissions.into();
     }
 
-    pub fn grant_admin(&mut self) {
-        let mut acl: BitFlags<AccountRoles> = BitFlags::from_bits(*self.0).unwrap();
-        acl.insert(AccountRoles::Admin);
-        *self.0 = acl.bits();
+    pub fn revoke<T: Into<Permissions>>(&mut self, permissions: T) {
+        *self.0 &= !*permissions.into();
     }
 
-    pub fn revoke_admin(&mut self) {
-        let mut acl: BitFlags<AccountRoles> = BitFlags::from_bits(*self.0).unwrap();
-        acl.remove(AccountRoles::Admin);
-        *self.0 = acl.bits();
-    }
-
-    pub fn is_operator(&self) -> bool {
-        let acl: BitFlags<AccountRoles> = BitFlags::from_bits(*self.0).unwrap();
-        acl.contains(AccountRoles::Operator)
-    }
-
-    pub fn grant_operator(&mut self) {
-        let mut acl: BitFlags<AccountRoles> = BitFlags::from_bits(*self.0).unwrap();
-        acl.insert(AccountRoles::Operator);
-        *self.0 = acl.bits();
-    }
-
-    pub fn revoke_operator(&mut self) {
-        let mut acl: BitFlags<AccountRoles> = BitFlags::from_bits(*self.0).unwrap();
-        acl.remove(AccountRoles::Operator);
-        *self.0 = acl.bits();
-    }
-
-    pub fn grant_access(&mut self, permissions: Permissions) {
-        let mut acl: BitFlags<AccountRoles> = BitFlags::from_bits(*self.0).unwrap();
-        acl.insert(BitFlags::from_bits(*permissions.0).unwrap());
-        *self.0 = acl.bits();
-    }
-
-    pub fn revoke_access(&mut self, permissions: Permissions) {
-        let mut acl: BitFlags<AccountRoles> = BitFlags::from_bits(*self.0).unwrap();
-        acl.remove(BitFlags::from_bits(*permissions).unwrap());
-        *self.0 = acl.bits();
-    }
-
-    pub fn revoke_all_access(&mut self) {
+    pub fn revoke_all(&mut self) {
         *self.0 = 0
     }
 
     /// returns true if all permission bitflags are set
-    pub fn has_access(&self, permissions: Permissions) -> bool {
-        let acl: BitFlags<AccountRoles> = BitFlags::from_bits(*self.0).unwrap();
-        acl.contains(BitFlags::from_bits(*permissions.0).unwrap())
+    pub fn contains<T: Into<Permissions>>(&self, permissions: T) -> bool {
+        let permissions = permissions.into();
+        (*self.0 & *permissions) == *permissions
     }
 }

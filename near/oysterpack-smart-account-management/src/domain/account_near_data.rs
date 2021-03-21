@@ -1,7 +1,6 @@
 use crate::{
     AccountIdHash, AccountStorageEvent, Permissions, StorageBalance, ERR_ACCOUNT_NOT_REGISTERED,
 };
-use enumflags2::bitflags;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
@@ -88,20 +87,19 @@ impl DerefMut for AccountNearDataObject {
     }
 }
 
-/// Predefined standard account roles
-#[bitflags]
-#[repr(u64)]
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum AccountRoles {
-    Admin = 1 << 0,
-    Operator = 1 << 1,
-}
+/// admin permission bitflag
+pub const PERMISSION_ADMIN: u64 = 1 << 63;
+/// operator permission bitflag
+pub const PERMISSION_OPERATOR: u64 = 1 << 62;
 
 /// Provides the basic fields that all accounts need:
 /// - [`AccountNearData::near_balance`] - all accounts must pay for their own storage and thus need a NEAR balance
 /// - [`AccountNearData::storage_usage`] - used to track account storage usage
-/// - [`AccountNearData::bitflags`] - many contracts will require access control. bitflags provides the ability
-///   to support up to 64 roles / permission bits.
+/// - [`AccountNearData::permissions`] - many contracts will require access control. bitflags provides
+///   the ability to support up to 64 roles / permission bits. The first 62 permission bits are available
+///   for the contract. The last 2 permission bits are reserved for:
+///   - [`PERMISSION_ADMIN`]
+///   - [`PERMISSION_OPERATOR`]
 #[derive(BorshSerialize, BorshDeserialize, Clone, Copy, Debug, PartialEq)]
 pub struct AccountNearData {
     near_balance: YoctoNear,
@@ -125,6 +123,10 @@ impl AccountNearData {
 
     pub fn storage_usage(&self) -> StorageUsage {
         self.storage_usage
+    }
+
+    pub fn permissions(&self) -> Option<Permissions> {
+        self.permissions
     }
 
     pub fn storage_balance(&self, required_min_storage_balance: YoctoNear) -> StorageBalance {
@@ -175,66 +177,68 @@ impl AccountNearData {
         *self.storage_usage = self.storage_usage.checked_sub(amount.value()).unwrap();
     }
 
-    pub fn set_bitflags(&mut self, bitflags: Permissions) {
-        self.permissions = Some(bitflags)
+    pub fn set_permissions(&mut self, permissions: Permissions) {
+        self.permissions = Some(permissions)
     }
 
     pub fn is_admin(&self) -> bool {
         self.permissions
-            .map_or(false, |permissions| permissions.is_admin())
+            .map_or(false, |permissions| permissions.contains(PERMISSION_ADMIN))
     }
 
     pub fn grant_admin(&mut self) {
         let mut permissions = self.permissions.take().unwrap_or_else(Default::default);
-        permissions.grant_admin();
+        permissions.grant(PERMISSION_ADMIN);
         self.permissions = Some(permissions);
     }
 
     pub fn revoke_admin(&mut self) {
         if let Some(mut permissions) = self.permissions.take() {
-            permissions.revoke_admin();
+            permissions.revoke(PERMISSION_ADMIN);
             self.permissions = Some(permissions);
         }
     }
 
     pub fn is_operator(&self) -> bool {
-        self.permissions
-            .map_or(false, |permissions| permissions.is_operator())
+        self.permissions.map_or(false, |permissions| {
+            permissions.contains(PERMISSION_OPERATOR)
+        })
     }
 
     pub fn grant_operator(&mut self) {
         let mut permissions = self.permissions.take().unwrap_or_else(Default::default);
-        permissions.grant_operator();
+        permissions.grant(PERMISSION_OPERATOR);
         self.permissions = Some(permissions);
     }
 
     pub fn revoke_operator(&mut self) {
         if let Some(mut permissions) = self.permissions.take() {
-            permissions.revoke_operator();
+            permissions.revoke(PERMISSION_OPERATOR);
             self.permissions = Some(permissions);
         }
     }
 
-    pub fn grant_access(&mut self, access: Permissions) {
+    pub fn grant(&mut self, access: Permissions) {
         let mut permissions = self.permissions.take().unwrap_or_else(Default::default);
-        permissions.grant_access(access);
+        permissions.grant(access);
         self.permissions = Some(permissions);
     }
 
-    pub fn revoke_access(&mut self, access: Permissions) {
+    pub fn revoke(&mut self, access: Permissions) {
         if let Some(mut permissions) = self.permissions.take() {
-            permissions.revoke_access(access);
+            permissions.revoke(access);
             self.permissions = Some(permissions);
         }
     }
 
-    pub fn revoke_all_access(&mut self) {
+    pub fn revoke_all(&mut self) {
         self.permissions = None;
     }
 
-    pub fn has_access(&self, permissions: Permissions) -> bool {
+    /// returns true if the account has all of the specified permissions
+    pub fn contains_permissions(&self, permissions: Permissions) -> bool {
         self.permissions
-            .map_or(false, |perms| perms.has_access(permissions))
+            .map_or(false, |perms| perms.contains(permissions))
     }
 }
 
