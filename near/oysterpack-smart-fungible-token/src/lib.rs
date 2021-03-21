@@ -1,4 +1,4 @@
-mod components;
+pub mod components;
 mod domain;
 mod interface;
 

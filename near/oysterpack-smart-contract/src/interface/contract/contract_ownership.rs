@@ -7,6 +7,7 @@ use near_sdk::{
 use oysterpack_smart_near::domain::YoctoNear;
 use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 
+/// # **Contract Interface**: Contract Ownership API
 /// Every contract has an owner
 pub trait ContractOwnership {
     /// returns the contract owner account ID

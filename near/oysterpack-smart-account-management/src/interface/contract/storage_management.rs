@@ -11,7 +11,7 @@ use oysterpack_smart_near::{domain::YoctoNear, eventbus::*, Level, LogEvent};
 use std::fmt::{self, Display, Formatter};
 use std::sync::Mutex;
 
-/// # Account Storage API
+/// # **Contract Interface**: [Account Storage API][3]
 ///
 /// [Storage staking][1] is an issue that needs to be addressed by any multi-user contract that allocates storage for the
 /// user on the blockchain. Storage staking costs are the most expensive costs to consider for the contract on NEAR. If storage
@@ -32,6 +32,7 @@ use std::sync::Mutex;
 ///
 /// [1]: https://docs.near.org/docs/concepts/storage#how-much-does-it-cost
 /// [2]: https://docs.near.org/docs/concepts/storage#the-million-cheap-data-additions-attack
+/// [3]: https://nomicon.io/Standards/StorageManagement.html
 pub trait StorageManagement {
     /// Used by accounts to deposit funds to pay for account storage staking fees.
     ///

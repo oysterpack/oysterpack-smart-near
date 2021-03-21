@@ -3,9 +3,7 @@ use near_sdk::json_types::ValidAccountId;
 use near_sdk::{Promise, PromiseOrValue};
 use oysterpack_smart_near::{Level, LogEvent};
 
-/// Defines the standard interface for the core Fungible Token contract
-/// - [NEP-141](https://github.com/near/NEPs/issues/141)
-/// - [NEP-141 Standard discussion](https://github.com/near/NEPs/discussions/146)
+/// # **Contract Interface**: [Fungible Token Core API][1]
 ///
 /// The core standard supports the following features:
 /// - [simple token transfers](FungibleToken::ft_transfer)
@@ -39,7 +37,8 @@ use oysterpack_smart_near::{Level, LogEvent};
 /// balance. The receiver can't overspend tokens from the sender outside of sent amount, so this
 /// standard must be considered as safe as #122
 ///
-pub trait FungibleToken {
+/// [1]: https://nomicon.io/Standards/Tokens/FungibleTokenCore.html
+pub trait FungibleToken: ResolveTransferCall {
     /// Enables simple transfer between accounts.
     ///
     /// - Transfers positive `amount` of tokens from the `env::predecessor_account_id` to `receiver_id`.
@@ -66,14 +65,14 @@ pub trait FungibleToken {
     /// Transfer to a contract with a callback.
     ///
     /// Transfers positive `amount` of tokens from the `env::predecessor_account_id` to `receiver_id`
-    /// account. Then calls [`TransferReceiver::ft_on_transfer`][1] method on `receiver_id` contract
+    /// account. Then calls [`TransferReceiver::ft_on_transfer`] method on `receiver_id` contract
     /// and attaches a callback to resolve this transfer.
     ///
-    /// [TransferReceiver::ft_on_transfer][1] method  must return the amount of tokens unused by
+    /// [TransferReceiver::ft_on_transfer] method  must return the amount of tokens unused by
     /// the receiver contract, the remaining tokens must be refunded to the `predecessor_account_id`
     /// by the resolve transfer callback.
     ///
-    /// Token contract must pass all the remaining unused gas to [`TransferReceiver::ft_on_transfer`][1]
+    /// Token contract must pass all the remaining unused gas to [`TransferReceiver::ft_on_transfer`]
     ///
     /// Malicious or invalid behavior by the receiver's contract:
     /// - If the receiver contract promise fails or returns invalid value, the full transfer amount
@@ -98,10 +97,7 @@ pub trait FungibleToken {
     /// - if amount is zero
     /// - if the sender account has insufficient funds to fulfill the transfer request
     ///
-    /// GAS REQUIREMENTS: 40 TGas + gas for receiver call
     /// #\[payable\]
-    ///
-    /// [1]: crate::interface::transfer_receiver::TransferReceiver::ft_on_transfer
     fn ft_transfer_call(
         &mut self,
         receiver_id: ValidAccountId,
@@ -116,27 +112,11 @@ pub trait FungibleToken {
     fn ft_balance_of(&self, account_id: ValidAccountId) -> TokenAmount;
 }
 
-pub const LOG_EVENT_FT_TRANSFER: LogEvent = LogEvent(Level::INFO, "FT_TRANSFER");
-
-pub const LOG_EVENT_FT_TRANSFER_CALL_FAILURE: LogEvent =
-    LogEvent(Level::WARN, "FT_TRANSFER_CALL_FAILURE");
-
-pub const LOG_EVENT_FT_TRANSFER_CALL_PARTIAL_REFUND: LogEvent =
-    LogEvent(Level::WARN, "FT_TRANSFER_CALL_PARTIAL_REFUND");
-
-pub const LOG_EVENT_FT_TRANSFER_CALL_RECEIVER_DEBIT: LogEvent =
-    LogEvent(Level::INFO, "FT_TRANSFER_CALL_RECEIVER_DEBIT");
-
-pub const LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT: LogEvent =
-    LogEvent(Level::INFO, "FT_TRANSFER_CALL_SENDER_CREDIT");
-
-pub const LOG_EVENT_FT_TRANSFER_CALL_TOKEN_BURN: LogEvent =
-    LogEvent(Level::WARN, "FT_TRANSFER_CALL_TOKEN_BURN");
-
-pub const LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED: LogEvent =
-    LogEvent(Level::WARN, "FT_TRANSFER_CALL_REFUND_NOT_APPLIED");
-
-/// Callback on fungible token contract to resolve transfer.
+/// # **Contract Interface**: [Fungible Token Transfer Call Resolver API][1]
+/// Private callback on fungible token contract to resolve transfer as part of the token transfer call
+/// workflow - see [`FungibleToken::ft_transfer_call`]
+///
+/// [1]: https://nomicon.io/Standards/Tokens/FungibleTokenCore.html
 pub trait ResolveTransferCall {
     /// Callback to resolve transfer.
     /// Private method (`env::predecessor_account_id == env::current_account_id`).
@@ -160,8 +140,8 @@ pub trait ResolveTransferCall {
     /// Returns amount that was refunded back to the sender.
     ///
     /// The callback should be designed to never panic.
-    /// - if the `sender_id` is not registered, then refunded STAKE tokens will be burned
-    /// - if the `receiver_id` is not registered, then the contract should be handle it
+    /// - if the `sender_id` is not registered, then refunded tokens will be burned
+    /// - if the `receiver_id` is not registered, then the contract should be able to handle it
     ///
     /// #\[private\]
     fn ft_resolve_transfer_call(
@@ -169,9 +149,59 @@ pub trait ResolveTransferCall {
         sender_id: ValidAccountId,
         receiver_id: ValidAccountId,
         amount: TokenAmount,
-        // NOTE: #[callback_result] is not supported yet and has to be handled using lower level interface.
-        //
-        // #[callback_result]
-        // unused_amount: CallbackResult<TokenAmount>,
+    ) -> TokenAmount;
+}
+
+pub const LOG_EVENT_FT_TRANSFER: LogEvent = LogEvent(Level::INFO, "FT_TRANSFER");
+
+pub const LOG_EVENT_FT_TRANSFER_CALL_FAILURE: LogEvent =
+    LogEvent(Level::WARN, "FT_TRANSFER_CALL_FAILURE");
+
+pub const LOG_EVENT_FT_TRANSFER_CALL_PARTIAL_REFUND: LogEvent =
+    LogEvent(Level::WARN, "FT_TRANSFER_CALL_PARTIAL_REFUND");
+
+pub const LOG_EVENT_FT_TRANSFER_CALL_RECEIVER_DEBIT: LogEvent =
+    LogEvent(Level::INFO, "FT_TRANSFER_CALL_RECEIVER_DEBIT");
+
+pub const LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT: LogEvent =
+    LogEvent(Level::INFO, "FT_TRANSFER_CALL_SENDER_CREDIT");
+
+pub const LOG_EVENT_FT_TRANSFER_CALL_TOKEN_BURN: LogEvent =
+    LogEvent(Level::WARN, "FT_TRANSFER_CALL_TOKEN_BURN");
+
+pub const LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED: LogEvent =
+    LogEvent(Level::WARN, "FT_TRANSFER_CALL_REFUND_NOT_APPLIED");
+
+/// # **Contract Interface**: [Fungible Token Transfer Call Receiver API][1]
+/// Contracts that want to receive token transfers as part of the transfer call workflow should
+/// implement this interface - see [`FungibleToken::ft_transfer_call`]
+///
+/// [1]: https://nomicon.io/Standards/Tokens/FungibleTokenCore.html
+pub trait TransferReceiver {
+    /// Callback to receive tokens.
+    ///
+    /// Called by fungible token contract `env::predecessor_account_id` after `transfer_call` was initiated by
+    /// `sender_id` of the given `amount` with the transfer message given in `msg` field.
+    /// The `amount` of tokens were already transferred to this contract account and ready to be used.
+    ///
+    /// The method must return the amount of tokens that are not used/accepted by this contract from
+    /// the transferred amount, e.g.:
+    /// - The transferred amount was `500`, the contract completely takes it and must return `0`.
+    /// - The transferred amount was `500`, but this transfer call only needs `450` for the action passed in the `msg`
+    ///   field, then the method must return `50`.
+    /// - The transferred amount was `500`, but the action in `msg` field has expired and the transfer must be
+    ///   cancelled. The method must return `500` or panic.
+    ///
+    /// Arguments:
+    /// - `sender_id` - the account ID that initiated the transfer.
+    /// - `amount` - the amount of tokens that were transferred to this account.
+    /// - `msg` - a string message that was passed with this transfer call.
+    ///
+    /// Returns the amount of tokens that are used/accepted by this contract from the transferred amount.
+    fn ft_on_transfer(
+        &mut self,
+        sender_id: ValidAccountId,
+        amount: TokenAmount,
+        msg: TransferCallMessage,
     ) -> PromiseOrValue<TokenAmount>;
 }

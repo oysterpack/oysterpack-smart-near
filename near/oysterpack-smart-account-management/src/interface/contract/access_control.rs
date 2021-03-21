@@ -1,6 +1,7 @@
 use crate::Permissions;
 use near_sdk::json_types::ValidAccountId;
 
+/// # **Contract Interface**: Access Control API
 pub trait AccessControl {
     /// contract owner is admin by default
     fn is_admin(&self, account_id: ValidAccountId) -> bool;

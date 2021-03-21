@@ -1,6 +1,4 @@
-mod fungible_token;
-mod metadata;
-pub mod transfer_receiver;
+pub use contract::fungible_token::*;
+pub use contract::metadata::*;
 
-pub use fungible_token::*;
-pub use metadata::*;
+pub mod contract;

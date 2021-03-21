@@ -6,6 +6,7 @@ use near_sdk::{
 use oysterpack_smart_near::domain::{ExpirationSetting, YoctoNear};
 use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 
+/// # **Contract Interface**: Contract Sale API
 /// Enables the contract to be transferred to a new owner via a sale.
 ///
 /// When the sale transaction is executed, the sale amount will be released to the current owner and

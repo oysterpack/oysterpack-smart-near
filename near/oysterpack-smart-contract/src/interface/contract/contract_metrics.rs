@@ -7,6 +7,7 @@ use oysterpack_smart_account_management::AccountMetrics;
 use oysterpack_smart_near::data::numbers::U128;
 use oysterpack_smart_near::domain::BlockTime;
 
+/// # **Contract Interface**: Contract Metrics API
 /// Provides metrics that track storage usage and NEAR balances
 pub trait ContractMetrics {
     fn total_registered_accounts() -> U128;

@@ -5,6 +5,8 @@ use near_sdk::{
 };
 use oysterpack_smart_near::domain::StorageUsage;
 
+/// # **Contract Interface**: Account Storage Usage API
+///
 /// Used to lookup account storage usage info   
 pub trait AccountStorageUsage {
     /// returns the account storage use bounds set by the contract
