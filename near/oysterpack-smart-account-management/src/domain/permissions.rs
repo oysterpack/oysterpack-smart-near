@@ -7,8 +7,15 @@ use std::fmt::{self, Debug, Display, Formatter};
 use std::ops::{Deref, DerefMut};
 
 /// Permissions are modeled as bitflags.
+///
 /// By default the account supports 64 bits, i.e., permissions, which should be enough to cover most
 /// use cases.
+///
+/// ## Example on how to construct permission bits
+/// ```rust
+/// use oysterpack_smart_account_management::{Permissions, PERMISSION_ADMIN};
+/// let permission: Permissions = (1 << PERMISSION_ADMIN).into();
+/// ```
 #[derive(
     BorshSerialize,
     BorshDeserialize,
