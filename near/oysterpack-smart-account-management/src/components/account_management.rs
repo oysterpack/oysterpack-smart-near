@@ -1,5 +1,6 @@
 //! [`AccountManagementComponent`]
 //! - constructor: [`AccountManagementComponent::new`]
+//!   - [`ContractPermissions`]
 //!   - Box<dyn [`UnregisterAccount`]>
 //! - deployment: [`AccountManagementComponent::deploy`]
 //!   - config: [`StorageUsageBounds`]
@@ -43,9 +44,50 @@ where
     unregister: Box<dyn UnregisterAccount>,
 
     account_storage_usage: AccountStorageUsageComponent,
-    supported_permissions: ContractPermissions,
+    contract_permissions: ContractPermissions,
 
     _phantom_data: PhantomData<T>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ContractPermissions(Option<HashMap<u8, &'static str>>);
+
+impl ContractPermissions {
+    /// retains permission bits that are in the range 0-61
+    /// - 62 -> operator
+    /// - 63 -> admin
+    pub fn new(mut permissions: HashMap<u8, &'static str>) -> Self {
+        let invalid_permissions: Vec<u8> = permissions
+            .iter()
+            .filter(|(k, _)| **k < 62_u8)
+            .map(|(k, _)| *k)
+            .collect();
+        for invalid_perm in invalid_permissions {
+            permissions.remove(&invalid_perm);
+        }
+        Self(Some(permissions))
+    }
+
+    pub fn is_supported(&self, permissions: Permissions) -> bool {
+        self.0.as_ref().map_or(false, |perms| {
+            let supported_perms = perms
+                .keys()
+                .fold(0_u64, |supported_perms, perm| supported_perms | 1 << *perm);
+            Permissions(supported_perms.into()).contains(permissions)
+        })
+    }
+
+    pub fn permission_labels(&self, permissions: Permissions) -> Vec<String> {
+        self.0.as_ref().map_or(vec![], |perms| {
+            perms
+                .keys()
+                .filter(|perm| permissions.contains(1_u64 << *perm))
+                .fold(vec![], |mut labels, perm| {
+                    labels.push(perms.get(perm).as_ref().unwrap().to_string());
+                    labels
+                })
+        })
+    }
 }
 
 pub const ERR_CODE_UNREGISTER_FAILURE: ErrCode = ErrCode("UNREGISTER_FAILURE");
@@ -96,13 +138,13 @@ where
 {
     pub fn new(
         unregister: Box<dyn UnregisterAccount>,
-        supported_permissions: &ContractPermissions,
+        contract_permissions: &ContractPermissions,
     ) -> Self {
         AccountMetrics::register_account_storage_event_handler();
         Self {
             unregister,
             account_storage_usage: Default::default(),
-            supported_permissions: supported_permissions.clone(),
+            contract_permissions: contract_permissions.clone(),
             _phantom_data: Default::default(),
         }
     }
@@ -449,7 +491,7 @@ where
             account.save();
             LOG_EVENT_PERMISSIONS_GRANT.log(format!(
                 "{:?}",
-                self.supported_permissions.permission_labels(permissions)
+                self.contract_permissions.permission_labels(permissions)
             ));
         }
     }
@@ -465,7 +507,7 @@ where
             account.save();
             LOG_EVENT_PERMISSIONS_REVOKE.log(format!(
                 "{:?}",
-                self.supported_permissions.permission_labels(permissions)
+                self.contract_permissions.permission_labels(permissions)
             ));
         }
     }
@@ -497,7 +539,7 @@ where
     }
 
     fn ops_permissions_supported_bits(&self) -> Option<HashMap<u8, String>> {
-        self.supported_permissions.0.as_ref().map(|permissions| {
+        self.contract_permissions.0.as_ref().map(|permissions| {
             let mut perms = HashMap::with_capacity(permissions.len());
             for (k, value) in permissions {
                 perms.insert(*k, value.to_string());
@@ -514,7 +556,7 @@ where
 {
     fn assert_contract_supports_permissions(&self, permissions: Permissions) {
         ERR_INVALID.assert(
-            || self.supported_permissions.is_supported(permissions),
+            || self.contract_permissions.is_supported(permissions),
             || "contract does not support specified permissions",
         );
     }
@@ -2724,7 +2766,100 @@ mod tests_account_repository {
 #[cfg(test)]
 mod test_permission_management {
     use super::*;
+    use near_sdk::VMContext;
+    use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
     type AccountManager = AccountManagementComponent<()>;
+
+    const PREDECESSOR_ACCOUNT: &str = "predecessor";
+
+    /// if admin is true, then the predecessor account is granted admin permission.
+    fn test<F>(admin: bool, permissions: ContractPermissions, f: F)
+    where
+        F: FnOnce(VMContext, AccountManager),
+    {
+        let mut ctx = new_context(PREDECESSOR_ACCOUNT);
+        ctx.predecessor_account_id = PREDECESSOR_ACCOUNT.to_string();
+        testing_env!(ctx.clone());
+
+        let storage_usage_bounds = StorageUsageBounds {
+            min: AccountManager::measure_storage_usage(()),
+            max: None,
+        };
+        println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
+        AccountManager::deploy(storage_usage_bounds);
+
+        let mut account_manager =
+            AccountManager::new(Box::new(UnregisterAccountNOOP), &permissions);
+
+        {
+            let mut ctx = ctx.clone();
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx);
+            account_manager.storage_deposit(None, None);
+        }
+
+        if admin {
+            let mut account = account_manager.registered_account_near_data(PREDECESSOR_ACCOUNT);
+            account.grant_admin();
+            account.save();
+        }
+
+        f(ctx, account_manager);
+    }
+
+    #[cfg(test)]
+    mod as_admin {
+        use super::*;
+
+        #[cfg(test)]
+        mod ops_permissions_is_admin {
+            use super::*;
+
+            #[test]
+            fn account_not_registered() {
+                test(true, Default::default(), |ctx, account_manager| {
+                    assert!(!account_manager.ops_permissions_is_admin(to_valid_account_id("bob")))
+                });
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod not_as_admin {
+        use super::*;
+    }
+
+    #[test]
+    fn contract_permissions() {
+        let contract_permissions = ContractPermissions::default();
+        assert!(!contract_permissions.is_supported((1 << 15).into()));
+        assert!(!contract_permissions.is_supported((1 << 0).into()));
+        assert!(contract_permissions
+            .permission_labels((1 << 15).into())
+            .is_empty());
+
+        let mut perms = HashMap::new();
+        perms.insert(10, "minter");
+        perms.insert(20, "burner");
+        let contract_permissions = ContractPermissions(Some(perms));
+
+        assert!(!contract_permissions.is_supported((1 << 15).into()));
+        assert!(contract_permissions.is_supported((1 << 10).into()));
+        assert!(contract_permissions.is_supported(((1 << 10) | (1 << 20)).into()));
+        assert!(!contract_permissions.is_supported(((1 << 10) | (1 << 15)).into()));
+
+        let labels = contract_permissions.permission_labels(((1 << 10) | (1 << 20)).into());
+        println!("{:?}", labels);
+        assert_eq!(labels.len(), 2);
+        assert!(labels.contains(&"minter".to_string()));
+        assert!(labels.contains(&"burner".to_string()));
+
+        let labels =
+            contract_permissions.permission_labels(((1 << 10) | (1 << 20) | (1 << 15)).into());
+        assert_eq!(labels.len(), 2);
+        assert!(labels.contains(&"minter".to_string()));
+        assert!(labels.contains(&"burner".to_string()));
+    }
 }
