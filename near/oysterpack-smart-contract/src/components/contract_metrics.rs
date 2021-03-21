@@ -59,7 +59,9 @@ mod tests {
     use oysterpack_smart_account_management::components::account_management::{
         AccountManagementComponent, UnregisterAccount, UnregisterAccountNOOP,
     };
-    use oysterpack_smart_account_management::{StorageManagement, StorageUsageBounds};
+    use oysterpack_smart_account_management::{
+        ContractPermissions, StorageManagement, StorageUsageBounds,
+    };
     use oysterpack_smart_near::component::*;
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::near_vm_logic::VMContext;
@@ -89,6 +91,7 @@ mod tests {
 
         let container = ServiceProvider::new()
             .add_transient_c::<Box<dyn UnregisterAccount>, Box<UnregisterAccountNOOP>>()
+            .add_instance(ContractPermissions::default())
             .add_transient::<AccountManager>();
 
         let service: AccountManager = container.resolve();

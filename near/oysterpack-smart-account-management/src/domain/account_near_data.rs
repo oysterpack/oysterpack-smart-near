@@ -201,7 +201,7 @@ impl AccountNearData {
 
     pub fn is_operator(&self) -> bool {
         self.permissions.map_or(false, |permissions| {
-            permissions.contains(PERMISSION_OPERATOR)
+            permissions.contains(PERMISSION_OPERATOR) || permissions.contains(PERMISSION_ADMIN)
         })
     }
 
@@ -227,7 +227,11 @@ impl AccountNearData {
     pub fn revoke(&mut self, access: Permissions) {
         if let Some(mut permissions) = self.permissions.take() {
             permissions.revoke(access);
-            self.permissions = Some(permissions);
+            if permissions.has_permissions() {
+                self.permissions = Some(permissions);
+            } else {
+                self.permissions = None;
+            }
         }
     }
 
@@ -237,8 +241,9 @@ impl AccountNearData {
 
     /// returns true if the account has all of the specified permissions
     pub fn contains_permissions(&self, permissions: Permissions) -> bool {
-        self.permissions
-            .map_or(false, |perms| perms.contains(permissions))
+        self.permissions.map_or(false, |perms| {
+            perms.contains(permissions) || perms.contains(PERMISSION_ADMIN)
+        })
     }
 }
 

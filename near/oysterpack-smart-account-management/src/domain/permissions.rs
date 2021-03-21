@@ -30,7 +30,7 @@ use std::ops::{Deref, DerefMut};
     Default,
 )]
 #[serde(crate = "near_sdk::serde")]
-pub struct Permissions(U64);
+pub struct Permissions(pub U64);
 
 impl Deref for Permissions {
     type Target = u64;
@@ -75,5 +75,47 @@ impl Permissions {
     pub fn contains<T: Into<Permissions>>(&self, permissions: T) -> bool {
         let permissions = permissions.into();
         (*self.0 & *permissions) == *permissions
+    }
+
+    /// return true if any permission bits are set
+    pub fn has_permissions(&self) -> bool {
+        *self.0 != 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test() {
+        let mut perms = Permissions::default();
+        assert!(!perms.has_permissions());
+
+        perms.grant(1 << 15);
+        assert!(perms.has_permissions());
+        assert!(perms.contains(1 << 15));
+        assert!(!perms.contains(1 << 14));
+        assert!(!perms.contains(1 << 16));
+
+        perms.grant(1 << 20);
+        assert!(perms.has_permissions());
+        assert!(perms.contains(1 << 15));
+        assert!(perms.contains(1 << 20));
+
+        perms.grant(1 << 50);
+        assert!(perms.has_permissions());
+        assert!(perms.contains(1 << 15));
+        assert!(perms.contains(1 << 20));
+        assert!(perms.contains(1 << 50));
+
+        perms.revoke(1 << 50);
+        assert!(perms.has_permissions());
+        assert!(perms.contains(1 << 15));
+        assert!(perms.contains(1 << 20));
+        assert!(!perms.contains(1 << 50));
+
+        perms.revoke_all();
+        assert!(!perms.has_permissions());
     }
 }

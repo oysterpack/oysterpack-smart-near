@@ -58,6 +58,13 @@ pub fn assert_near_attached<Msg: Display>(msg: Msg) {
     )
 }
 
+pub fn assert_account_not_predecessor(account_id: &str) {
+    ERR_INVALID.assert(
+        || env::predecessor_account_id().as_str() != account_id,
+        || "`account_id` cannot be the same as the predecessor account ID",
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

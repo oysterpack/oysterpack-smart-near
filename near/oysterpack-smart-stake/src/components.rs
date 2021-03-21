@@ -2,6 +2,7 @@ use crate::*;
 use oysterpack_smart_account_management::components::account_management::{
     AccountManagementComponent, UnregisterAccount,
 };
+use oysterpack_smart_account_management::ContractPermissions;
 use teloc::*;
 
 pub type AccountData = ();
@@ -12,6 +13,7 @@ impl Contract {
     pub fn account_manager() -> AccountManager {
         let container = ServiceProvider::new()
             .add_transient_c::<Box<dyn UnregisterAccount>, Box<UnregisterMock>>()
+            .add_instance(ContractPermissions::default())
             .add_transient::<AccountManager>();
 
         container.resolve()

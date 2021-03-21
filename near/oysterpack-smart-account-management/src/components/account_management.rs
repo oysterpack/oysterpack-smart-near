@@ -20,8 +20,10 @@ use std::{fmt::Debug, ops::Deref};
 use teloc::*;
 
 use crate::components::account_storage_usage::AccountStorageUsageComponent;
+use oysterpack_smart_near::asserts::{assert_account_not_predecessor, ERR_INVALID};
 use oysterpack_smart_near::component::Deploy;
 use oysterpack_smart_near::domain::{StorageUsage, ZERO_NEAR};
+use std::collections::HashMap;
 use std::marker::PhantomData;
 
 pub const ERR_INSUFFICIENT_STORAGE_BALANCE: ErrorConst = ErrorConst(
@@ -41,6 +43,7 @@ where
     unregister: Box<dyn UnregisterAccount>,
 
     account_storage_usage: AccountStorageUsageComponent,
+    supported_permissions: ContractPermissions,
 
     _phantom_data: PhantomData<T>,
 }
@@ -91,11 +94,15 @@ impl<T> AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    pub fn new(unregister: Box<dyn UnregisterAccount>) -> Self {
+    pub fn new(
+        unregister: Box<dyn UnregisterAccount>,
+        supported_permissions: &ContractPermissions,
+    ) -> Self {
         AccountMetrics::register_account_storage_event_handler();
         Self {
             unregister,
             account_storage_usage: Default::default(),
+            supported_permissions: supported_permissions.clone(),
             _phantom_data: Default::default(),
         }
     }
@@ -107,7 +114,8 @@ where
 {
     /// helper method used to measure the amount of storage needed to store the specified data.
     pub fn measure_storage_usage(account_data: T) -> StorageUsage {
-        let mut account_manager: Self = Self::new(Box::new(UnregisterAccountNOOP));
+        let mut account_manager: Self =
+            Self::new(Box::new(UnregisterAccountNOOP), &Default::default());
 
         // seeds the storage required to store metrics
         {
@@ -368,11 +376,154 @@ where
     }
 }
 
+impl<T> PermissionsManagement for AccountManagementComponent<T>
+where
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+{
+    fn ops_permissions_is_admin(&self, account_id: ValidAccountId) -> bool {
+        self.load_account_near_data(account_id.as_ref())
+            .map_or(false, |account| account.is_admin())
+    }
+
+    fn ops_permissions_grant_admin(&mut self, account_id: ValidAccountId) {
+        assert_account_not_predecessor(account_id.as_ref());
+        self.assert_predecessor_is_admin();
+
+        let mut account = self.registered_account_near_data(env::predecessor_account_id().as_str());
+        if !account.is_admin() {
+            account.grant_admin();
+            account.save();
+            LOG_EVENT_PERMISSIONS_GRANT.log("admin")
+        }
+    }
+
+    fn ops_permissions_revoke_admin(&mut self, account_id: ValidAccountId) {
+        assert_account_not_predecessor(account_id.as_ref());
+        self.assert_predecessor_is_admin();
+
+        let mut account = self.registered_account_near_data(env::predecessor_account_id().as_str());
+        if account.is_admin() {
+            account.revoke_admin();
+            account.save();
+            LOG_EVENT_PERMISSIONS_REVOKE.log("admin")
+        }
+    }
+
+    fn ops_permissions_is_operator(&self, account_id: ValidAccountId) -> bool {
+        self.load_account_near_data(account_id.as_ref())
+            .map_or(false, |account| account.is_operator())
+    }
+
+    fn ops_permissions_grant_operator(&mut self, account_id: ValidAccountId) {
+        assert_account_not_predecessor(account_id.as_ref());
+        self.assert_predecessor_is_admin();
+
+        let mut account = self.registered_account_near_data(env::predecessor_account_id().as_str());
+        if !account.is_operator() {
+            account.grant_admin();
+            account.save();
+            LOG_EVENT_PERMISSIONS_GRANT.log("operator")
+        }
+    }
+
+    fn ops_permissions_revoke_operator(&mut self, account_id: ValidAccountId) {
+        assert_account_not_predecessor(account_id.as_ref());
+        self.assert_predecessor_is_admin();
+
+        let mut account = self.registered_account_near_data(env::predecessor_account_id().as_str());
+        if account.is_operator() {
+            account.revoke_operator();
+            account.save();
+            LOG_EVENT_PERMISSIONS_REVOKE.log("operator")
+        }
+    }
+
+    fn ops_permissions_grant(&mut self, account_id: ValidAccountId, permissions: Permissions) {
+        self.assert_contract_supports_permissions(permissions);
+        assert_account_not_predecessor(account_id.as_ref());
+        self.assert_predecessor_is_admin();
+
+        let mut account = self.registered_account_near_data(env::predecessor_account_id().as_str());
+        if !account.contains_permissions(permissions) {
+            account.grant(permissions);
+            account.save();
+            LOG_EVENT_PERMISSIONS_GRANT.log(format!(
+                "{:?}",
+                self.supported_permissions.permission_labels(permissions)
+            ));
+        }
+    }
+
+    fn ops_permissions_revoke(&mut self, account_id: ValidAccountId, permissions: Permissions) {
+        self.assert_contract_supports_permissions(permissions);
+        assert_account_not_predecessor(account_id.as_ref());
+        self.assert_predecessor_is_admin();
+
+        let mut account = self.registered_account_near_data(env::predecessor_account_id().as_str());
+        if account.permissions().is_some() {
+            account.revoke(permissions);
+            account.save();
+            LOG_EVENT_PERMISSIONS_REVOKE.log(format!(
+                "{:?}",
+                self.supported_permissions.permission_labels(permissions)
+            ));
+        }
+    }
+
+    fn ops_permissions_revoke_all(&mut self, account_id: ValidAccountId) {
+        assert_account_not_predecessor(account_id.as_ref());
+        self.assert_predecessor_is_admin();
+        let mut account = self.registered_account_near_data(env::predecessor_account_id().as_str());
+        if account.permissions().is_some() {
+            account.revoke_all();
+            account.save();
+            LOG_EVENT_PERMISSIONS_REVOKE.log("all permissions were revoked");
+        }
+    }
+
+    fn ops_permissions_contains(
+        &self,
+        account_id: ValidAccountId,
+        permissions: Permissions,
+    ) -> bool {
+        self.load_account_near_data(account_id.as_ref())
+            .map_or(false, |account| account.contains_permissions(permissions))
+    }
+
+    fn ops_permissions(&self, account_id: ValidAccountId) -> Option<Permissions> {
+        self.load_account_near_data(account_id.as_ref())
+            .map(|account| account.permissions())
+            .flatten()
+    }
+
+    fn ops_permissions_supported_bits(&self) -> Option<HashMap<u8, String>> {
+        self.supported_permissions.0.as_ref().map(|permissions| {
+            let mut perms = HashMap::with_capacity(permissions.len());
+            for (k, value) in permissions {
+                perms.insert(*k, value.to_string());
+            }
+            perms
+        })
+    }
+}
+
 /// helper functions
 impl<T> AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
+    fn assert_contract_supports_permissions(&self, permissions: Permissions) {
+        ERR_INVALID.assert(
+            || self.supported_permissions.is_supported(permissions),
+            || "contract does not support specified permissions",
+        );
+    }
+
+    fn assert_predecessor_is_admin(&self) {
+        let admin = self.registered_account_near_data(env::predecessor_account_id().as_str());
+        ERR_NOT_AUTHORIZED.assert(|| admin.is_admin());
+    }
+
     fn register_account(
         &mut self,
         account_id: &str,
@@ -495,7 +646,7 @@ mod tests_service {
         deploy_account_service();
 
         let service: AccountManagementComponent<()> =
-            AccountManagementComponent::new(Box::new(UnregisterAccountNOOP));
+            AccountManagementComponent::new(Box::new(UnregisterAccountNOOP), &Default::default());
         let storage_balance_bounds = service.storage_balance_bounds();
         assert_eq!(
             storage_balance_bounds.min,
@@ -533,8 +684,9 @@ mod tests_teloc {
         deploy_account_service();
 
         let container = ServiceProvider::new()
+            .add_transient::<AccountManager>()
             .add_transient_c::<Box<dyn UnregisterAccount>, Box<UnregisterAccountNOOP>>()
-            .add_transient::<AccountManager>();
+            .add_instance(ContractPermissions::default());
 
         let service: AccountManager = container.resolve();
         let storage_balance_bounds = service.storage_balance_bounds();
@@ -585,7 +737,7 @@ mod tests_storage_management {
         AccountStorageUsageComponent::deploy(storage_usage_bounds);
 
         let mut service: AccountManagementComponent<()> =
-            AccountManagementComponent::new(Box::new(UnregisterAccountNOOP));
+            AccountManagementComponent::new(Box::new(UnregisterAccountNOOP), &Default::default());
         let storage_balance_bounds = service.storage_balance_bounds();
         println!("storage_balance_bounds = {:?}", storage_balance_bounds);
 
@@ -1195,8 +1347,10 @@ mod tests_storage_management {
                     max: Some(2000.into()),
                 });
 
-                let mut service =
-                    AccountManagementComponent::<()>::new(Box::new(UnregisterAccountNOOP));
+                let mut service = AccountManagementComponent::<()>::new(
+                    Box::new(UnregisterAccountNOOP),
+                    &Default::default(),
+                );
 
                 ctx.attached_deposit = YOCTO;
                 testing_env!(ctx.clone());
@@ -1942,8 +2096,10 @@ mod tests_storage_management {
 
             AccountStorageUsageComponent::deploy(storage_usage_bounds);
 
-            let mut service: AccountManagementComponent<()> =
-                AccountManagementComponent::new(Box::new(UnregisterAccountNOOP));
+            let mut service: AccountManagementComponent<()> = AccountManagementComponent::new(
+                Box::new(UnregisterAccountNOOP),
+                &Default::default(),
+            );
 
             if deposit.value() > 0 {
                 ctx.attached_deposit = deposit.value();
@@ -2132,8 +2288,10 @@ mod tests_storage_management {
 
             AccountStorageUsageComponent::deploy(storage_usage_bounds);
 
-            let mut service: AccountManagementComponent<()> =
-                AccountManagementComponent::new(Box::new(UnregisterAccountNOOP));
+            let mut service: AccountManagementComponent<()> = AccountManagementComponent::new(
+                Box::new(UnregisterAccountNOOP),
+                &Default::default(),
+            );
 
             if deposit.value() > 0 {
                 ctx.attached_deposit = deposit.value();
@@ -2295,7 +2453,8 @@ mod tests_storage_management {
                 max: None,
             });
 
-            let mut service = AccountManager::new(Box::new(UnregisterMock { fail: true }));
+            let mut service =
+                AccountManager::new(Box::new(UnregisterMock { fail: true }), &Default::default());
             ctx.attached_deposit = YOCTO;
             testing_env!(ctx.clone());
             service.storage_deposit(None, None);
@@ -2318,7 +2477,8 @@ mod tests_storage_management {
                 max: None,
             });
 
-            let mut service = AccountManager::new(Box::new(UnregisterMock { fail: true }));
+            let mut service =
+                AccountManager::new(Box::new(UnregisterMock { fail: true }), &Default::default());
             ctx.attached_deposit = YOCTO;
             testing_env!(ctx.clone());
             service.storage_deposit(None, None);
@@ -2355,7 +2515,7 @@ mod tests_account_storage_usage {
         println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
         AccountManager::deploy(storage_usage_bounds);
 
-        let mut service = AccountManager::new(Box::new(UnregisterAccountNOOP));
+        let mut service = AccountManager::new(Box::new(UnregisterAccountNOOP), &Default::default());
         assert_eq!(storage_usage_bounds, service.ops_storage_usage_bounds());
 
         assert!(service
@@ -2405,7 +2565,7 @@ mod tests_account_metrics {
         println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
         AccountManager::deploy(storage_usage_bounds);
 
-        let mut service = AccountManager::new(Box::new(UnregisterAccountNOOP));
+        let mut service = AccountManager::new(Box::new(UnregisterAccountNOOP), &Default::default());
         // Act
         let metrics = AccountManager::account_metrics();
         // Assert
@@ -2496,7 +2656,8 @@ mod tests_account_repository {
         println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
         AccountManager::deploy(storage_usage_bounds);
 
-        let mut account_manager = AccountManager::new(Box::new(UnregisterAccountNOOP));
+        let mut account_manager =
+            AccountManager::new(Box::new(UnregisterAccountNOOP), &Default::default());
         let service: &mut dyn AccountRepository<String> = &mut account_manager;
         assert!(service.load_account(account).is_none());
         assert!(service.load_account_near_data(account).is_none());
@@ -2551,10 +2712,19 @@ mod tests_account_repository {
         println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
         AccountManager::deploy(storage_usage_bounds);
 
-        let mut account_manager = AccountManager::new(Box::new(UnregisterAccountNOOP));
+        let mut account_manager =
+            AccountManager::new(Box::new(UnregisterAccountNOOP), &Default::default());
         let service: &mut dyn AccountRepository<String> = &mut account_manager;
 
         service.create_account(account, YOCTO.into(), None);
         service.create_account(account, YOCTO.into(), None);
     }
+}
+
+#[cfg(test)]
+mod test_permission_management {
+    use super::*;
+    use oysterpack_smart_near_test::*;
+
+    type AccountManager = AccountManagementComponent<()>;
 }
