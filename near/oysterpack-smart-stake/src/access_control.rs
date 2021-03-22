@@ -52,7 +52,7 @@ impl PermissionsManagement for Contract {
         Self::account_manager().ops_permissions(account_id)
     }
 
-    fn ops_permissions_supported_bits(&self) -> Option<HashMap<u8, String>> {
-        Self::account_manager().ops_permissions_supported_bits()
+    fn ops_permissions_contract_permissions(&self) -> Option<HashMap<u8, String>> {
+        Self::account_manager().ops_permissions_contract_permissions()
     }
 }

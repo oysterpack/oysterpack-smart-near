@@ -79,7 +79,7 @@ pub trait PermissionsManagement {
 
     /// lists the permission bits that are supported by the contract with a human friendly name
     /// - [`crate::Permissions::ADMIN`] and [`crate::Permissions::OPERATOR`] are excluded
-    fn ops_permissions_supported_bits(&self) -> Option<HashMap<u8, String>>;
+    fn ops_permissions_contract_permissions(&self) -> Option<HashMap<u8, String>>;
 }
 
 pub const ERR_NOT_AUTHORIZED: ErrorConst = ErrorConst(

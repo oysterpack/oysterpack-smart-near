@@ -636,7 +636,7 @@ where
             .flatten()
     }
 
-    fn ops_permissions_supported_bits(&self) -> Option<HashMap<u8, String>> {
+    fn ops_permissions_contract_permissions(&self) -> Option<HashMap<u8, String>> {
         self.contract_permissions.0.as_ref().map(|permissions| {
             let mut perms = HashMap::with_capacity(permissions.len());
             for (k, value) in permissions {
@@ -3409,14 +3409,18 @@ mod test_permission_management {
         #[test]
         fn no_contract_permissions() {
             test(false, Default::default(), |_, account_manager| {
-                assert!(account_manager.ops_permissions_supported_bits().is_none());
+                assert!(account_manager
+                    .ops_permissions_contract_permissions()
+                    .is_none());
             });
         }
 
         #[test]
         fn with_contract_permissions() {
             test(false, permissions(), |_, account_manager| {
-                let permissions = account_manager.ops_permissions_supported_bits().unwrap();
+                let permissions = account_manager
+                    .ops_permissions_contract_permissions()
+                    .unwrap();
                 assert_eq!(permissions.len(), 2);
                 assert_eq!(permissions.get(&0).unwrap(), "perm_0");
                 assert_eq!(permissions.get(&1).unwrap(), "perm_1");
