@@ -30,6 +30,8 @@ pub type Permission = u64;
     Debug,
     PartialEq,
     Eq,
+    PartialOrd,
+    Ord,
     Hash,
     Default,
 )]

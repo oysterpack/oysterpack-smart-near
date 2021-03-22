@@ -76,8 +76,9 @@ impl ContractPermissions {
         })
     }
 
+    /// permissions will be returned as sorted
     pub fn permission_labels(&self, permissions: Permissions) -> Vec<String> {
-        self.0.as_ref().map_or(vec![], |perms| {
+        let mut labels = self.0.as_ref().map_or(vec![], |perms| {
             perms
                 .keys()
                 .filter(|perm| permissions.contains(1_u64 << *perm))
@@ -85,13 +86,15 @@ impl ContractPermissions {
                     labels.push(perms.get(perm).as_ref().unwrap().to_string());
                     labels
                 })
-        })
+        });
+        labels.sort();
+        labels
     }
 
     /// unfolds the individual permissions from the specified `permissions` set. For example, if
     /// `permissions` has 5 permission bits set, then the 5 permissions will be extracted and returned.
     pub fn unfold_permissions(&self, permissions: Permissions) -> Vec<Permissions> {
-        self.0.as_ref().map_or(vec![], |perms| {
+        let mut perms = self.0.as_ref().map_or(vec![], |perms| {
             perms
                 .keys()
                 .filter(|perm| permissions.contains(1_u64 << *perm))
@@ -99,7 +102,9 @@ impl ContractPermissions {
                     perms.push((1 << *perm).into());
                     perms
                 })
-        })
+        });
+        perms.sort();
+        perms
     }
 }
 
@@ -3202,7 +3207,8 @@ mod test_permission_management {
 
                         // Act - grant
                         testing_env!(ctx.clone());
-                        account_manager.ops_permissions_grant_operator(to_valid_account_id(bob));
+                        account_manager
+                            .ops_permissions_grant(to_valid_account_id(bob), PERM_0.into());
                         let logs = test_utils::get_logs();
                         println!("{:#?}", logs);
                         assert_eq!(logs.len(), 2);
@@ -3210,17 +3216,29 @@ mod test_permission_management {
                             &logs[0],
                             "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(8)"
                         );
-                        assert_eq!(&logs[1], "[INFO] [PERMISSIONS_GRANT] operator");
+                        assert_eq!(&logs[1], "[INFO] [PERMISSIONS_GRANT] [\"perm_0\"]");
 
                         // Act - grant admin again to user should have no effect
                         testing_env!(ctx.clone());
-                        account_manager.ops_permissions_grant_operator(to_valid_account_id(bob));
+                        account_manager
+                            .ops_permissions_grant(to_valid_account_id(bob), PERM_0.into());
                         let logs = test_utils::get_logs();
                         assert!(logs.is_empty());
 
+                        testing_env!(ctx.clone());
+                        account_manager
+                            .ops_permissions_grant(to_valid_account_id(bob), PERM_1.into());
+                        let logs = test_utils::get_logs();
+                        println!("{:#?}", logs);
+                        assert_eq!(logs.len(), 1);
+                        assert_eq!(&logs[0], "[INFO] [PERMISSIONS_GRANT] [\"perm_1\"]");
+
                         // Act - revoke
                         testing_env!(ctx.clone());
-                        account_manager.ops_permissions_revoke_operator(to_valid_account_id(bob));
+                        account_manager.ops_permissions_revoke(
+                            to_valid_account_id(bob),
+                            (PERM_0 | PERM_1).into(),
+                        );
                         let logs = test_utils::get_logs();
                         println!("{:#?}", logs);
                         assert_eq!(logs.len(), 2);
@@ -3228,11 +3246,15 @@ mod test_permission_management {
                             &logs[0],
                             "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-8)"
                         );
-                        assert_eq!(&logs[1], "[INFO] [PERMISSIONS_REVOKE] operator");
+                        assert_eq!(
+                            &logs[1],
+                            "[INFO] [PERMISSIONS_REVOKE] [\"perm_0\", \"perm_1\"]"
+                        );
 
                         // Act - revoke again
                         testing_env!(ctx.clone());
-                        account_manager.ops_permissions_revoke_operator(to_valid_account_id(bob));
+                        account_manager
+                            .ops_permissions_revoke(to_valid_account_id(bob), PERM_0.into());
                         let logs = test_utils::get_logs();
                         assert!(logs.is_empty());
                     });
