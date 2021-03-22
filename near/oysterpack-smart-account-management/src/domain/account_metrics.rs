@@ -159,13 +159,13 @@ mod test {
 
         AccountMetrics::register_account_storage_event_handler();
 
-        let account = AccountNearDataObject::new(account_id, ZERO_NEAR);
-        account.save();
-
         let stats = AccountMetrics::load();
         assert_eq!(stats.total_registered_accounts, 0.into());
         assert_eq!(stats.total_near_balance, 0.into());
         assert_eq!(stats.total_storage_usage, 0.into());
+
+        let account = AccountNearDataObject::new(account_id, ZERO_NEAR);
+        account.save();
 
         // Act - account registered
         let storage_balance = StorageBalance {
@@ -174,11 +174,13 @@ mod test {
         };
         eventbus::post(&AccountStorageEvent::Registered(storage_balance));
 
+        let account = AccountNearDataObject::load(account_id).unwrap();
+
         // Assert
         let stats = AccountMetrics::load();
         assert_eq!(stats.total_registered_accounts, 1.into());
         assert_eq!(stats.total_near_balance, YOCTO.into());
-        assert_eq!(stats.total_storage_usage, 0.into());
+        assert_eq!(stats.total_storage_usage, account.storage_usage());
 
         // Act - deposit
         eventbus::post(&AccountStorageEvent::Deposit(YOCTO.into()));
@@ -187,7 +189,7 @@ mod test {
         let stats = AccountMetrics::load();
         assert_eq!(stats.total_registered_accounts, 1.into());
         assert_eq!(stats.total_near_balance, (2 * YOCTO).into());
-        assert_eq!(stats.total_storage_usage, 0.into());
+        assert_eq!(stats.total_storage_usage, account.storage_usage());
 
         // Act - withdraw
         eventbus::post(&AccountStorageEvent::Withdrawal(YOCTO.into()));
@@ -196,7 +198,7 @@ mod test {
         let stats = AccountMetrics::load();
         assert_eq!(stats.total_registered_accounts, 1.into());
         assert_eq!(stats.total_near_balance, YOCTO.into());
-        assert_eq!(stats.total_storage_usage, 0.into());
+        assert_eq!(stats.total_storage_usage, account.storage_usage());
         let initial_account_storage_usage = account.storage_usage();
 
         // Act - storage usage increase
@@ -209,7 +211,10 @@ mod test {
         let stats = AccountMetrics::load();
         assert_eq!(stats.total_registered_accounts, 1.into());
         assert_eq!(stats.total_near_balance, YOCTO.into());
-        assert_eq!(stats.total_storage_usage, 1000.into());
+        assert_eq!(
+            stats.total_storage_usage,
+            account.storage_usage() + 1000.into()
+        );
 
         let account = AccountNearDataObject::load(account_id).unwrap();
         assert_eq!(
@@ -222,12 +227,13 @@ mod test {
             account.key().account_id_hash(),
             StorageUsageChange(-1000),
         ));
+        let account = AccountNearDataObject::load(account_id).unwrap();
 
         // Assert
         let stats = AccountMetrics::load();
         assert_eq!(stats.total_registered_accounts, 1.into());
         assert_eq!(stats.total_near_balance, YOCTO.into());
-        assert_eq!(stats.total_storage_usage, 0.into());
+        assert_eq!(stats.total_storage_usage, account.storage_usage());
 
         let account = AccountNearDataObject::load(account_id).unwrap();
         assert_eq!(account.storage_usage(), initial_account_storage_usage);
@@ -238,11 +244,9 @@ mod test {
         // Assert
         let stats = AccountMetrics::load();
         assert_eq!(stats.total_registered_accounts, 0.into());
-        assert_eq!(stats.total_near_balance, 0.into());
-        assert_eq!(stats.total_storage_usage, 0.into());
 
         let logs = test_utils::get_logs();
-        assert_eq!(logs.len(), 6);
         println!("{:#?}", logs);
+        assert_eq!(logs.len(), 7);
     }
 }

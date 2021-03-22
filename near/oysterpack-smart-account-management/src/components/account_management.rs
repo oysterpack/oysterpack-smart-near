@@ -184,7 +184,10 @@ where
         let account_id = "1953718041838591893489340663938715635";
         account_manager.delete_account(account_id);
         let initial_storage_usage = env::storage_usage();
-        account_manager.create_account(account_id, 0.into(), Some(account_data));
+        let (mut account, _data) =
+            account_manager.create_account(account_id, 0.into(), Some(account_data));
+        account.grant_operator();
+        account.save();
         let storage_usage = env::storage_usage() - initial_storage_usage;
 
         // clean up storage
@@ -230,16 +233,7 @@ where
         ERR_ACCOUNT_ALREADY_REGISTERED.assert(|| !AccountNearDataObject::exists(account_id));
 
         let near_data = AccountNearDataObject::new(account_id, near_balance);
-
-        // measure the storage usage
-        let initial_storage_usage = env::storage_usage();
         near_data.save();
-        let account_storage_usage = env::storage_usage() - initial_storage_usage;
-        // update the account storage usage
-        eventbus::post(&AccountStorageEvent::StorageUsageChanged(
-            near_data.key().account_id_hash(),
-            account_storage_usage.into(),
-        ));
 
         match data {
             Some(data) => {
@@ -2614,16 +2608,22 @@ mod tests_account_metrics {
         let mut ctx = new_context(account);
         testing_env!(ctx.clone());
 
+        let metrics = AccountManager::account_metrics();
+        println!("{:?}", metrics);
         let storage_usage_bounds = StorageUsageBounds {
             min: AccountManager::measure_storage_usage(()),
             max: None,
         };
+        let metrics = AccountManager::account_metrics();
+        println!("{:?}", metrics);
         println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
+
         AccountManager::deploy(storage_usage_bounds);
 
         let mut service = AccountManager::new(Box::new(UnregisterAccountNOOP), &Default::default());
         // Act
         let metrics = AccountManager::account_metrics();
+        println!("{:?}", metrics);
         // Assert
         assert_eq!(metrics.total_registered_accounts.value(), 0);
         assert_eq!(metrics.total_near_balance.value(), 0);
@@ -2637,6 +2637,9 @@ mod tests_account_metrics {
         assert!(account_data.is_none());
         let mut account_data: AccountDataObject<()> = AccountDataObject::new(account, ());
         account_data.save();
+        let mut account_near_data = service.registered_account_near_data(account);
+        account_near_data.grant_operator();
+        account_near_data.save();
 
         // Act
         let metrics = AccountManager::account_metrics();
@@ -2662,6 +2665,9 @@ mod tests_account_metrics {
         let bob_storage_balance = service.storage_deposit(Some(to_valid_account_id("bob")), None);
         let mut account_data: AccountDataObject<()> = AccountDataObject::new("bob", ());
         account_data.save();
+        let mut account_near_data = service.registered_account_near_data("bob");
+        account_near_data.grant_operator();
+        account_near_data.save();
         // Act
         let metrics = AccountManager::account_metrics();
         // Assert

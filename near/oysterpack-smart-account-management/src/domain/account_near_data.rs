@@ -57,6 +57,26 @@ impl AccountNearDataObject {
         DAO::exists(&account_id.into())
     }
 
+    pub fn save(&self) {
+        let storage_usage_before_save = env::storage_usage();
+        self.0.save();
+        let storage_usage_after_save = env::storage_usage();
+        if storage_usage_after_save == storage_usage_before_save {
+            return;
+        }
+        let event = if storage_usage_after_save > storage_usage_before_save {
+            let storage_usage_change = storage_usage_after_save - storage_usage_before_save;
+            AccountStorageEvent::StorageUsageChanged(self.key().0, storage_usage_change.into())
+        } else {
+            let storage_usage_change = storage_usage_before_save - storage_usage_after_save;
+            AccountStorageEvent::StorageUsageChanged(
+                self.key().0,
+                (storage_usage_change as i64 * -1).into(),
+            )
+        };
+        eventbus::post(&event);
+    }
+
     /// tracks storage usage - emits [`AccountStorageEvent::StorageUsageChanged`]
     pub fn delete(self) -> bool {
         let key = self.key().0;
@@ -86,11 +106,6 @@ impl DerefMut for AccountNearDataObject {
         &mut self.0
     }
 }
-
-/// admin permission bitflag
-pub const PERMISSION_ADMIN: u64 = 1 << 63;
-/// operator permission bitflag
-pub const PERMISSION_OPERATOR: u64 = 1 << 62;
 
 /// Provides the basic fields that all accounts need:
 /// - [`AccountNearData::near_balance`] - all accounts must pay for their own storage and thus need a NEAR balance
@@ -182,38 +197,39 @@ impl AccountNearData {
     }
 
     pub fn is_admin(&self) -> bool {
-        self.permissions
-            .map_or(false, |permissions| permissions.contains(PERMISSION_ADMIN))
+        self.permissions.map_or(false, |permissions| {
+            permissions.contains(Permissions::ADMIN)
+        })
     }
 
     pub fn grant_admin(&mut self) {
         let mut permissions = self.permissions.take().unwrap_or_else(Default::default);
-        permissions.grant(PERMISSION_ADMIN);
+        permissions.grant(Permissions::ADMIN);
         self.permissions = Some(permissions);
     }
 
     pub fn revoke_admin(&mut self) {
         if let Some(mut permissions) = self.permissions.take() {
-            permissions.revoke(PERMISSION_ADMIN);
+            permissions.revoke(Permissions::ADMIN);
             self.permissions = Some(permissions);
         }
     }
 
     pub fn is_operator(&self) -> bool {
         self.permissions.map_or(false, |permissions| {
-            permissions.contains(PERMISSION_OPERATOR) || permissions.contains(PERMISSION_ADMIN)
+            permissions.contains(Permissions::OPERATOR) || permissions.contains(Permissions::ADMIN)
         })
     }
 
     pub fn grant_operator(&mut self) {
         let mut permissions = self.permissions.take().unwrap_or_else(Default::default);
-        permissions.grant(PERMISSION_OPERATOR);
+        permissions.grant(Permissions::OPERATOR);
         self.permissions = Some(permissions);
     }
 
     pub fn revoke_operator(&mut self) {
         if let Some(mut permissions) = self.permissions.take() {
-            permissions.revoke(PERMISSION_OPERATOR);
+            permissions.revoke(Permissions::OPERATOR);
             self.permissions = Some(permissions);
         }
     }
@@ -242,7 +258,7 @@ impl AccountNearData {
     /// returns true if the account has all of the specified permissions
     pub fn contains_permissions(&self, permissions: Permissions) -> bool {
         self.permissions.map_or(false, |perms| {
-            perms.contains(permissions) || perms.contains(PERMISSION_ADMIN)
+            perms.contains(permissions) || perms.contains(Permissions::ADMIN)
         })
     }
 }

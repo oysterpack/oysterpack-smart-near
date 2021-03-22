@@ -61,6 +61,11 @@ impl Display for Permissions {
 }
 
 impl Permissions {
+    /// admin permission bitflag
+    pub const ADMIN: u64 = 1 << 63;
+    /// operator permission bitflag
+    pub const OPERATOR: u64 = 1 << 62;
+
     pub fn grant<T: Into<Permissions>>(&mut self, permissions: T) {
         *self.0 |= *permissions.into();
     }

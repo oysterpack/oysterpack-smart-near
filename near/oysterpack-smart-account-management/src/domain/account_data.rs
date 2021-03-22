@@ -51,21 +51,23 @@ where
         let storage_usage_before_save = env::storage_usage();
         self.0.save();
         let storage_usage_after_save = env::storage_usage();
-        if storage_usage_after_save > storage_usage_before_save {
+        if storage_usage_after_save == storage_usage_before_save {
+            return;
+        }
+        let event = if storage_usage_after_save > storage_usage_before_save {
             let storage_usage_change = storage_usage_after_save - storage_usage_before_save;
-            eventbus::post(&AccountStorageEvent::StorageUsageChanged(
+            AccountStorageEvent::StorageUsageChanged(
                 self.key().clone(),
                 storage_usage_change.into(),
-            ));
+            )
         } else {
             let storage_usage_change = storage_usage_before_save - storage_usage_after_save;
-            if storage_usage_change > 0 {
-                eventbus::post(&AccountStorageEvent::StorageUsageChanged(
-                    self.key().clone(),
-                    (storage_usage_change as i64 * -1).into(),
-                ));
-            }
-        }
+            AccountStorageEvent::StorageUsageChanged(
+                self.key().clone(),
+                (storage_usage_change as i64 * -1).into(),
+            )
+        };
+        eventbus::post(&event);
     }
 
     /// tracks storage usage - emits [`AccountStorageEvent::StorageUsageChanged`] event
