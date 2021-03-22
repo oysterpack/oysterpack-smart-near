@@ -128,7 +128,7 @@ impl ContractPermissions {
             Some(perms) => {
                 let contract_perms: HashSet<String> =
                     perms.values().map(|perm| perm.to_string()).collect();
-                let invalid_perms: Vec<String> = permissions
+                let mut invalid_perms: Vec<String> = permissions
                     .iter()
                     .filter(|perm| {
                         // let perm = perm.to_string();
@@ -137,6 +137,8 @@ impl ContractPermissions {
                     .map(|perm| perm.to_string())
                     .collect();
                 if !invalid_perms.is_empty() {
+                    invalid_perms.sort();
+                    invalid_perms.dedup();
                     return Err(ERR_INVALID.error(format!(
                         "contract does not support specified permissions: {:?}",
                         invalid_perms
@@ -3399,6 +3401,28 @@ mod test_permission_management {
             });
         }
     }
+
+    #[cfg(test)]
+    mod contract_permission_bits {
+        use super::*;
+
+        #[test]
+        fn no_contract_permissions() {
+            test(false, Default::default(), |_, account_manager| {
+                assert!(account_manager.ops_permissions_supported_bits().is_none());
+            });
+        }
+
+        #[test]
+        fn with_contract_permissions() {
+            test(false, permissions(), |_, account_manager| {
+                let permissions = account_manager.ops_permissions_supported_bits().unwrap();
+                assert_eq!(permissions.len(), 2);
+                assert_eq!(permissions.get(&0).unwrap(), "perm_0");
+                assert_eq!(permissions.get(&1).unwrap(), "perm_1");
+            });
+        }
+    }
 }
 
 #[cfg(test)]
@@ -3470,6 +3494,10 @@ mod test_contract_permissions {
     fn fold_permissions() {
         test_utils::test_env::setup();
         let contract_permissions: ContractPermissions = vec![(1, "1"), (2, "2"), (3, "3")].into();
+        assert_eq!(
+            contract_permissions.fold_permissions(vec![]).unwrap(),
+            0.into()
+        );
         let perm_123 = contract_permissions
             .fold_permissions(vec![
                 "1".to_string(),
@@ -3482,5 +3510,25 @@ mod test_contract_permissions {
             contract_permissions.unfold_permissions(perm_123),
             vec![(1 << 1).into(), (1 << 2).into(), (1 << 3).into()]
         );
+    }
+
+    #[test]
+    fn fold_permissions_with_no_contract_perms() {
+        test_utils::test_env::setup();
+        let contract_permissions: ContractPermissions = vec![].into();
+        match contract_permissions.fold_permissions(vec![
+            "1".to_string(),
+            "3".to_string(),
+            "2".to_string(),
+        ]) {
+            Ok(_) => panic!("should have failed"),
+            Err(err) => {
+                assert_eq!(err.0, ERR_INVALID);
+                assert_eq!(
+                    err.1,
+                    "contract does not support specified permissions: [\"1\", \"2\", \"3\"]"
+                );
+            }
+        }
     }
 }
