@@ -52,12 +52,50 @@ pub trait PermissionsManagement {
     /// - if permissions are not supported by the contract
     fn ops_permissions_grant(&mut self, account_id: ValidAccountId, permissions: Permissions);
 
+    /// Is restricted to admins.
+    ///
+    /// [`crate::Permissions::ADMIN`] and [`crate::Permissions::OPERATOR`] can not be granted - explicit grant functions
+    /// must be used.
+    ///
+    /// ## Panics
+    /// - if predecessor account is not owner or admin
+    /// - if `account_id` is not registered
+    /// - if permissions are not supported by the contract
+    fn ops_permissions_grant_permissions(
+        &mut self,
+        account_id: ValidAccountId,
+        permissions: Vec<u8>,
+    ) {
+        let permissions = permissions
+            .iter()
+            .fold(0_u64, |permissions, perm_bit| permissions | 1 << *perm_bit);
+        self.ops_permissions_grant(account_id, permissions.into());
+    }
+
     /// Is restricted to admins
     ///
     /// ## Panics
     /// - if predecessor account is not owner or admin
     /// - if `account_id` is not registered
+    /// - if permissions are not supported by the contract
     fn ops_permissions_revoke(&mut self, account_id: ValidAccountId, permissions: Permissions);
+
+    /// Is restricted to admins
+    ///
+    /// ## Panics
+    /// - if predecessor account is not owner or admin
+    /// - if `account_id` is not registered
+    /// - if permissions are not supported by the contract
+    fn ops_permissions_revoke_permissions(
+        &mut self,
+        account_id: ValidAccountId,
+        permissions: Vec<u8>,
+    ) {
+        let permissions = permissions
+            .iter()
+            .fold(0_u64, |permissions, perm_bit| permissions | 1 << perm_bit);
+        self.ops_permissions_revoke(account_id, permissions.into());
+    }
 
     /// Is restricted to admins
     ///

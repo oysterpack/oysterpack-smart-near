@@ -3335,6 +3335,27 @@ mod test_permission_management {
                             &logs[1],
                             "[INFO] [PERMISSIONS_REVOKE] all permissions were revoked"
                         );
+
+                        testing_env!(ctx.clone());
+                        account_manager.ops_permissions_grant_permissions(
+                            to_valid_account_id(bob),
+                            vec![0, 1],
+                        );
+                        let logs = test_utils::get_logs();
+                        println!("{:#?}", logs);
+                        assert_eq!(logs.len(), 2);
+                        assert_eq!(
+                            &logs[1],
+                            "[INFO] [PERMISSIONS_GRANT] [\"perm_0\", \"perm_1\"]"
+                        );
+
+                        account_manager.ops_permissions_revoke_permissions(
+                            to_valid_account_id(bob),
+                            vec![0, 1],
+                        );
+                        assert!(account_manager
+                            .ops_permissions(to_valid_account_id(bob))
+                            .is_none());
                     });
                 }
             }
