@@ -87,8 +87,33 @@ impl ContractPermissions {
                 })
         })
     }
+
+    /// unfolds the individual permissions from the specified `permissions` set. For example, if
+    /// `permissions` has 5 permission bits set, then the 5 permissions will be extracted and returned.
+    pub fn unfold_permissions(&self, permissions: Permissions) -> Vec<Permissions> {
+        self.0.as_ref().map_or(vec![], |perms| {
+            perms
+                .keys()
+                .filter(|perm| permissions.contains(1_u64 << *perm))
+                .fold(vec![], |mut perms, perm| {
+                    perms.push((1 << *perm).into());
+                    perms
+                })
+        })
+    }
 }
 
+/// [`ContractPermissions`] can be constructed by specifying (permission_bit, permission_label) mappings:
+///
+/// ```rust
+/// use oysterpack_smart_account_management::components::account_management::ContractPermissions;
+/// let contract_permissions: ContractPermissions = vec![
+///     (0, "PERM_0"),
+///     (1, "PERM_1"),
+///     (2, "PERM_2"),
+/// ].into();
+/// ```
+/// - any permission bits >= 62 will be filtered out (62 -> [`Permissions::OPERATOR`], 63 -> [`Permissions::ADMIN`])
 impl From<Vec<(u8, &'static str)>> for ContractPermissions {
     fn from(values: Vec<(u8, &'static str)>) -> Self {
         let mut permissions = values
@@ -2786,13 +2811,23 @@ mod tests_account_repository {
 #[cfg(test)]
 mod test_permission_management {
     use super::*;
-    use near_sdk::VMContext;
+    use near_sdk::{test_utils, VMContext};
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
+    use std::convert::TryInto;
 
     type AccountManager = AccountManagementComponent<()>;
 
     const PREDECESSOR_ACCOUNT: &str = "predecessor";
+
+    const PERM_0: u64 = 1 << 0;
+    const PERM_1: u64 = 1 << 1;
+    const PERMISSIONS: [(u8, &'static str); 2] = [(0, "perm_0"), (1, "perm_1")];
+
+    fn permissions() -> ContractPermissions {
+        let perms: Vec<(u8, &'static str)> = PERMISSIONS.try_into().unwrap();
+        perms.into()
+    }
 
     /// if admin is true, then the predecessor account is granted admin permission.
     fn test<F>(admin: bool, permissions: ContractPermissions, f: F)
@@ -2837,11 +2872,8 @@ mod test_permission_management {
             use super::*;
 
             #[test]
-            fn grants_revokes() {
-                const PERM_0: u64 = 1 << 0;
-                const PERM_1: u64 = 1 << 1;
-                let permissions = vec![(0, "perm_0"), (1, "perm_1")];
-                test(true, permissions.into(), |mut ctx, mut account_manager| {
+            fn basic_grants_revokes() {
+                test(true, permissions(), |mut ctx, mut account_manager| {
                     // Arrange
                     let bob = "bob";
                     ctx.predecessor_account_id = bob.to_string();
@@ -2926,6 +2958,9 @@ mod test_permission_management {
                     assert!(account_manager
                         .ops_permissions(to_valid_account_id(bob))
                         .is_none());
+
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
                 });
             }
 
@@ -2948,7 +2983,63 @@ mod test_permission_management {
 
     #[cfg(test)]
     mod not_as_admin {
-        // use super::*;
+        use super::*;
+
+        #[test]
+        #[should_panic(expected = "[ERR] [NOT_AUTHORIZED]")]
+        fn grant_admin() {
+            test(false, Default::default(), |_ctx, mut account_manager| {
+                account_manager.ops_permissions_grant_admin(to_valid_account_id("bob"));
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [NOT_AUTHORIZED]")]
+        fn grant_operator() {
+            test(false, Default::default(), |_ctx, mut account_manager| {
+                account_manager.ops_permissions_grant_operator(to_valid_account_id("bob"));
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [NOT_AUTHORIZED]")]
+        fn grant() {
+            test(false, permissions(), |_ctx, mut account_manager| {
+                account_manager.ops_permissions_grant(to_valid_account_id("bob"), (1 << 1).into());
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [NOT_AUTHORIZED]")]
+        fn revoke_admin() {
+            test(false, Default::default(), |_ctx, mut account_manager| {
+                account_manager.ops_permissions_revoke_admin(to_valid_account_id("bob"));
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [NOT_AUTHORIZED]")]
+        fn revoke_operator() {
+            test(false, Default::default(), |_ctx, mut account_manager| {
+                account_manager.ops_permissions_revoke_operator(to_valid_account_id("bob"));
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [NOT_AUTHORIZED]")]
+        fn revoke() {
+            test(false, permissions(), |_ctx, mut account_manager| {
+                account_manager.ops_permissions_revoke(to_valid_account_id("bob"), (1 << 1).into());
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [NOT_AUTHORIZED]")]
+        fn revoke_all() {
+            test(false, permissions(), |_ctx, mut account_manager| {
+                account_manager.ops_permissions_revoke_all(to_valid_account_id("bob"));
+            });
+        }
     }
 
     #[test]
@@ -2960,6 +3051,8 @@ mod test_permission_management {
             .permission_labels((1 << 15).into())
             .is_empty());
 
+        const MINTER: Permission = 1 << 10;
+        const BURNER: Permission = 1 << 20;
         let mut perms = HashMap::new();
         perms.insert(10, "minter");
         perms.insert(20, "burner");
@@ -2981,5 +3074,10 @@ mod test_permission_management {
         assert_eq!(labels.len(), 2);
         assert!(labels.contains(&"minter".to_string()));
         assert!(labels.contains(&"burner".to_string()));
+
+        let perms = contract_permissions.unfold_permissions((MINTER | BURNER).into());
+        assert_eq!(perms.len(), 2);
+        assert!(perms.contains(&MINTER.into()));
+        assert!(perms.contains(&BURNER.into()));
     }
 }

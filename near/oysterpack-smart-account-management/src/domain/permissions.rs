@@ -6,6 +6,8 @@ use oysterpack_smart_near::data::numbers::U64;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::ops::{Deref, DerefMut};
 
+pub type Permission = u64;
+
 /// Permissions are modeled as bitflags.
 ///
 /// By default the account supports 64 bits, i.e., permissions, which should be enough to cover most
@@ -61,10 +63,10 @@ impl Display for Permissions {
 }
 
 impl Permissions {
-    /// admin permission bitflag
-    pub const ADMIN: u64 = 1 << 63;
-    /// operator permission bitflag
-    pub const OPERATOR: u64 = 1 << 62;
+    /// admin permission
+    pub const ADMIN: Permission = 1 << 63;
+    /// operator permission
+    pub const OPERATOR: Permission = 1 << 62;
 
     pub fn grant<T: Into<Permissions>>(&mut self, permissions: T) {
         *self.0 |= *permissions.into();
