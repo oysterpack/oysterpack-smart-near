@@ -1,3 +1,4 @@
+mod access_control;
 mod account_storage_usage;
 mod components;
 mod contract_metrics;
@@ -46,10 +47,4 @@ impl Contract {
 
         Self
     }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test() {}
 }

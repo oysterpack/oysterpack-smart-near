@@ -112,9 +112,9 @@ impl DerefMut for AccountNearDataObject {
 /// - [`AccountNearData::storage_usage`] - used to track account storage usage
 /// - [`AccountNearData::permissions`] - many contracts will require access control. bitflags provides
 ///   the ability to support up to 64 roles / permission bits. The first 62 permission bits are available
-///   for the contract. The last 2 permission bits are reserved for:
-///   - [`PERMISSION_ADMIN`]
-///   - [`PERMISSION_OPERATOR`]
+///   for the contract. The last 2 permission bits are reserved by:
+///   - [`crate::Permissions::ADMIN`]
+///   - [`crate::Permissions::OPERATOR`]
 #[derive(BorshSerialize, BorshDeserialize, Clone, Copy, Debug, PartialEq)]
 pub struct AccountNearData {
     near_balance: YoctoNear,

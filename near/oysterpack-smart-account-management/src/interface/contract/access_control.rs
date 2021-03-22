@@ -43,7 +43,7 @@ pub trait PermissionsManagement {
 
     /// Is restricted to admins.
     ///
-    /// [`crate::PERMISSION_ADMIN`] and [`crate::PERMISSION_OPERATOR`] can not be granted - explicit grant functions
+    /// [`crate::Permissions::ADMIN`] and [`crate::Permissions::OPERATOR`] can not be granted - explicit grant functions
     /// must be used.
     ///
     /// ## Panics
@@ -78,7 +78,7 @@ pub trait PermissionsManagement {
     fn ops_permissions(&self, account_id: ValidAccountId) -> Option<Permissions>;
 
     /// lists the permission bits that are supported by the contract with a human friendly name
-    /// - [`crate::PERMISSION_ADMIN`] and [`crate::PERMISSION_OPERATOR`] are excluded
+    /// - [`crate::Permissions::ADMIN`] and [`crate::Permissions::OPERATOR`] are excluded
     fn ops_permissions_supported_bits(&self) -> Option<HashMap<u8, String>>;
 }
 
