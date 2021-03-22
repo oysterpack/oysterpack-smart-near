@@ -479,6 +479,7 @@ where
         let mut account = self.registered_account_near_data(account_id.as_ref());
         if account.is_admin() {
             account.revoke_admin();
+            Self::clear_permissions_if_has_no_permissions(&mut account);
             account.save();
             LOG_EVENT_PERMISSIONS_REVOKE.log("admin")
         }
@@ -508,6 +509,7 @@ where
         let mut account = self.registered_account_near_data(account_id.as_ref());
         if account.is_operator() {
             account.revoke_operator();
+            Self::clear_permissions_if_has_no_permissions(&mut account);
             account.save();
             LOG_EVENT_PERMISSIONS_REVOKE.log("operator")
         }
@@ -537,6 +539,7 @@ where
         let mut account = self.registered_account_near_data(account_id.as_ref());
         if account.permissions().is_some() {
             account.revoke(permissions);
+            Self::clear_permissions_if_has_no_permissions(&mut account);
             account.save();
             LOG_EVENT_PERMISSIONS_REVOKE.log(format!(
                 "{:?}",
@@ -587,6 +590,14 @@ impl<T> AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
+    fn clear_permissions_if_has_no_permissions(account: &mut AccountNearData) {
+        if let Some(permissions) = account.permissions() {
+            if !permissions.has_permissions() {
+                account.revoke_all(); // sets permissions to NONE - frees up some storage
+            }
+        }
+    }
+
     fn assert_contract_supports_permissions(&self, permissions: Permissions) {
         ERR_INVALID.assert(
             || self.contract_permissions.is_supported(permissions),
@@ -3072,8 +3083,8 @@ mod test_permission_management {
                 use super::*;
 
                 #[test]
-                fn grant_admin() {
-                    test(true, Default::default(), |ctx, mut account_manager| {
+                fn grant_revoke_admin() {
+                    test(true, permissions(), |ctx, mut account_manager| {
                         // Arrange
                         let bob = "bob";
                         {
@@ -3085,7 +3096,7 @@ mod test_permission_management {
                                 .storage_deposit(Some(to_valid_account_id(bob)), Some(true));
                         }
 
-                        // Act
+                        // Act - grant
                         testing_env!(ctx.clone());
                         account_manager.ops_permissions_grant_admin(to_valid_account_id(bob));
                         let logs = test_utils::get_logs();
@@ -3096,6 +3107,134 @@ mod test_permission_management {
                             "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(8)"
                         );
                         assert_eq!(&logs[1], "[INFO] [PERMISSIONS_GRANT] admin");
+
+                        // Act - grant admin again to user should have no effect
+                        testing_env!(ctx.clone());
+                        account_manager.ops_permissions_grant_admin(to_valid_account_id(bob));
+                        let logs = test_utils::get_logs();
+                        assert!(logs.is_empty());
+
+                        // Act - revoke
+                        testing_env!(ctx.clone());
+                        account_manager.ops_permissions_revoke_admin(to_valid_account_id(bob));
+                        let logs = test_utils::get_logs();
+                        println!("{:#?}", logs);
+                        assert_eq!(logs.len(), 2);
+                        assert_eq!(
+                            &logs[0],
+                            "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-8)"
+                        );
+                        assert_eq!(&logs[1], "[INFO] [PERMISSIONS_REVOKE] admin");
+
+                        // Act - revoke again
+                        testing_env!(ctx.clone());
+                        account_manager.ops_permissions_revoke_admin(to_valid_account_id(bob));
+                        let logs = test_utils::get_logs();
+                        assert!(logs.is_empty());
+                    });
+                }
+
+                #[test]
+                fn grant_revoke_operator() {
+                    test(true, permissions(), |ctx, mut account_manager| {
+                        // Arrange
+                        let bob = "bob";
+                        {
+                            // register account
+                            let mut ctx = ctx.clone();
+                            ctx.attached_deposit = YOCTO;
+                            testing_env!(ctx.clone());
+                            account_manager
+                                .storage_deposit(Some(to_valid_account_id(bob)), Some(true));
+                        }
+
+                        // Act - grant
+                        testing_env!(ctx.clone());
+                        account_manager.ops_permissions_grant_operator(to_valid_account_id(bob));
+                        let logs = test_utils::get_logs();
+                        println!("{:#?}", logs);
+                        assert_eq!(logs.len(), 2);
+                        assert_eq!(
+                            &logs[0],
+                            "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(8)"
+                        );
+                        assert_eq!(&logs[1], "[INFO] [PERMISSIONS_GRANT] operator");
+
+                        // Act - grant admin again to user should have no effect
+                        testing_env!(ctx.clone());
+                        account_manager.ops_permissions_grant_operator(to_valid_account_id(bob));
+                        let logs = test_utils::get_logs();
+                        assert!(logs.is_empty());
+
+                        // Act - revoke
+                        testing_env!(ctx.clone());
+                        account_manager.ops_permissions_revoke_operator(to_valid_account_id(bob));
+                        let logs = test_utils::get_logs();
+                        println!("{:#?}", logs);
+                        assert_eq!(logs.len(), 2);
+                        assert_eq!(
+                            &logs[0],
+                            "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-8)"
+                        );
+                        assert_eq!(&logs[1], "[INFO] [PERMISSIONS_REVOKE] operator");
+
+                        // Act - revoke again
+                        testing_env!(ctx.clone());
+                        account_manager.ops_permissions_revoke_operator(to_valid_account_id(bob));
+                        let logs = test_utils::get_logs();
+                        assert!(logs.is_empty());
+                    });
+                }
+
+                #[test]
+                fn grant_revoke_contract_permissions() {
+                    test(true, permissions(), |ctx, mut account_manager| {
+                        // Arrange
+                        let bob = "bob";
+                        {
+                            // register account
+                            let mut ctx = ctx.clone();
+                            ctx.attached_deposit = YOCTO;
+                            testing_env!(ctx.clone());
+                            account_manager
+                                .storage_deposit(Some(to_valid_account_id(bob)), Some(true));
+                        }
+
+                        // Act - grant
+                        testing_env!(ctx.clone());
+                        account_manager.ops_permissions_grant_operator(to_valid_account_id(bob));
+                        let logs = test_utils::get_logs();
+                        println!("{:#?}", logs);
+                        assert_eq!(logs.len(), 2);
+                        assert_eq!(
+                            &logs[0],
+                            "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(8)"
+                        );
+                        assert_eq!(&logs[1], "[INFO] [PERMISSIONS_GRANT] operator");
+
+                        // Act - grant admin again to user should have no effect
+                        testing_env!(ctx.clone());
+                        account_manager.ops_permissions_grant_operator(to_valid_account_id(bob));
+                        let logs = test_utils::get_logs();
+                        assert!(logs.is_empty());
+
+                        // Act - revoke
+                        testing_env!(ctx.clone());
+                        account_manager.ops_permissions_revoke_operator(to_valid_account_id(bob));
+                        let logs = test_utils::get_logs();
+                        println!("{:#?}", logs);
+                        assert_eq!(logs.len(), 2);
+                        assert_eq!(
+                            &logs[0],
+                            "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-8)"
+                        );
+                        assert_eq!(&logs[1], "[INFO] [PERMISSIONS_REVOKE] operator");
+
+                        // Act - revoke again
+                        testing_env!(ctx.clone());
+                        account_manager.ops_permissions_revoke_operator(to_valid_account_id(bob));
+                        let logs = test_utils::get_logs();
+                        assert!(logs.is_empty());
                     });
                 }
             }
