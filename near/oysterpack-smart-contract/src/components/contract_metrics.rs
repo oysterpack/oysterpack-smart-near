@@ -57,11 +57,9 @@ mod tests {
     use super::*;
     use near_sdk::env;
     use oysterpack_smart_account_management::components::account_management::{
-        AccountManagementComponent, UnregisterAccount, UnregisterAccountNOOP,
+        AccountManagementComponent, ContractPermissions, UnregisterAccount, UnregisterAccountNOOP,
     };
-    use oysterpack_smart_account_management::{
-        ContractPermissions, StorageManagement, StorageUsageBounds,
-    };
+    use oysterpack_smart_account_management::{StorageManagement, StorageUsageBounds};
     use oysterpack_smart_near::component::*;
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::near_vm_logic::VMContext;

@@ -417,7 +417,9 @@ mod tests {
     use crate::FungibleToken;
     use crate::*;
     use near_sdk::test_utils;
-    use oysterpack_smart_account_management::components::account_management::UnregisterAccountNOOP;
+    use oysterpack_smart_account_management::components::account_management::{
+        ContractPermissions, UnregisterAccountNOOP,
+    };
     use oysterpack_smart_account_management::{StorageManagement, StorageUsageBounds};
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
@@ -452,7 +454,10 @@ mod tests {
             token_supply: YOCTO,
         });
 
-        let mut account_manager = AccountManager::new(Box::new(UnregisterAccountNOOP));
+        let mut account_manager = AccountManager::new(
+            Box::new(UnregisterAccountNOOP),
+            &ContractPermissions::default(),
+        );
 
         // register accounts
         {

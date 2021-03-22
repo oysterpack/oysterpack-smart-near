@@ -1,8 +1,7 @@
 use crate::*;
 use oysterpack_smart_account_management::components::account_management::{
-    AccountManagementComponent, UnregisterAccount,
+    AccountManagementComponent, ContractPermissions, UnregisterAccount,
 };
-use oysterpack_smart_account_management::ContractPermissions;
 use teloc::*;
 
 pub type AccountData = ();

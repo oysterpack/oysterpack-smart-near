@@ -59,8 +59,7 @@ impl ContractPermissions {
     pub fn new(mut permissions: HashMap<u8, &'static str>) -> Self {
         let invalid_permissions: Vec<u8> = permissions
             .iter()
-            .filter(|(k, _)| **k < 62_u8)
-            .map(|(k, _)| *k)
+            .filter_map(|(k, _)| if *k >= 62_u8 { Some(*k) } else { None })
             .collect();
         for invalid_perm in invalid_permissions {
             permissions.remove(&invalid_perm);
@@ -92,12 +91,15 @@ impl ContractPermissions {
 
 impl From<Vec<(u8, &'static str)>> for ContractPermissions {
     fn from(values: Vec<(u8, &'static str)>) -> Self {
-        let permissions = values
+        let mut permissions = values
             .iter()
             .fold(HashMap::new(), |mut permissions, entry| {
-                permissions.insert(entry.0, entry.1);
+                if entry.0 < 62 {
+                    permissions.insert(entry.0, entry.1);
+                }
                 permissions
             });
+        permissions.shrink_to_fit();
         ContractPermissions::new(permissions)
     }
 }
@@ -2799,7 +2801,6 @@ mod test_permission_management {
             min: AccountManager::measure_storage_usage(()),
             max: None,
         };
-        println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
         AccountManager::deploy(storage_usage_bounds);
 
         let mut account_manager =
@@ -2831,6 +2832,8 @@ mod test_permission_management {
 
             #[test]
             fn grants_revokes() {
+                const PERM_0: u64 = 1 << 0;
+                const PERM_1: u64 = 1 << 1;
                 let permissions = vec![(0, "perm_0"), (1, "perm_1")];
                 test(true, permissions.into(), |mut ctx, mut account_manager| {
                     // Arrange
@@ -2844,21 +2847,79 @@ mod test_permission_management {
                     ctx.attached_deposit = 0;
                     testing_env!(ctx.clone());
 
-                    // Act - Assert
+                    // grant admin
                     account_manager.ops_permissions_grant_admin(to_valid_account_id(bob));
                     assert!(account_manager.ops_permissions_is_admin(to_valid_account_id(bob)));
                     assert!(account_manager.ops_permissions_is_operator(to_valid_account_id(bob)));
+                    assert!(account_manager
+                        .ops_permissions_contains(to_valid_account_id(bob), PERM_0.into()));
 
+                    // revoke admin
                     account_manager.ops_permissions_revoke_admin(to_valid_account_id(bob));
                     assert!(!account_manager.ops_permissions_is_admin(to_valid_account_id(bob)));
                     assert!(!account_manager.ops_permissions_is_operator(to_valid_account_id(bob)));
 
+                    // grant operator
                     account_manager.ops_permissions_grant_operator(to_valid_account_id(bob));
                     assert!(account_manager.ops_permissions_is_operator(to_valid_account_id(bob)));
                     assert!(!account_manager.ops_permissions_is_admin(to_valid_account_id(bob)));
 
+                    // revoke operator
                     account_manager.ops_permissions_revoke_operator(to_valid_account_id(bob));
                     assert!(!account_manager.ops_permissions_is_operator(to_valid_account_id(bob)));
+
+                    // grant permissions
+                    account_manager
+                        .ops_permissions_grant(to_valid_account_id(bob), (PERM_0 | PERM_1).into());
+                    assert!(account_manager
+                        .ops_permissions_contains(to_valid_account_id(bob), PERM_0.into()));
+                    assert!(account_manager
+                        .ops_permissions_contains(to_valid_account_id(bob), PERM_1.into()));
+                    assert!(account_manager.ops_permissions_contains(
+                        to_valid_account_id(bob),
+                        (PERM_0 | PERM_1).into()
+                    ));
+
+                    // revoke permissions
+                    account_manager.ops_permissions_revoke(to_valid_account_id(bob), PERM_0.into());
+                    assert!(!account_manager
+                        .ops_permissions_contains(to_valid_account_id(bob), PERM_0.into()));
+                    assert!(account_manager
+                        .ops_permissions_contains(to_valid_account_id(bob), PERM_1.into()));
+                    assert!(!account_manager.ops_permissions_contains(
+                        to_valid_account_id(bob),
+                        (PERM_0 | PERM_1).into()
+                    ));
+
+                    account_manager.ops_permissions_revoke(to_valid_account_id(bob), PERM_1.into());
+                    assert!(!account_manager
+                        .ops_permissions_contains(to_valid_account_id(bob), PERM_0.into()));
+                    assert!(!account_manager
+                        .ops_permissions_contains(to_valid_account_id(bob), PERM_1.into()));
+                    assert!(!account_manager.ops_permissions_contains(
+                        to_valid_account_id(bob),
+                        (PERM_0 | PERM_1).into()
+                    ));
+
+                    // grant permissions
+                    account_manager
+                        .ops_permissions_grant(to_valid_account_id(bob), (PERM_0 | PERM_1).into());
+                    account_manager.ops_permissions_grant_operator(to_valid_account_id(bob));
+                    assert!(account_manager
+                        .ops_permissions_contains(to_valid_account_id(bob), PERM_0.into()));
+                    assert!(account_manager
+                        .ops_permissions_contains(to_valid_account_id(bob), PERM_1.into()));
+                    assert!(account_manager.ops_permissions_contains(
+                        to_valid_account_id(bob),
+                        (PERM_0 | PERM_1).into()
+                    ));
+                    assert!(account_manager.ops_permissions_is_operator(to_valid_account_id(bob)));
+
+                    // revoke all permissions
+                    account_manager.ops_permissions_revoke_all(to_valid_account_id(bob));
+                    assert!(account_manager
+                        .ops_permissions(to_valid_account_id(bob))
+                        .is_none());
                 });
             }
 

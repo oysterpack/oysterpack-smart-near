@@ -13,8 +13,10 @@ use std::ops::{Deref, DerefMut};
 ///
 /// ## Example on how to construct permission bits
 /// ```rust
-/// use oysterpack_smart_account_management::{Permissions, PERMISSION_ADMIN};
-/// let permission: Permissions = (1 << PERMISSION_ADMIN).into();
+/// use oysterpack_smart_account_management::Permissions;
+/// pub const PERMISSION_MINTER: u64 = 1 << 0;
+/// pub const PERMISSION_BURNER: u64 = 1 << 1;
+/// let permission: Permissions = (PERMISSION_MINTER | PERMISSION_BURNER).into();
 /// ```
 #[derive(
     BorshSerialize,
