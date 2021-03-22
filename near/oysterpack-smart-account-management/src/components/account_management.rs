@@ -2978,6 +2978,127 @@ mod test_permission_management {
                         .is_none());
                 });
             }
+
+            #[cfg(test)]
+            mod grant_to_self {
+                use super::*;
+
+                #[test]
+                #[should_panic(
+                    expected = "[ERR] [INVALID] `account_id` cannot be the same as the predecessor account ID"
+                )]
+                fn grant_admin_to_self() {
+                    test(true, Default::default(), |_ctx, mut account_manager| {
+                        account_manager
+                            .ops_permissions_grant_admin(to_valid_account_id(PREDECESSOR_ACCOUNT));
+                    });
+                }
+
+                #[test]
+                #[should_panic(
+                    expected = "[ERR] [INVALID] `account_id` cannot be the same as the predecessor account ID"
+                )]
+                fn grant_operator_to_self() {
+                    test(true, Default::default(), |_ctx, mut account_manager| {
+                        account_manager.ops_permissions_grant_operator(to_valid_account_id(
+                            PREDECESSOR_ACCOUNT,
+                        ));
+                    });
+                }
+
+                #[test]
+                #[should_panic(
+                    expected = "[ERR] [INVALID] `account_id` cannot be the same as the predecessor account ID"
+                )]
+                fn grant_to_self() {
+                    test(true, permissions(), |_ctx, mut account_manager| {
+                        account_manager.ops_permissions_grant(
+                            to_valid_account_id(PREDECESSOR_ACCOUNT),
+                            PERM_0.into(),
+                        );
+                    });
+                }
+
+                #[test]
+                #[should_panic(
+                    expected = "[ERR] [INVALID] `account_id` cannot be the same as the predecessor account ID"
+                )]
+                fn revoke_admin_to_self() {
+                    test(true, Default::default(), |_ctx, mut account_manager| {
+                        account_manager
+                            .ops_permissions_revoke_admin(to_valid_account_id(PREDECESSOR_ACCOUNT));
+                    });
+                }
+
+                #[test]
+                #[should_panic(
+                    expected = "[ERR] [INVALID] `account_id` cannot be the same as the predecessor account ID"
+                )]
+                fn revoke_operator_to_self() {
+                    test(true, Default::default(), |_ctx, mut account_manager| {
+                        account_manager.ops_permissions_revoke_operator(to_valid_account_id(
+                            PREDECESSOR_ACCOUNT,
+                        ));
+                    });
+                }
+
+                #[test]
+                #[should_panic(
+                    expected = "[ERR] [INVALID] `account_id` cannot be the same as the predecessor account ID"
+                )]
+                fn revoke_to_self() {
+                    test(true, permissions(), |_ctx, mut account_manager| {
+                        account_manager.ops_permissions_revoke(
+                            to_valid_account_id(PREDECESSOR_ACCOUNT),
+                            PERM_0.into(),
+                        );
+                    });
+                }
+
+                #[test]
+                #[should_panic(
+                    expected = "[ERR] [INVALID] `account_id` cannot be the same as the predecessor account ID"
+                )]
+                fn revoke_all_to_self() {
+                    test(true, permissions(), |_ctx, mut account_manager| {
+                        account_manager
+                            .ops_permissions_revoke_all(to_valid_account_id(PREDECESSOR_ACCOUNT));
+                    });
+                }
+            }
+
+            #[cfg(test)]
+            mod test_log_events {
+                use super::*;
+
+                #[test]
+                fn grant_admin() {
+                    test(true, Default::default(), |ctx, mut account_manager| {
+                        // Arrange
+                        let bob = "bob";
+                        {
+                            // register account
+                            let mut ctx = ctx.clone();
+                            ctx.attached_deposit = YOCTO;
+                            testing_env!(ctx.clone());
+                            account_manager
+                                .storage_deposit(Some(to_valid_account_id(bob)), Some(true));
+                        }
+
+                        // Act
+                        testing_env!(ctx.clone());
+                        account_manager.ops_permissions_grant_admin(to_valid_account_id(bob));
+                        let logs = test_utils::get_logs();
+                        println!("{:#?}", logs);
+                        assert_eq!(logs.len(), 2);
+                        assert_eq!(
+                            &logs[0],
+                            "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(8)"
+                        );
+                        assert_eq!(&logs[1], "[INFO] [PERMISSIONS_GRANT] admin");
+                    });
+                }
+            }
         }
     }
 
