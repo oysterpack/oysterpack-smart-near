@@ -32,8 +32,24 @@ impl PermissionsManagement for Contract {
         Self::account_manager().ops_permissions_grant(account_id, permissions);
     }
 
+    fn ops_permissions_grant_permissions(
+        &mut self,
+        account_id: ValidAccountId,
+        permissions: Vec<u8>,
+    ) {
+        Self::account_manager().ops_permissions_grant_permissions(account_id, permissions);
+    }
+
     fn ops_permissions_revoke(&mut self, account_id: ValidAccountId, permissions: Permissions) {
         Self::account_manager().ops_permissions_revoke(account_id, permissions);
+    }
+
+    fn ops_permissions_revoke_permissions(
+        &mut self,
+        account_id: ValidAccountId,
+        permissions: Vec<u8>,
+    ) {
+        Self::account_manager().ops_permissions_revoke_permissions(account_id, permissions);
     }
 
     fn ops_permissions_revoke_all(&mut self, account_id: ValidAccountId) {

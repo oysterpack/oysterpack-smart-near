@@ -593,6 +593,17 @@ where
         }
     }
 
+    fn ops_permissions_grant_permissions(
+        &mut self,
+        account_id: ValidAccountId,
+        permissions: Vec<u8>,
+    ) {
+        let permissions = permissions
+            .iter()
+            .fold(0_u64, |permissions, perm_bit| permissions | 1 << *perm_bit);
+        self.ops_permissions_grant(account_id, permissions.into());
+    }
+
     fn ops_permissions_revoke(&mut self, account_id: ValidAccountId, permissions: Permissions) {
         self.assert_contract_supports_permissions(permissions);
         assert_account_not_predecessor(account_id.as_ref());
@@ -608,6 +619,17 @@ where
                 self.contract_permissions.permission_names(permissions)
             ));
         }
+    }
+
+    fn ops_permissions_revoke_permissions(
+        &mut self,
+        account_id: ValidAccountId,
+        permissions: Vec<u8>,
+    ) {
+        let permissions = permissions
+            .iter()
+            .fold(0_u64, |permissions, perm_bit| permissions | 1 << perm_bit);
+        self.ops_permissions_revoke(account_id, permissions.into());
     }
 
     fn ops_permissions_revoke_all(&mut self, account_id: ValidAccountId) {

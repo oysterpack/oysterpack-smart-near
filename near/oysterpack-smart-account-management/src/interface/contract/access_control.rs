@@ -65,12 +65,7 @@ pub trait PermissionsManagement {
         &mut self,
         account_id: ValidAccountId,
         permissions: Vec<u8>,
-    ) {
-        let permissions = permissions
-            .iter()
-            .fold(0_u64, |permissions, perm_bit| permissions | 1 << *perm_bit);
-        self.ops_permissions_grant(account_id, permissions.into());
-    }
+    );
 
     /// Is restricted to admins
     ///
@@ -90,12 +85,7 @@ pub trait PermissionsManagement {
         &mut self,
         account_id: ValidAccountId,
         permissions: Vec<u8>,
-    ) {
-        let permissions = permissions
-            .iter()
-            .fold(0_u64, |permissions, perm_bit| permissions | 1 << perm_bit);
-        self.ops_permissions_revoke(account_id, permissions.into());
-    }
+    );
 
     /// Is restricted to admins
     ///
