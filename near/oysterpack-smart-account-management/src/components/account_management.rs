@@ -43,8 +43,6 @@ where
     /// must be provided by the contract
     unregister: Box<dyn UnregisterAccount>,
 
-    // TODO: remove because AccountStorageUsageComponent is stateless
-    account_storage_usage: AccountStorageUsageComponent,
     contract_permissions: ContractPermissions,
 
     _phantom_data: PhantomData<T>,
@@ -245,7 +243,6 @@ where
         AccountMetrics::register_account_storage_event_handler();
         Self {
             unregister,
-            account_storage_usage: Default::default(),
             contract_permissions: contract_permissions.clone(),
             _phantom_data: Default::default(),
         }
@@ -434,11 +431,11 @@ where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     fn ops_storage_usage_bounds(&self) -> StorageUsageBounds {
-        self.account_storage_usage.ops_storage_usage_bounds()
+        AccountStorageUsageComponent.ops_storage_usage_bounds()
     }
 
     fn ops_storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage> {
-        self.account_storage_usage.ops_storage_usage(account_id)
+        AccountStorageUsageComponent.ops_storage_usage(account_id)
     }
 }
 
@@ -537,7 +534,9 @@ where
     }
 
     fn storage_balance_bounds(&self) -> StorageBalanceBounds {
-        self.account_storage_usage.ops_storage_usage_bounds().into()
+        AccountStorageUsageComponent
+            .ops_storage_usage_bounds()
+            .into()
     }
 
     fn storage_balance_of(&self, account_id: ValidAccountId) -> Option<StorageBalance> {
