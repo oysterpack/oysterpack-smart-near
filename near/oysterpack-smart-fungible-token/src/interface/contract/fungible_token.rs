@@ -58,7 +58,6 @@ pub trait FungibleToken: ResolveTransferCall {
     /// - if amount is zero
     /// - if the sender account has insufficient funds to fulfill the request
     ///
-    /// GAS REQUIREMENTS: 10 TGas
     /// #\[payable\]
     fn ft_transfer(&mut self, receiver_id: ValidAccountId, amount: TokenAmount, memo: Option<Memo>);
 

@@ -8,16 +8,30 @@ use oysterpack_smart_near::Hash;
 use std::fmt::{self, Display, Formatter};
 use std::ops::Deref;
 
+/// The following fields are immutable once the FT contract is deployed:
+/// - [`Metadata::spec`]
+/// - [`Metadata::name`]
+/// - [`Metadata::symbol`]
+/// - [`Metadata::decimals`]
+///
+/// The following fields can be updated by the contract owner or accounts that have the admin permission:
+/// - [`Metadata::icon`]
+/// - [`Metadata::reference`]
+/// - [`Metadata::reference_hash`]
+///
+/// NOTE: how optional metadata is stored off-chain is out of scope
 #[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize, PartialEq, Debug)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Metadata {
     pub spec: Spec,
     pub name: Name,
     pub symbol: Symbol,
+    pub decimals: u8,
+
     pub icon: Option<Icon>,
     pub reference: Option<Reference>,
+    /// sha256 hash of the JSON file contained in the reference field. This is to guard against off-chain tampering.
     pub reference_hash: Option<Hash>,
-    pub decimals: u8,
 }
 
 impl Metadata {
@@ -126,6 +140,16 @@ impl Display for Symbol {
     }
 }
 
+/// A small image associated with this token.
+/// Must be a data URL, to help consumers display it quickly while protecting user data.
+///
+/// ### Recommendations
+/// - use optimized SVG, which can result in high-resolution images with only 100s of bytes of storage cost.
+///   - Note that these storage costs are incurred to the token owner/deployer, but that querying these
+///     icons is a very cheap & cacheable read operation for all consumers of the contract and the RPC
+///     nodes that serve the data.
+/// - create icons that will work well with both light-mode and dark-mode websites by either using
+/// middle-tone color schemes, or by embedding media queries in the SVG.
 #[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize, PartialEq, Debug)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Icon(pub String);
@@ -156,6 +180,12 @@ impl Display for Icon {
     }
 }
 
+/// A link to a valid JSON file containing various keys offering supplementary details on the token.
+/// Example: "/ipfs/QmdmQXB2mzChmMeKY47C43LxUdg1NDJ5MWcKMKxDu7RgQm", "https://example.com/token.json", etc.
+///
+///
+/// If the information given in this document conflicts with the on-chain attributes, then the values
+/// in reference shall be considered the source of truth.
 #[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize, PartialEq, Debug)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Reference(pub String);
