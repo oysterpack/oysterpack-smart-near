@@ -3,7 +3,7 @@
 //!   - [`ContractPermissions`]
 //!   - Box<dyn [`UnregisterAccount`]>
 //! - deployment: [`AccountManagementComponent::deploy`]
-//!   - config: [`StorageUsageBounds`]
+//!   - config: [`AccountManagementComponentConfig`]
 
 use crate::*;
 use near_sdk::{
@@ -43,6 +43,7 @@ where
     /// must be provided by the contract
     unregister: Box<dyn UnregisterAccount>,
 
+    // TODO: remove because AccountStorageUsageComponent is stateless
     account_storage_usage: AccountStorageUsageComponent,
     contract_permissions: ContractPermissions,
 
@@ -294,10 +295,47 @@ impl<T> Deploy for AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    type Config = StorageUsageBounds;
+    type Config = AccountManagementComponentConfig;
 
     fn deploy(config: Self::Config) {
-        AccountStorageUsageComponent::deploy(config)
+        let storage_usage_bounds =
+            config
+                .storage_usage_bounds
+                .unwrap_or_else(|| StorageUsageBounds {
+                    min: Self::measure_storage_usage(Default::default()),
+                    max: None,
+                });
+        AccountStorageUsageComponent::deploy(storage_usage_bounds);
+
+        let storage_balance_bounds: StorageBalanceBounds = storage_usage_bounds.into();
+
+        AccountMetrics::register_account_storage_event_handler();
+        let mut account =
+            AccountNearDataObject::new(config.admin_account.as_ref(), storage_balance_bounds.min);
+        account.grant_admin();
+        account.save();
+        eventbus::post(&AccountStorageEvent::Registered(
+            account.storage_balance(storage_balance_bounds.min),
+        ));
+    }
+}
+
+/// [`AccountManagementComponent::deploy`] deployment config
+pub struct AccountManagementComponentConfig {
+    /// if not specified then the default min will be measured and max will be unbounded
+    pub storage_usage_bounds: Option<StorageUsageBounds>,
+    /// required to seed the contract with an admin account
+    /// - storage usage costs will be paid for by the contract owner - normally the initial admin
+    ///   account will be the contract owner
+    pub admin_account: ValidAccountId,
+}
+
+impl AccountManagementComponentConfig {
+    pub fn new(admin_account: ValidAccountId) -> Self {
+        Self {
+            admin_account,
+            storage_usage_bounds: None,
+        }
     }
 }
 
@@ -701,7 +739,7 @@ where
         registration_only: bool,
         storage_balance_bounds: StorageBalanceBounds,
     ) -> AccountNearDataObject {
-        let deposit = self.initial_deposit(deposit, registration_only, storage_balance_bounds);
+        let deposit = Self::initial_deposit(deposit, registration_only, storage_balance_bounds);
         let (account, _data) = self.create_account(account_id, deposit, None);
         eventbus::post(&AccountStorageEvent::Registered(
             account.storage_balance(storage_balance_bounds.min),
@@ -739,7 +777,6 @@ where
     }
 
     fn initial_deposit(
-        &self,
         deposit: YoctoNear,
         registration_only: bool,
         storage_balance_bounds: StorageBalanceBounds,
@@ -837,9 +874,12 @@ mod tests_teloc {
     pub type AccountManager = AccountManagementComponent<()>;
 
     fn deploy_account_service() {
-        AccountManager::deploy(StorageUsageBounds {
-            min: 1000.into(),
-            max: None,
+        AccountManager::deploy(AccountManagementComponentConfig {
+            admin_account: to_valid_account_id("admin"),
+            storage_usage_bounds: Some(StorageUsageBounds {
+                min: 1000.into(),
+                max: None,
+            }),
         });
     }
 
@@ -1512,9 +1552,12 @@ mod tests_storage_management {
                 let mut ctx = new_context(account);
                 testing_env!(ctx.clone());
 
-                AccountManagementComponent::<()>::deploy(StorageUsageBounds {
-                    min: 1000.into(),
-                    max: Some(2000.into()),
+                AccountManagementComponent::<()>::deploy(AccountManagementComponentConfig {
+                    storage_usage_bounds: Some(StorageUsageBounds {
+                        min: 1000.into(),
+                        max: Some(2000.into()),
+                    }),
+                    admin_account: to_valid_account_id("admin"),
                 });
 
                 let mut service = AccountManagementComponent::<()>::new(
@@ -2618,9 +2661,12 @@ mod tests_storage_management {
             let mut ctx = new_context(account);
             testing_env!(ctx.clone());
 
-            AccountManager::deploy(StorageUsageBounds {
-                min: 1000.into(),
-                max: None,
+            AccountManager::deploy(AccountManagementComponentConfig {
+                admin_account: to_valid_account_id("admin"),
+                storage_usage_bounds: Some(StorageUsageBounds {
+                    min: 1000.into(),
+                    max: None,
+                }),
             });
 
             let mut service =
@@ -2642,9 +2688,12 @@ mod tests_storage_management {
             let mut ctx = new_context(account);
             testing_env!(ctx.clone());
 
-            AccountManager::deploy(StorageUsageBounds {
-                min: 1000.into(),
-                max: None,
+            AccountManager::deploy(AccountManagementComponentConfig {
+                storage_usage_bounds: Some(StorageUsageBounds {
+                    min: 1000.into(),
+                    max: None,
+                }),
+                admin_account: to_valid_account_id("admin"),
             });
 
             let mut service =
@@ -2683,7 +2732,10 @@ mod tests_account_storage_usage {
             max: None,
         };
         println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
-        AccountManager::deploy(storage_usage_bounds);
+        AccountManager::deploy(AccountManagementComponentConfig {
+            storage_usage_bounds: Some(storage_usage_bounds),
+            admin_account: to_valid_account_id("admin"),
+        });
 
         let mut service = AccountManager::new(Box::new(UnregisterAccountNOOP), &Default::default());
         assert_eq!(storage_usage_bounds, service.ops_storage_usage_bounds());
@@ -2738,16 +2790,20 @@ mod tests_account_metrics {
         println!("{:?}", metrics);
         println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
 
-        AccountManager::deploy(storage_usage_bounds);
+        AccountManager::deploy(AccountManagementComponentConfig {
+            storage_usage_bounds: Some(storage_usage_bounds),
+            admin_account: to_valid_account_id("admin"),
+        });
 
         let mut service = AccountManager::new(Box::new(UnregisterAccountNOOP), &Default::default());
+        let admin_account = service.registered_account_near_data("admin");
         // Act
         let metrics = AccountManager::account_metrics();
         println!("{:?}", metrics);
         // Assert
-        assert_eq!(metrics.total_registered_accounts.value(), 0);
-        assert_eq!(metrics.total_near_balance.value(), 0);
-        assert_eq!(metrics.total_storage_usage.value(), 0);
+        assert_eq!(metrics.total_registered_accounts.value(), 1);
+        assert_eq!(metrics.total_near_balance, admin_account.near_balance());
+        assert_eq!(metrics.total_storage_usage, admin_account.storage_usage());
 
         // Arrange - register account
         ctx.attached_deposit = YOCTO;
@@ -2764,9 +2820,15 @@ mod tests_account_metrics {
         // Act
         let metrics = AccountManager::account_metrics();
         // Assert
-        assert_eq!(metrics.total_registered_accounts.value(), 1);
-        assert_eq!(metrics.total_near_balance, storage_balance.total);
-        assert_eq!(metrics.total_storage_usage, storage_usage_bounds.min);
+        assert_eq!(metrics.total_registered_accounts.value(), 2);
+        assert_eq!(
+            metrics.total_near_balance,
+            storage_balance.total + admin_account.near_balance()
+        );
+        assert_eq!(
+            metrics.total_storage_usage,
+            storage_usage_bounds.min + admin_account.storage_usage()
+        );
 
         // Arrange - deposit more funds
         ctx.attached_deposit = YOCTO;
@@ -2775,9 +2837,15 @@ mod tests_account_metrics {
         // Act
         let metrics = AccountManager::account_metrics();
         // Assert
-        assert_eq!(metrics.total_registered_accounts.value(), 1);
-        assert_eq!(metrics.total_near_balance, storage_balance.total);
-        assert_eq!(metrics.total_storage_usage, storage_usage_bounds.min);
+        assert_eq!(metrics.total_registered_accounts.value(), 2);
+        assert_eq!(
+            metrics.total_near_balance,
+            storage_balance.total + admin_account.near_balance()
+        );
+        assert_eq!(
+            metrics.total_storage_usage,
+            storage_usage_bounds.min + admin_account.storage_usage()
+        );
 
         // Arrange - register another account
         ctx.attached_deposit = YOCTO;
@@ -2791,14 +2859,14 @@ mod tests_account_metrics {
         // Act
         let metrics = AccountManager::account_metrics();
         // Assert
-        assert_eq!(metrics.total_registered_accounts.value(), 2);
+        assert_eq!(metrics.total_registered_accounts.value(), 3);
         assert_eq!(
             metrics.total_near_balance,
-            storage_balance.total + bob_storage_balance.total
+            storage_balance.total + bob_storage_balance.total + admin_account.near_balance()
         );
         assert_eq!(
             metrics.total_storage_usage.value(),
-            storage_usage_bounds.min.value() * 2
+            (storage_usage_bounds.min.value() * 2) + admin_account.storage_usage().value()
         );
 
         // Arrange - unregister account
@@ -2808,11 +2876,14 @@ mod tests_account_metrics {
         // Act
         let metrics = AccountManager::account_metrics();
         // Assert
-        assert_eq!(metrics.total_registered_accounts.value(), 1);
-        assert_eq!(metrics.total_near_balance, bob_storage_balance.total);
+        assert_eq!(metrics.total_registered_accounts.value(), 2);
         assert_eq!(
-            metrics.total_storage_usage.value(),
-            storage_usage_bounds.min.value()
+            metrics.total_near_balance,
+            bob_storage_balance.total + admin_account.near_balance()
+        );
+        assert_eq!(
+            metrics.total_storage_usage,
+            storage_usage_bounds.min + admin_account.storage_usage()
         );
     }
 }
@@ -2836,7 +2907,10 @@ mod tests_account_repository {
             max: None,
         };
         println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
-        AccountManager::deploy(storage_usage_bounds);
+        AccountManager::deploy(AccountManagementComponentConfig {
+            storage_usage_bounds: Some(storage_usage_bounds),
+            admin_account: to_valid_account_id("admin"),
+        });
 
         let mut account_manager =
             AccountManager::new(Box::new(UnregisterAccountNOOP), &Default::default());
@@ -2892,7 +2966,10 @@ mod tests_account_repository {
             max: None,
         };
         println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
-        AccountManager::deploy(storage_usage_bounds);
+        AccountManager::deploy(AccountManagementComponentConfig {
+            storage_usage_bounds: Some(storage_usage_bounds),
+            admin_account: to_valid_account_id("admin"),
+        });
 
         let mut account_manager =
             AccountManager::new(Box::new(UnregisterAccountNOOP), &Default::default());
@@ -2937,7 +3014,10 @@ mod test_permission_management {
             min: AccountManager::measure_storage_usage(()),
             max: None,
         };
-        AccountManager::deploy(storage_usage_bounds);
+        AccountManager::deploy(AccountManagementComponentConfig {
+            storage_usage_bounds: Some(storage_usage_bounds),
+            admin_account: to_valid_account_id("admin"),
+        });
 
         let mut account_manager =
             AccountManager::new(Box::new(UnregisterAccountNOOP), &permissions);

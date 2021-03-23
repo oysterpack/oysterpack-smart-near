@@ -3,6 +3,7 @@ use near_sdk::json_types::ValidAccountId;
 use oysterpack_smart_account_management::{Permissions, PermissionsManagement};
 use std::collections::HashMap;
 
+#[near_bindgen]
 impl PermissionsManagement for Contract {
     fn ops_permissions_is_admin(&self, account_id: ValidAccountId) -> bool {
         Self::account_manager().ops_permissions_is_admin(account_id)

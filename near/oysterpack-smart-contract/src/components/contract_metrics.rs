@@ -57,10 +57,14 @@ mod tests {
     use super::*;
     use near_sdk::env;
     use oysterpack_smart_account_management::components::account_management::{
-        AccountManagementComponent, ContractPermissions, UnregisterAccount, UnregisterAccountNOOP,
+        AccountManagementComponent, AccountManagementComponentConfig, ContractPermissions,
+        UnregisterAccount, UnregisterAccountNOOP,
     };
-    use oysterpack_smart_account_management::{StorageManagement, StorageUsageBounds};
+    use oysterpack_smart_account_management::{
+        AccountRepository, StorageManagement, StorageUsageBounds,
+    };
     use oysterpack_smart_near::component::*;
+    use oysterpack_smart_near::domain::YoctoNear;
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::near_vm_logic::VMContext;
     use oysterpack_smart_near_test::*;
@@ -68,20 +72,26 @@ mod tests {
 
     pub type AccountManager = AccountManagementComponent<()>;
 
+    const ADMIN: &str = "admin";
+
     fn deploy_account_service() {
-        AccountManager::deploy(StorageUsageBounds {
-            min: 1000.into(),
-            max: None,
+        AccountManager::deploy(AccountManagementComponentConfig {
+            storage_usage_bounds: Some(StorageUsageBounds {
+                min: 1000.into(),
+                max: None,
+            }),
+            admin_account: to_valid_account_id(ADMIN),
         });
     }
+
+    const ACCOUNT: &str = "bob";
 
     fn run_test<F>(test: F)
     where
         F: FnOnce(VMContext, AccountManager),
     {
         // Arrange
-        let account_id = "bob";
-        let ctx = new_context(account_id);
+        let ctx = new_context(ACCOUNT);
         testing_env!(ctx.clone());
 
         // Act
@@ -102,7 +112,7 @@ mod tests {
             // Assert - no accounts registered
             assert_eq!(
                 ContractMetricsComponent::ops_metrics_total_registered_accounts(),
-                0.into()
+                1.into()
             );
 
             // Arrange - register an account
@@ -113,7 +123,7 @@ mod tests {
             // Assert
             assert_eq!(
                 ContractMetricsComponent::ops_metrics_total_registered_accounts(),
-                1.into()
+                2.into()
             );
         });
     }
@@ -121,21 +131,27 @@ mod tests {
     #[test]
     fn storage_usage() {
         run_test(|mut ctx, mut account_manager| {
-            // Act - no accounts registered
+            // Act - no accounts registered besides admin
+            let admin = account_manager.registered_account_near_data(ADMIN);
             let storage_usage = ContractMetricsComponent::ops_metrics_contract_storage_usage();
             println!("{:?}", storage_usage);
-            assert_eq!(storage_usage.accounts(), 0.into());
+            assert_eq!(storage_usage.accounts(), admin.storage_usage());
 
             // Arrange - register an account
             ctx.attached_deposit = YOCTO;
             testing_env!(ctx.clone());
             account_manager.storage_deposit(None, None);
 
+            let account = account_manager.registered_account_near_data(ACCOUNT);
+
             // Act
             let storage_usage = ContractMetricsComponent::ops_metrics_contract_storage_usage();
             println!("{:?}", storage_usage);
             // Assert
-            assert!(storage_usage.accounts().value() > 0);
+            assert_eq!(
+                storage_usage.accounts(),
+                account.storage_usage() + admin.storage_usage()
+            );
 
             let storage_usage_costs = ContractMetricsComponent::ops_metrics_storage_usage_costs();
             assert_eq!(storage_usage_costs, storage_usage.into());
@@ -145,13 +161,17 @@ mod tests {
     #[test]
     fn near_balances() {
         run_test(|mut ctx, mut account_manager| {
-            // Act - no accounts registered
+            // Act - no accounts registered besides admin
+            let admin = account_manager.registered_account_near_data(ADMIN);
             let balances1 = ContractMetricsComponent::ops_metrics_near_balances();
-            println!("{:?}", balances1);
+            println!("{:#?}", balances1);
             assert_eq!(balances1.total(), env::account_balance().into());
-            assert_eq!(balances1.owner(), env::account_balance().into());
+            assert_eq!(
+                balances1.owner(),
+                (env::account_balance() - admin.near_balance().value()).into()
+            );
             assert!(balances1.balances().is_none());
-            assert_eq!(balances1.accounts(), 0.into());
+            assert_eq!(balances1.accounts(), admin.near_balance());
             assert_eq!(balances1.total(), balances1.owner() + balances1.accounts());
 
             // Arrange - register an account
@@ -166,7 +186,10 @@ mod tests {
             assert_eq!(balances2.total(), env::account_balance().into());
             assert_eq!(balances2.owner(), balances1.owner());
             assert!(balances2.balances().is_none());
-            assert_eq!(balances2.accounts(), YOCTO.into());
+            assert_eq!(
+                balances2.accounts(),
+                admin.near_balance() + YoctoNear(YOCTO)
+            );
             assert_eq!(balances2.total(), balances2.owner() + balances2.accounts());
         });
     }

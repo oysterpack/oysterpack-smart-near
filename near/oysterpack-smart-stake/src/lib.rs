@@ -13,6 +13,7 @@ use near_sdk::{
     json_types::ValidAccountId,
     near_bindgen, PanicOnDefault,
 };
+use oysterpack_smart_account_management::components::account_management::AccountManagementComponentConfig;
 use oysterpack_smart_account_management::StorageUsageBounds;
 use oysterpack_smart_contract::components::contract_ownership::ContractOwnershipComponent;
 use oysterpack_smart_near::component::Deploy;
@@ -36,14 +37,13 @@ impl Contract {
     ) -> Self {
         assert!(!env::state_exists(), "contract is already initialized");
 
-        ContractOwnershipComponent::deploy(
-            owner.unwrap_or_else(|| env::predecessor_account_id().try_into().unwrap()),
-        );
+        let owner = owner.unwrap_or_else(|| env::predecessor_account_id().try_into().unwrap());
+        ContractOwnershipComponent::deploy(owner.clone());
 
-        AccountManager::deploy(storage_usage_bounds.unwrap_or_else(|| StorageUsageBounds {
-            min: AccountManager::measure_storage_usage(()),
-            max: None,
-        }));
+        AccountManager::deploy(AccountManagementComponentConfig {
+            storage_usage_bounds,
+            admin_account: owner,
+        });
 
         Self
     }

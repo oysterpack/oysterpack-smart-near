@@ -418,9 +418,9 @@ mod tests {
     use crate::*;
     use near_sdk::test_utils;
     use oysterpack_smart_account_management::components::account_management::{
-        ContractPermissions, UnregisterAccountNOOP,
+        AccountManagementComponentConfig, ContractPermissions, UnregisterAccountNOOP,
     };
-    use oysterpack_smart_account_management::{StorageManagement, StorageUsageBounds};
+    use oysterpack_smart_account_management::StorageManagement;
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
@@ -436,10 +436,9 @@ mod tests {
         let mut ctx = new_context(sender);
         testing_env!(ctx.clone());
 
-        AccountManager::deploy(StorageUsageBounds {
-            min: AccountManager::measure_storage_usage(()),
-            max: None,
-        });
+        AccountManager::deploy(AccountManagementComponentConfig::new(to_valid_account_id(
+            "admin",
+        )));
 
         STAKE::deploy(Config {
             metadata: Metadata {
