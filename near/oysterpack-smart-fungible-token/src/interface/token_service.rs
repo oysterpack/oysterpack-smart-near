@@ -12,7 +12,7 @@ pub trait TokenService {
     /// ## Panics
     /// - if the account is not registered
     /// - if amount is zero
-    fn ft_mint(&mut self, account_id: ValidAccountId, amount: TokenAmount);
+    fn ft_mint(&mut self, account_id: &str, amount: TokenAmount);
 
     /// Debits tokens from the specified account ID and burns them, which decreases the total supply.
     /// - logs [`LOG_EVENT_FT_BURN`]
@@ -22,7 +22,7 @@ pub trait TokenService {
     /// ## Panics
     /// - if the account is not registered
     /// - if amount is zero
-    fn ft_burn(&mut self, account_id: ValidAccountId, amount: TokenAmount);
+    fn ft_burn(&mut self, account_id: &str, amount: TokenAmount);
 }
 
 pub const LOG_EVENT_FT_MINT: LogEvent = LogEvent(Level::INFO, "FT_MINT");

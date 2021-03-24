@@ -166,12 +166,11 @@ impl<T> TokenService for FungibleTokenComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    fn ft_mint(&mut self, account_id: ValidAccountId, amount: TokenAmount) {
+    fn ft_mint(&mut self, account_id: &str, amount: TokenAmount) {
         ERR_INVALID.assert(|| *amount > 0, || "amount cannot be zero");
-        ERR_ACCOUNT_NOT_REGISTERED
-            .assert(|| self.account_manager.account_exists(account_id.as_ref()));
+        ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(account_id));
 
-        let account_id_hash = Hash::from(account_id.as_ref().as_str());
+        let account_id_hash = Hash::from(account_id);
         let mut ft_balance = AccountFTBalance::load(&account_id_hash).unwrap();
         *ft_balance += *amount;
         ft_balance.save();
@@ -180,30 +179,21 @@ where
         *token_supply += *amount;
         token_supply.save();
 
-        LOG_EVENT_FT_MINT.log(format!(
-            "account_id: {}, amount: {}",
-            account_id.as_ref(),
-            amount
-        ));
+        LOG_EVENT_FT_MINT.log(format!("account_id: {}, amount: {}", account_id, amount));
     }
 
-    fn ft_burn(&mut self, account_id: ValidAccountId, amount: TokenAmount) {
+    fn ft_burn(&mut self, account_id: &str, amount: TokenAmount) {
         ERR_INVALID.assert(|| *amount > 0, || "amount cannot be zero");
-        ERR_ACCOUNT_NOT_REGISTERED
-            .assert(|| self.account_manager.account_exists(account_id.as_ref()));
+        ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(account_id));
 
-        let account_id_hash = Hash::from(account_id.as_ref().as_str());
+        let account_id_hash = Hash::from(account_id);
         let mut ft_balance = AccountFTBalance::load(&account_id_hash).unwrap();
         *ft_balance -= *amount;
         ft_balance.save();
 
         burn_tokens(*amount);
 
-        LOG_EVENT_FT_BURN.log(format!(
-            "account_id: {}, amount: {}",
-            account_id.as_ref(),
-            amount
-        ));
+        LOG_EVENT_FT_BURN.log(format!("account_id: {}, amount: {}", account_id, amount));
     }
 }
 
@@ -738,7 +728,14 @@ mod tests {
         const SENDER: &str = "sender";
         const RECEIVER: &str = "receiver";
 
-        fn run_test(register_sender: bool, register_receiver: bool) {
+        /// - if the balances are Some then register them and mint tokens for them
+        fn run_test<F>(
+            sender_balance: Option<TokenAmount>,
+            receiver_balance: Option<TokenAmount>,
+            test: F,
+        ) where
+            F: FnOnce(STAKE),
+        {
             // Arrange
             let mut ctx = new_context(SENDER);
             testing_env!(ctx.clone());
@@ -750,21 +747,41 @@ mod tests {
                 &ContractPermissions::default(),
             );
 
-            // register accounts
-            {
-                ctx.attached_deposit = YOCTO;
-                testing_env!(ctx.clone());
-                account_manager.storage_deposit(None, None);
-
-                ctx.attached_deposit = YOCTO;
-                ctx.predecessor_account_id = RECEIVER.to_string();
-                testing_env!(ctx.clone());
-                account_manager.storage_deposit(None, None);
-            }
-
             let mut stake = STAKE::new(account_manager);
 
-            // TODO:
+            // register accounts
+            {
+                let mut account_manager = AccountManager::new(
+                    Box::new(UnregisterAccountNOOP),
+                    &ContractPermissions::default(),
+                );
+
+                if let Some(balance) = sender_balance {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = SENDER.to_string();
+                    ctx.attached_deposit = account_manager.storage_balance_bounds().min.value();
+                    testing_env!(ctx.clone());
+                    account_manager.storage_deposit(None, Some(true));
+
+                    if *balance > 0 {
+                        stake.ft_mint(SENDER, balance);
+                    }
+                }
+
+                if let Some(balance) = receiver_balance {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = RECEIVER.to_string();
+                    ctx.attached_deposit = account_manager.storage_balance_bounds().min.value();
+                    testing_env!(ctx.clone());
+                    account_manager.storage_deposit(None, Some(true));
+
+                    if *balance > 0 {
+                        stake.ft_mint(RECEIVER, balance);
+                    }
+                }
+            }
+
+            test(stake);
         }
     }
 }
