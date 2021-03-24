@@ -90,18 +90,18 @@ where
             || sender_id != receiver_id.as_ref(),
             || "sender and receiver cannot be the same",
         );
+
         ERR_ACCOUNT_NOT_REGISTERED.assert_with_message(
             || self.account_manager.account_exists(sender_id),
             || "sender account is not registered",
         );
-
-        let sender_balance = self.ft_balance_of(to_valid_account_id(sender_id));
-        ERR_INSUFFICIENT_FUNDS.assert(|| *sender_balance >= *amount);
-
         ERR_ACCOUNT_NOT_REGISTERED.assert_with_message(
             || self.account_manager.account_exists(receiver_id.as_ref()),
             || "receiver account is not registered",
         );
+
+        let sender_balance = self.ft_balance_of(to_valid_account_id(sender_id));
+        ERR_INSUFFICIENT_FUNDS.assert(|| *sender_balance >= *amount);
 
         // transfer the tokens
         ft_set_balance(sender_id, *sender_balance - *amount);
@@ -170,8 +170,7 @@ where
         ERR_INVALID.assert(|| *amount > 0, || "amount cannot be zero");
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(account_id));
 
-        let account_id_hash = Hash::from(account_id);
-        let mut ft_balance = AccountFTBalance::load(&account_id_hash).unwrap();
+        let mut ft_balance = account_ft_balance(account_id);
         *ft_balance += *amount;
         ft_balance.save();
 
@@ -431,6 +430,12 @@ type AccountFTBalance = Object<Hash, u128>;
 fn ft_set_balance(account_id: &str, balance: u128) {
     let account_hash_id = ft_account_id_hash(account_id);
     AccountFTBalance::new(account_hash_id, balance).save();
+}
+
+fn account_ft_balance(account_id: &str) -> AccountFTBalance {
+    let account_hash_id = ft_account_id_hash(account_id);
+    AccountFTBalance::load(&account_hash_id)
+        .unwrap_or_else(|| AccountFTBalance::new(account_hash_id, 0))
 }
 
 fn ft_balance_of(account_id: &str) -> TokenAmount {
@@ -734,15 +739,15 @@ mod tests {
             receiver_balance: Option<TokenAmount>,
             test: F,
         ) where
-            F: FnOnce(STAKE),
+            F: FnOnce(VMContext, STAKE),
         {
             // Arrange
-            let mut ctx = new_context(SENDER);
+            let ctx = new_context(SENDER);
             testing_env!(ctx.clone());
 
             deploy_comps();
 
-            let mut account_manager = AccountManager::new(
+            let account_manager = AccountManager::new(
                 Box::new(UnregisterAccountNOOP),
                 &ContractPermissions::default(),
             );
@@ -781,7 +786,100 @@ mod tests {
                 }
             }
 
-            test(stake);
+            test(ctx, stake);
+        }
+
+        #[test]
+        fn valid_transfer_with_no_memo() {
+            run_test(Some(1000.into()), Some(0.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = SENDER.to_string();
+                ctx.attached_deposit = 1;
+                testing_env!(ctx.clone());
+                stake.ft_transfer(to_valid_account_id(RECEIVER), 400.into(), None);
+
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(SENDER)), 600.into());
+                assert_eq!(
+                    stake.ft_balance_of(to_valid_account_id(RECEIVER)),
+                    400.into()
+                );
+
+                let logs = test_utils::get_logs();
+                assert!(logs.is_empty());
+            });
+        }
+
+        #[test]
+        fn valid_transfer_with_memo() {
+            run_test(Some(1000.into()), Some(0.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = SENDER.to_string();
+                ctx.attached_deposit = 1;
+                testing_env!(ctx.clone());
+                stake.ft_transfer(
+                    to_valid_account_id(RECEIVER),
+                    400.into(),
+                    Some(Memo("memo".to_string())),
+                );
+
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(SENDER)), 600.into());
+                assert_eq!(
+                    stake.ft_balance_of(to_valid_account_id(RECEIVER)),
+                    400.into()
+                );
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 1);
+                assert_eq!(&logs[0], "[INFO] [FT_TRANSFER] memo");
+            });
+        }
+
+        #[test]
+        #[should_panic(
+            expected = "[ERR] [ACCOUNT_NOT_REGISTERED] sender account is not registered"
+        )]
+        fn sender_not_registered() {
+            run_test(None, Some(0.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = SENDER.to_string();
+                ctx.attached_deposit = 1;
+                testing_env!(ctx.clone());
+                stake.ft_transfer(
+                    to_valid_account_id(RECEIVER),
+                    400.into(),
+                    Some(Memo("memo".to_string())),
+                );
+            });
+        }
+
+        #[test]
+        #[should_panic(
+            expected = "[ERR] [ACCOUNT_NOT_REGISTERED] receiver account is not registered"
+        )]
+        fn receiver_not_registered() {
+            run_test(Some(1000.into()), None, |mut ctx, mut stake| {
+                ctx.predecessor_account_id = SENDER.to_string();
+                ctx.attached_deposit = 1;
+                testing_env!(ctx.clone());
+                stake.ft_transfer(
+                    to_valid_account_id(RECEIVER),
+                    400.into(),
+                    Some(Memo("memo".to_string())),
+                );
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [BAD_REQUEST] sender and receiver cannot be the same")]
+        fn sender_is_receiver() {
+            run_test(Some(1000.into()), Some(0.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = SENDER.to_string();
+                ctx.attached_deposit = 1;
+                testing_env!(ctx.clone());
+                stake.ft_transfer(
+                    to_valid_account_id(SENDER),
+                    400.into(),
+                    Some(Memo("memo".to_string())),
+                );
+            });
         }
     }
 }

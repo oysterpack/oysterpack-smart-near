@@ -1,5 +1,4 @@
 use crate::TokenAmount;
-use near_sdk::json_types::ValidAccountId;
 use oysterpack_smart_near::{Level, LogEvent};
 
 /// Provides basic functions to operate the fungible token.

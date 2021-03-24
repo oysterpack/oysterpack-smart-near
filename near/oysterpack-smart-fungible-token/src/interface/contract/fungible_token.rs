@@ -39,12 +39,18 @@ pub trait FungibleToken: ResolveTransferCall {
     /// - Both accounts must be registered with the contract for transfer to succeed.
     /// - Sender account is required to attach exactly 1 yoctoNEAR to the function call - see security
     ///   section of the standard.
-    ///   - the yoctoNEAR will be credited to the sender account's NEAR balance
     ///
     /// Arguments:
     /// - `receiver_id` - the account ID of the receiver.
     /// - `amount` - the amount of tokens to transfer - unsigned integer in string representation.
     /// - `memo` - an optional string field in a free form to associate a memo with this transfer.
+    ///
+    /// ## Log Events
+    /// - [`LOG_EVENT_FT_TRANSFER`] - if there is a memo
+    ///
+    /// ## NOTES
+    /// The 1 yoctoNEAR that is attached is not credited to the sender account because crediting the
+    /// 1 yoctoNEAR will cost the sender more in gas than the 1 yoctoNEAR.
     ///
     /// ## Panics
     /// - if the attached deposit does not equal 1 yoctoNEAR
