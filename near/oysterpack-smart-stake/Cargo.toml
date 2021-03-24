@@ -10,9 +10,11 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 near-sdk = "=3.0.0-pre.2"
 teloc = "0.1.0"
+
 oysterpack-smart-near = {path = "../oysterpack-smart-near"}
 oysterpack-smart-contract = {path = "../oysterpack-smart-contract"}
 oysterpack-smart-account-management = {path = "../oysterpack-smart-account-management"}
+oysterpack-smart-fungible-token = {path = "../oysterpack-smart-fungible-token"}
 
 [dev-dependencies]
 oysterpack-smart-near-test = {path = "../oysterpack-smart-near-test"}

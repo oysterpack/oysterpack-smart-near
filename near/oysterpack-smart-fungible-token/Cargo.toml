@@ -9,8 +9,6 @@ near-sdk = "=3.0.0-pre.2"
 oysterpack-smart-near = { path = "../oysterpack-smart-near" }
 oysterpack-smart-account-management = { path = "../oysterpack-smart-account-management" }
 teloc = "0.1.0"
-data-url = "0.1.0"
-url = "2.2.1"
 
 [dev-dependencies]
 oysterpack-smart-near-test = { path = "../oysterpack-smart-near-test" }
