@@ -809,6 +809,25 @@ mod tests {
         }
 
         #[test]
+        fn valid_transfer_full_amount() {
+            run_test(Some(1000.into()), Some(0.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = SENDER.to_string();
+                ctx.attached_deposit = 1;
+                testing_env!(ctx.clone());
+                stake.ft_transfer(to_valid_account_id(RECEIVER), 1000.into(), None);
+
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(SENDER)), 0.into());
+                assert_eq!(
+                    stake.ft_balance_of(to_valid_account_id(RECEIVER)),
+                    1000.into()
+                );
+
+                let logs = test_utils::get_logs();
+                assert!(logs.is_empty());
+            });
+        }
+
+        #[test]
         fn valid_transfer_with_memo() {
             run_test(Some(1000.into()), Some(0.into()), |mut ctx, mut stake| {
                 ctx.predecessor_account_id = SENDER.to_string();
@@ -877,6 +896,51 @@ mod tests {
                 stake.ft_transfer(
                     to_valid_account_id(SENDER),
                     400.into(),
+                    Some(Memo("memo".to_string())),
+                );
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [YOCTONEAR_DEPOSIT_REQUIRED]")]
+        fn yocto_not_attached() {
+            run_test(Some(1000.into()), Some(0.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = SENDER.to_string();
+                ctx.attached_deposit = 0;
+                testing_env!(ctx.clone());
+                stake.ft_transfer(
+                    to_valid_account_id(RECEIVER),
+                    400.into(),
+                    Some(Memo("memo".to_string())),
+                );
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [BAD_REQUEST] transfer amount cannot be zero")]
+        fn zero_transfer_amount() {
+            run_test(Some(1000.into()), Some(0.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = SENDER.to_string();
+                ctx.attached_deposit = 1;
+                testing_env!(ctx.clone());
+                stake.ft_transfer(
+                    to_valid_account_id(RECEIVER),
+                    0.into(),
+                    Some(Memo("memo".to_string())),
+                );
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [INSUFFICIENT_FUNDS]")]
+        fn insufficient_funds() {
+            run_test(Some(1000.into()), Some(0.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = SENDER.to_string();
+                ctx.attached_deposit = 1;
+                testing_env!(ctx.clone());
+                stake.ft_transfer(
+                    to_valid_account_id(RECEIVER),
+                    1001.into(),
                     Some(Memo("memo".to_string())),
                 );
             });
