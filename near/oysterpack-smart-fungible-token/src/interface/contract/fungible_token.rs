@@ -11,12 +11,6 @@ use oysterpack_smart_near::{Level, LogEvent};
 /// - accounting for [total token supply](FungibleToken::ft_total_supply) and
 ///   [account balances](FungibleToken::ft_balance_of)
 ///
-/// ## Notes
-/// - it doesn't include token metadata standard that will be covered by a separate NEP, because the
-///   metadata may evolve.
-/// - it also doesn't include account registration standard that also must be covered by a separate
-///   NEP because it can be reused for other contract.
-///
 /// ### Security
 /// Requirement for accept attached deposits (#\[payable\])
 /// Due to the nature of function-call permission access keys on NEAR protocol, the method that
@@ -164,9 +158,6 @@ pub const LOG_EVENT_FT_TRANSFER_CALL_RECEIVER_DEBIT: LogEvent =
 
 pub const LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT: LogEvent =
     LogEvent(Level::INFO, "FT_TRANSFER_CALL_SENDER_CREDIT");
-
-pub const LOG_EVENT_FT_TRANSFER_CALL_TOKEN_BURN: LogEvent =
-    LogEvent(Level::WARN, "FT_TRANSFER_CALL_TOKEN_BURN");
 
 pub const LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED: LogEvent =
     LogEvent(Level::WARN, "FT_TRANSFER_CALL_REFUND_NOT_APPLIED");

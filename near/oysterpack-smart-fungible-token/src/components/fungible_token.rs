@@ -10,10 +10,10 @@
 use crate::contract::operator::{FungibleTokenOperator, OperatorCommand};
 use crate::{
     FungibleToken, FungibleTokenMetadataProvider, Memo, Metadata, ResolveTransferCall, TokenAmount,
-    TransferCallMessage, LOG_EVENT_FT_TRANSFER, LOG_EVENT_FT_TRANSFER_CALL_FAILURE,
-    LOG_EVENT_FT_TRANSFER_CALL_PARTIAL_REFUND, LOG_EVENT_FT_TRANSFER_CALL_RECEIVER_DEBIT,
-    LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED, LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT,
-    LOG_EVENT_FT_TRANSFER_CALL_TOKEN_BURN,
+    TokenService, TransferCallMessage, LOG_EVENT_FT_BURN, LOG_EVENT_FT_MINT, LOG_EVENT_FT_TRANSFER,
+    LOG_EVENT_FT_TRANSFER_CALL_FAILURE, LOG_EVENT_FT_TRANSFER_CALL_PARTIAL_REFUND,
+    LOG_EVENT_FT_TRANSFER_CALL_RECEIVER_DEBIT, LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED,
+    LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT,
 };
 use near_sdk::{
     borsh::{BorshDeserialize, BorshSerialize},
@@ -29,7 +29,7 @@ use oysterpack_smart_account_management::{
     AccountRepository, ERR_ACCOUNT_NOT_REGISTERED, ERR_NOT_AUTHORIZED,
 };
 use oysterpack_smart_near::asserts::{
-    assert_yocto_near_attached, ERR_CODE_BAD_REQUEST, ERR_INSUFFICIENT_FUNDS,
+    assert_yocto_near_attached, ERR_CODE_BAD_REQUEST, ERR_INSUFFICIENT_FUNDS, ERR_INVALID,
 };
 use oysterpack_smart_near::{component::Deploy, data::Object, to_valid_account_id, Hash, TERA};
 use std::{cmp::min, fmt::Debug, ops::Deref};
@@ -159,6 +159,51 @@ where
             }
         }
         metadata.save();
+    }
+}
+
+impl<T> TokenService for FungibleTokenComponent<T>
+where
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+{
+    fn ft_mint(&mut self, account_id: ValidAccountId, amount: TokenAmount) {
+        ERR_INVALID.assert(|| *amount > 0, || "amount cannot be zero");
+        ERR_ACCOUNT_NOT_REGISTERED
+            .assert(|| self.account_manager.account_exists(account_id.as_ref()));
+
+        let account_id_hash = Hash::from(account_id.as_ref().as_str());
+        let mut ft_balance = AccountFTBalance::load(&account_id_hash).unwrap();
+        *ft_balance += *amount;
+        ft_balance.save();
+
+        let mut token_supply = token_supply();
+        *token_supply += *amount;
+        token_supply.save();
+
+        LOG_EVENT_FT_MINT.log(format!(
+            "account_id: {}, amount: {}",
+            account_id.as_ref(),
+            amount
+        ));
+    }
+
+    fn ft_burn(&mut self, account_id: ValidAccountId, amount: TokenAmount) {
+        ERR_INVALID.assert(|| *amount > 0, || "amount cannot be zero");
+        ERR_ACCOUNT_NOT_REGISTERED
+            .assert(|| self.account_manager.account_exists(account_id.as_ref()));
+
+        let account_id_hash = Hash::from(account_id.as_ref().as_str());
+        let mut ft_balance = AccountFTBalance::load(&account_id_hash).unwrap();
+        *ft_balance -= *amount;
+        ft_balance.save();
+
+        burn_tokens(*amount);
+
+        LOG_EVENT_FT_BURN.log(format!(
+            "account_id: {}, amount: {}",
+            account_id.as_ref(),
+            amount
+        ));
     }
 }
 
@@ -299,10 +344,13 @@ pub struct ResolveTransferArgs {
 
 const TOKEN_SUPPLY: u128 = 1953830723745925743018307013370321490;
 type TokenSupply = Object<u128, u128>;
+fn token_supply() -> TokenSupply {
+    TokenSupply::load(&TOKEN_SUPPLY).unwrap()
+}
 
 fn burn_tokens(amount: u128) {
-    let mut supply = TokenSupply::load(&TOKEN_SUPPLY).unwrap();
-    *supply = supply.saturating_sub(amount);
+    let mut supply = token_supply();
+    *supply -= amount;
     supply.save();
 }
 
@@ -367,7 +415,7 @@ where
                         }
                         None => {
                             burn_tokens(refund_amount);
-                            LOG_EVENT_FT_TRANSFER_CALL_TOKEN_BURN
+                            LOG_EVENT_FT_BURN
                                 .log(format!(
                                 "tokens were burned because sender account is not registered: {}"
                             ,refund_amount));
@@ -681,5 +729,42 @@ mod tests {
 
         let mut stake = STAKE::new(account_manager);
         stake.ft_operator_command(OperatorCommand::ClearReference);
+    }
+
+    #[cfg(test)]
+    mod test_ft_transfer {
+        use super::*;
+
+        const SENDER: &str = "sender";
+        const RECEIVER: &str = "receiver";
+
+        fn run_test(register_sender: bool, register_receiver: bool) {
+            // Arrange
+            let mut ctx = new_context(SENDER);
+            testing_env!(ctx.clone());
+
+            deploy_comps();
+
+            let mut account_manager = AccountManager::new(
+                Box::new(UnregisterAccountNOOP),
+                &ContractPermissions::default(),
+            );
+
+            // register accounts
+            {
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, None);
+
+                ctx.attached_deposit = YOCTO;
+                ctx.predecessor_account_id = RECEIVER.to_string();
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, None);
+            }
+
+            let mut stake = STAKE::new(account_manager);
+
+            // TODO:
+        }
     }
 }
