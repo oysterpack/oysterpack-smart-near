@@ -3059,6 +3059,14 @@ mod test_permission_management {
                     ctx.attached_deposit = 0;
                     testing_env!(ctx.clone());
 
+                    // account with admin permission implies all permissions
+                    assert!(account_manager
+                        .ops_permissions_is_operator(to_valid_account_id(PREDECESSOR_ACCOUNT)));
+                    assert!(account_manager.ops_permissions_contains(
+                        to_valid_account_id(PREDECESSOR_ACCOUNT),
+                        PERM_0.into()
+                    ));
+
                     // grant admin
                     account_manager.ops_permissions_grant_admin(to_valid_account_id(bob));
                     assert!(account_manager.ops_permissions_is_admin(to_valid_account_id(bob)));

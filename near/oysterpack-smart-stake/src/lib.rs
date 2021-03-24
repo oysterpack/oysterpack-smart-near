@@ -4,6 +4,7 @@ mod components;
 mod contract_metrics;
 mod contract_ownership;
 mod contract_sale;
+mod fungible_token;
 mod storage_management;
 
 use components::*;
