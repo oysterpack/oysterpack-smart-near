@@ -1,4 +1,4 @@
-//! NEAR typesafe domain domain
+//! NEAR typesafe domain model
 //! - all domain objects support Borsh and JSON serialization
 
 mod account_id_hash;

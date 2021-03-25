@@ -3,10 +3,13 @@ mod errors;
 pub mod eventbus;
 mod hash;
 mod log_events;
+mod promise;
 
 pub use errors::*;
 pub use hash::*;
 pub use log_events::*;
+pub use promise::*;
+
 use near_sdk::json_types::ValidAccountId;
 
 /// YOCTO = 10^24

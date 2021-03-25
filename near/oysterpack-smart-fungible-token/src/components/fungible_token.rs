@@ -934,4 +934,9 @@ mod tests {
             });
         }
     }
+
+    #[cfg(test)]
+    mod test_ft_transfer_call {
+        use super::*;
+    }
 }
