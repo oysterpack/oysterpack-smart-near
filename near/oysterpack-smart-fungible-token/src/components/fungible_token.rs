@@ -1008,5 +1008,237 @@ mod tests {
                 }
             });
         }
+
+        #[test]
+        fn valid_transfer_full_amount_with_no_memo() {
+            run_test(Some(1000.into()), Some(0.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = SENDER.to_string();
+                ctx.attached_deposit = 1;
+                testing_env!(ctx.clone());
+                stake.ft_transfer_call(
+                    to_valid_account_id(RECEIVER),
+                    1000.into(),
+                    None,
+                    TransferCallMessage("msg".to_string()),
+                );
+
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(SENDER)), 0.into());
+                assert_eq!(
+                    stake.ft_balance_of(to_valid_account_id(RECEIVER)),
+                    1000.into()
+                );
+
+                let logs = test_utils::get_logs();
+                assert!(logs.is_empty());
+
+                let receipts = deserialize_receipts();
+                assert_eq!(receipts.len(), 2);
+                {
+                    let receipt = &receipts[0];
+                    assert_eq!(receipt.receiver_id, RECEIVER);
+                    assert_eq!(receipt.actions.len(), 1);
+                    let action = &receipt.actions[0];
+                    match action {
+                        Action::FunctionCall(action) => {
+                            assert_eq!(action.method_name, "ft_on_transfer");
+                            assert_eq!(action.deposit, 0);
+                            let args: OnTransferArgs =
+                                serde_json::from_str(action.args.as_str()).unwrap();
+                            assert_eq!(args.sender_id, SENDER);
+                            assert_eq!(args.amount, 1000.into());
+                            assert_eq!(args.msg, TransferCallMessage("msg".to_string()));
+                        }
+                        _ => panic!("expected FunctionCall action"),
+                    }
+                }
+
+                {
+                    let receipt = &receipts[1];
+                    assert_eq!(receipt.receiver_id, env::current_account_id());
+                    assert_eq!(receipt.actions.len(), 1);
+                    let action = &receipt.actions[0];
+                    match action {
+                        Action::FunctionCall(action) => {
+                            assert_eq!(action.method_name, "ft_resolve_transfer_call");
+                            assert_eq!(action.deposit, 0);
+                            let args: ResolveTransferArgs =
+                                serde_json::from_str(action.args.as_str()).unwrap();
+                            assert_eq!(args.sender_id, SENDER);
+                            assert_eq!(args.amount, 1000.into());
+                            assert_eq!(args.receiver_id, RECEIVER);
+                            assert_eq!(action.gas, transfer_callback_gas().value());
+                        }
+                        _ => panic!("expected FunctionCall action"),
+                    }
+                }
+            });
+        }
+
+        #[test]
+        fn valid_transfer_with_memo() {
+            run_test(Some(1000.into()), Some(0.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = SENDER.to_string();
+                ctx.attached_deposit = 1;
+                testing_env!(ctx.clone());
+                stake.ft_transfer_call(
+                    to_valid_account_id(RECEIVER),
+                    400.into(),
+                    Some(Memo("memo".to_string())),
+                    TransferCallMessage("msg".to_string()),
+                );
+
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(SENDER)), 600.into());
+                assert_eq!(
+                    stake.ft_balance_of(to_valid_account_id(RECEIVER)),
+                    400.into()
+                );
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 1);
+                assert_eq!(&logs[0], "[INFO] [FT_TRANSFER] memo");
+
+                let receipts = deserialize_receipts();
+                assert_eq!(receipts.len(), 2);
+                {
+                    let receipt = &receipts[0];
+                    assert_eq!(receipt.receiver_id, RECEIVER);
+                    assert_eq!(receipt.actions.len(), 1);
+                    let action = &receipt.actions[0];
+                    match action {
+                        Action::FunctionCall(action) => {
+                            assert_eq!(action.method_name, "ft_on_transfer");
+                            assert_eq!(action.deposit, 0);
+                            let args: OnTransferArgs =
+                                serde_json::from_str(action.args.as_str()).unwrap();
+                            assert_eq!(args.sender_id, SENDER);
+                            assert_eq!(args.amount, 400.into());
+                            assert_eq!(args.msg, TransferCallMessage("msg".to_string()));
+                        }
+                        _ => panic!("expected FunctionCall action"),
+                    }
+                }
+
+                {
+                    let receipt = &receipts[1];
+                    assert_eq!(receipt.receiver_id, env::current_account_id());
+                    assert_eq!(receipt.actions.len(), 1);
+                    let action = &receipt.actions[0];
+                    match action {
+                        Action::FunctionCall(action) => {
+                            assert_eq!(action.method_name, "ft_resolve_transfer_call");
+                            assert_eq!(action.deposit, 0);
+                            let args: ResolveTransferArgs =
+                                serde_json::from_str(action.args.as_str()).unwrap();
+                            assert_eq!(args.sender_id, SENDER);
+                            assert_eq!(args.amount, 400.into());
+                            assert_eq!(args.receiver_id, RECEIVER);
+                            assert_eq!(action.gas, transfer_callback_gas().value());
+                        }
+                        _ => panic!("expected FunctionCall action"),
+                    }
+                }
+            });
+        }
+
+        #[test]
+        #[should_panic(
+            expected = "[ERR] [ACCOUNT_NOT_REGISTERED] sender account is not registered"
+        )]
+        fn sender_not_registered() {
+            run_test(None, Some(0.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = SENDER.to_string();
+                ctx.attached_deposit = 1;
+                testing_env!(ctx.clone());
+                stake.ft_transfer_call(
+                    to_valid_account_id(RECEIVER),
+                    400.into(),
+                    Some(Memo("memo".to_string())),
+                    TransferCallMessage("msg".to_string()),
+                );
+            });
+        }
+
+        #[test]
+        #[should_panic(
+            expected = "[ERR] [ACCOUNT_NOT_REGISTERED] receiver account is not registered"
+        )]
+        fn receiver_not_registered() {
+            run_test(Some(1000.into()), None, |mut ctx, mut stake| {
+                ctx.predecessor_account_id = SENDER.to_string();
+                ctx.attached_deposit = 1;
+                testing_env!(ctx.clone());
+                stake.ft_transfer_call(
+                    to_valid_account_id(RECEIVER),
+                    400.into(),
+                    Some(Memo("memo".to_string())),
+                    TransferCallMessage("msg".to_string()),
+                );
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [BAD_REQUEST] sender and receiver cannot be the same")]
+        fn sender_is_receiver() {
+            run_test(Some(1000.into()), Some(0.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = SENDER.to_string();
+                ctx.attached_deposit = 1;
+                testing_env!(ctx.clone());
+                stake.ft_transfer_call(
+                    to_valid_account_id(SENDER),
+                    400.into(),
+                    Some(Memo("memo".to_string())),
+                    TransferCallMessage("msg".to_string()),
+                );
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [YOCTONEAR_DEPOSIT_REQUIRED]")]
+        fn yocto_not_attached() {
+            run_test(Some(1000.into()), Some(0.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = SENDER.to_string();
+                ctx.attached_deposit = 0;
+                testing_env!(ctx.clone());
+                stake.ft_transfer_call(
+                    to_valid_account_id(RECEIVER),
+                    400.into(),
+                    Some(Memo("memo".to_string())),
+                    TransferCallMessage("msg".to_string()),
+                );
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [BAD_REQUEST] transfer amount cannot be zero")]
+        fn zero_transfer_amount() {
+            run_test(Some(1000.into()), Some(0.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = SENDER.to_string();
+                ctx.attached_deposit = 1;
+                testing_env!(ctx.clone());
+                stake.ft_transfer_call(
+                    to_valid_account_id(RECEIVER),
+                    0.into(),
+                    Some(Memo("memo".to_string())),
+                    TransferCallMessage("msg".to_string()),
+                );
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [INSUFFICIENT_FUNDS]")]
+        fn insufficient_funds() {
+            run_test(Some(1000.into()), Some(0.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = SENDER.to_string();
+                ctx.attached_deposit = 1;
+                testing_env!(ctx.clone());
+                stake.ft_transfer_call(
+                    to_valid_account_id(RECEIVER),
+                    1001.into(),
+                    Some(Memo("memo".to_string())),
+                    TransferCallMessage("msg".to_string()),
+                );
+            });
+        }
     }
 }
