@@ -408,11 +408,16 @@ where
                         LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT.log(refund_amount);
                     }
                     None => {
-                        burn_tokens(refund_amount);
-                        LOG_EVENT_FT_BURN.log(format!(
-                            "sender account is not registered: {}",
-                            refund_amount
-                        ));
+                        if self.account_manager.account_exists(sender_id.as_ref()) {
+                            ft_set_balance(sender_id.as_ref(), refund_amount);
+                            LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT.log(refund_amount);
+                        } else {
+                            burn_tokens(refund_amount);
+                            LOG_EVENT_FT_BURN.log(format!(
+                                "sender account is not registered: {}",
+                                refund_amount
+                            ));
+                        }
                     }
                 }
             } else {
@@ -1268,11 +1273,35 @@ mod tests {
                 stake.ft_resolve_transfer_call(
                     to_valid_account_id(SENDER),
                     to_valid_account_id(RECEIVER),
-                    TokenAmount(0.into()),
+                    TokenAmount(500.into()),
                 );
 
                 let logs = test_utils::get_logs();
                 assert!(logs.is_empty());
+            });
+        }
+
+        #[test]
+        fn full_refund() {
+            run_test(Some(0.into()), Some(1000.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = ctx.current_account_id.clone();
+                let refund_amount = TokenAmount(500.into());
+                let refund_amount_bytes = serde_json::to_vec(&refund_amount).unwrap();
+                testing_env_with_promise_results(
+                    ctx,
+                    vec![PromiseResult::Successful(refund_amount_bytes)],
+                );
+                stake.ft_resolve_transfer_call(
+                    to_valid_account_id(SENDER),
+                    to_valid_account_id(RECEIVER),
+                    refund_amount,
+                );
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 2);
+                assert_eq!(&logs[0], "[INFO] [FT_TRANSFER_CALL_RECEIVER_DEBIT] 500");
+                assert_eq!(&logs[1], "[INFO] [FT_TRANSFER_CALL_SENDER_CREDIT] 500");
             });
         }
     }
