@@ -290,19 +290,22 @@ where
             - ft_resolve_transfer_call_receipt_action_cost.value()
             - TERA; // to complete this call;
 
-        let ft_transfer_call = Promise::new(receiver_id.to_string()).function_call(
-            ft_on_transfer,
-            ft_on_transfer_args,
-            0,
-            ft_on_transfer_gas,
-        );
-        let ft_resolve_transfer_call = Promise::new(env::current_account_id()).function_call(
-            ft_resolve_transfer_call,
-            ft_resolve_transfer_call_args,
-            0,
-            transfer_callback_gas().value(),
-        );
-        ft_transfer_call.then(ft_resolve_transfer_call)
+        // create the function call chain
+        {
+            let ft_transfer_call = Promise::new(receiver_id.to_string()).function_call(
+                ft_on_transfer,
+                ft_on_transfer_args,
+                0,
+                ft_on_transfer_gas,
+            );
+            let ft_resolve_transfer_call = Promise::new(env::current_account_id()).function_call(
+                ft_resolve_transfer_call,
+                ft_resolve_transfer_call_args,
+                0,
+                transfer_callback_gas().value(),
+            );
+            ft_transfer_call.then(ft_resolve_transfer_call)
+        }
     }
 }
 
