@@ -5,10 +5,8 @@
 //!   - config: [`Config`]
 //! - [`UnregisterAccount`] -> [`UnregisterFungibleTokenAccount`]
 
-#![allow(unused_variables)]
-
-use crate::contract::operator::{FungibleTokenOperator, OperatorCommand};
 use crate::{
+    contract::operator::{FungibleTokenOperator, OperatorCommand},
     FungibleToken, FungibleTokenMetadataProvider, Memo, Metadata, ResolveTransferCall, TokenAmount,
     TokenService, TransferCallMessage, LOG_EVENT_FT_BURN, LOG_EVENT_FT_MINT, LOG_EVENT_FT_TRANSFER,
     LOG_EVENT_FT_TRANSFER_CALL_FAILURE, LOG_EVENT_FT_TRANSFER_CALL_PARTIAL_REFUND,
@@ -20,18 +18,23 @@ use near_sdk::{
     env,
     json_types::ValidAccountId,
     serde::{Deserialize, Serialize},
-    serde_json, AccountId, Gas, Promise, PromiseResult, RuntimeFeesConfig,
-};
-use oysterpack_smart_account_management::components::account_management::{
-    AccountManagementComponent, UnregisterAccount, ERR_CODE_UNREGISTER_FAILURE,
+    serde_json, AccountId, Promise, PromiseResult,
 };
 use oysterpack_smart_account_management::{
+    components::account_management::{
+        AccountManagementComponent, UnregisterAccount, ERR_CODE_UNREGISTER_FAILURE,
+    },
     AccountRepository, ERR_ACCOUNT_NOT_REGISTERED, ERR_NOT_AUTHORIZED,
 };
-use oysterpack_smart_near::asserts::{
-    assert_yocto_near_attached, ERR_CODE_BAD_REQUEST, ERR_INSUFFICIENT_FUNDS, ERR_INVALID,
+use oysterpack_smart_near::domain::{
+    ActionType, ByteLen, Gas, SenderIsReceiver, TGas, TransactionResource,
 };
-use oysterpack_smart_near::{component::Deploy, data::Object, to_valid_account_id, Hash, TERA};
+use oysterpack_smart_near::{
+    asserts::{
+        assert_yocto_near_attached, ERR_CODE_BAD_REQUEST, ERR_INSUFFICIENT_FUNDS, ERR_INVALID,
+    },
+    {component::Deploy, data::Object, to_valid_account_id, Hash, TERA},
+};
 use std::{cmp::min, fmt::Debug, ops::Deref};
 use teloc::*;
 
@@ -157,9 +160,28 @@ where
                 metadata.reference = None;
                 metadata.reference_hash = None;
             }
+            OperatorCommand::SetTransferCallbackGas(gas) => set_transfer_callback_gas(gas),
         }
         metadata.save();
     }
+
+    fn ft_operator_transfer_callback_gas() -> Gas {
+        transfer_callback_gas()
+    }
+}
+
+const TRANSFER_CALLBACK_GAS_KEY: u128 = 1954437955283579441216159415148835888;
+type TransferCallbackGas = Object<u128, Gas>;
+
+fn transfer_callback_gas() -> Gas {
+    TransferCallbackGas::load(&TRANSFER_CALLBACK_GAS_KEY)
+        .map_or_else(|| (5 * TERA).into(), |gas| *gas)
+}
+
+fn set_transfer_callback_gas(gas: TGas) {
+    ERR_INVALID.assert(|| gas.value() > 0, || "transfer callback TGas must be > 0");
+    let gas = TransferCallbackGas::new(TRANSFER_CALLBACK_GAS_KEY, gas.into());
+    gas.save();
 }
 
 impl<T> TokenService for FungibleTokenComponent<T>
@@ -222,6 +244,7 @@ where
             msg,
         })
         .expect("");
+        let ft_on_transfer_bytes: u64 = (ft_on_transfer.len() + ft_on_transfer_args.len()) as u64;
 
         let ft_resolve_transfer_call = b"ft_resolve_transfer_call".to_vec();
         let ft_resolve_transfer_call_args = serde_json::to_vec(&ResolveTransferArgs {
@@ -232,86 +255,52 @@ where
         .expect("");
         let ft_resolve_transfer_call_bytes: u64 =
             (ft_resolve_transfer_call.len() + ft_resolve_transfer_call_args.len()) as u64;
+
         let ft_resolve_transfer_call_promise = Promise::new(env::current_account_id())
             .function_call(
                 ft_resolve_transfer_call,
                 ft_resolve_transfer_call_args,
                 0,
-                self.ft_resolve_transfer_call_gas(),
+                transfer_callback_gas().value(),
             );
 
         // compute how much gas is needed to complete this call and the resolve transfer callback
         // and then give the rest of the gas to the transfer receiver call
-        let runtime_fees = RuntimeFeesConfig::default();
         let ft_on_transfer_receipt_action_cost = {
-            let action_receipt_creation_cost =
-                runtime_fees.action_receipt_creation_config.send_not_sir
-                    + runtime_fees.action_receipt_creation_config.execution;
-
-            let function_call_cost_per_byte = runtime_fees
-                .action_creation_config
-                .function_call_cost_per_byte
-                .send_not_sir
-                + runtime_fees
-                    .action_creation_config
-                    .function_call_cost_per_byte
-                    .execution;
-            let func_call_bytes: u64 = (ft_on_transfer.len() + ft_on_transfer_args.len()) as u64;
-            let func_call_cost = function_call_cost_per_byte * func_call_bytes;
-
-            runtime_fees.min_receipt_with_function_call_gas()
-                + action_receipt_creation_cost
-                + func_call_cost
+            let action_receipt = TransactionResource::ActionReceipt(SenderIsReceiver(false));
+            let func_call_action = TransactionResource::Action(ActionType::FunctionCall(
+                SenderIsReceiver(false),
+                ByteLen(ft_on_transfer_bytes),
+            ));
+            Gas::compute(vec![(action_receipt, 1), (func_call_action, 1)])
         };
         let ft_resolve_transfer_call_receipt_action_cost = {
-            let action_receipt_creation_cost = runtime_fees.action_receipt_creation_config.send_sir
-                + runtime_fees.action_receipt_creation_config.execution;
-
-            let function_call_cost_per_byte = runtime_fees
-                .action_creation_config
-                .function_call_cost_per_byte
-                .send_sir
-                + runtime_fees
-                    .action_creation_config
-                    .function_call_cost_per_byte
-                    .execution;
-
-            let func_call_cost = function_call_cost_per_byte * ft_resolve_transfer_call_bytes;
-
-            let data_receipt_cost_per_byte = runtime_fees
-                .data_receipt_creation_config
-                .cost_per_byte
-                .send_sir
-                + runtime_fees
-                    .data_receipt_creation_config
-                    .cost_per_byte
-                    .execution;
-            let data_receipt_cost = runtime_fees.data_receipt_creation_config.base_cost.send_sir
-                + runtime_fees
-                    .data_receipt_creation_config
-                    .base_cost
-                    .execution
-                + (data_receipt_cost_per_byte * 100);
-
-            runtime_fees.min_receipt_with_function_call_gas()
-                + action_receipt_creation_cost
-                + func_call_cost
-                + data_receipt_cost
+            let action_receipt = TransactionResource::ActionReceipt(SenderIsReceiver(true));
+            let func_call_action = TransactionResource::Action(ActionType::FunctionCall(
+                SenderIsReceiver(true),
+                ByteLen(ft_resolve_transfer_call_bytes),
+            ));
+            // byte len for transfer amount is set to 100 because even though the underlying type
+            // is u128, it is marshalled as a string. Thus the number of bytes will vary depending on
+            // the amount value - we'll pick 100 to be conservative.
+            let data_receipt =
+                TransactionResource::DataReceipt(SenderIsReceiver(false), ByteLen(100));
+            Gas::compute(vec![
+                (action_receipt, 1),
+                (func_call_action, 1),
+                (data_receipt, 1),
+            ])
         };
         let ft_on_transfer_gas = env::prepaid_gas()
             - env::used_gas()
-            - self.ft_resolve_transfer_call_gas()
-            - ft_on_transfer_receipt_action_cost
-            - ft_resolve_transfer_call_receipt_action_cost;
+            - transfer_callback_gas().value()
+            - ft_on_transfer_receipt_action_cost.value()
+            - ft_resolve_transfer_call_receipt_action_cost.value()
+            - TERA; // to complete this call;
 
         Promise::new(receiver_id.to_string())
             .function_call(ft_on_transfer, ft_on_transfer_args, 0, ft_on_transfer_gas)
             .then(ft_resolve_transfer_call_promise)
-    }
-
-    // TODO: make configurable
-    fn ft_resolve_transfer_call_gas(&self) -> Gas {
-        5 * TERA
     }
 }
 
@@ -628,7 +617,6 @@ mod tests {
         }
 
         let mut stake = STAKE::new(account_manager);
-        let metadata = stake.ft_metadata();
 
         fn run_operator_commands(mut ctx: VMContext, stake: &mut STAKE, account_id: &str) {
             // Act
@@ -726,68 +714,68 @@ mod tests {
         stake.ft_operator_command(OperatorCommand::ClearReference);
     }
 
-    #[cfg(test)]
-    mod test_ft_transfer {
-        use super::*;
+    const SENDER: &str = "sender";
+    const RECEIVER: &str = "receiver";
 
-        const SENDER: &str = "sender";
-        const RECEIVER: &str = "receiver";
+    /// - if the balances are Some then register them and mint tokens for them
+    fn run_test<F>(
+        sender_balance: Option<TokenAmount>,
+        receiver_balance: Option<TokenAmount>,
+        test: F,
+    ) where
+        F: FnOnce(VMContext, STAKE),
+    {
+        // Arrange
+        let ctx = new_context(SENDER);
+        testing_env!(ctx.clone());
 
-        /// - if the balances are Some then register them and mint tokens for them
-        fn run_test<F>(
-            sender_balance: Option<TokenAmount>,
-            receiver_balance: Option<TokenAmount>,
-            test: F,
-        ) where
-            F: FnOnce(VMContext, STAKE),
+        deploy_comps();
+
+        let account_manager = AccountManager::new(
+            Box::new(UnregisterAccountNOOP),
+            &ContractPermissions::default(),
+        );
+
+        let mut stake = STAKE::new(account_manager);
+
+        // register accounts
         {
-            // Arrange
-            let ctx = new_context(SENDER);
-            testing_env!(ctx.clone());
-
-            deploy_comps();
-
-            let account_manager = AccountManager::new(
+            let mut account_manager = AccountManager::new(
                 Box::new(UnregisterAccountNOOP),
                 &ContractPermissions::default(),
             );
 
-            let mut stake = STAKE::new(account_manager);
+            if let Some(balance) = sender_balance {
+                let mut ctx = ctx.clone();
+                ctx.predecessor_account_id = SENDER.to_string();
+                ctx.attached_deposit = account_manager.storage_balance_bounds().min.value();
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, Some(true));
 
-            // register accounts
-            {
-                let mut account_manager = AccountManager::new(
-                    Box::new(UnregisterAccountNOOP),
-                    &ContractPermissions::default(),
-                );
-
-                if let Some(balance) = sender_balance {
-                    let mut ctx = ctx.clone();
-                    ctx.predecessor_account_id = SENDER.to_string();
-                    ctx.attached_deposit = account_manager.storage_balance_bounds().min.value();
-                    testing_env!(ctx.clone());
-                    account_manager.storage_deposit(None, Some(true));
-
-                    if *balance > 0 {
-                        stake.ft_mint(SENDER, balance);
-                    }
-                }
-
-                if let Some(balance) = receiver_balance {
-                    let mut ctx = ctx.clone();
-                    ctx.predecessor_account_id = RECEIVER.to_string();
-                    ctx.attached_deposit = account_manager.storage_balance_bounds().min.value();
-                    testing_env!(ctx.clone());
-                    account_manager.storage_deposit(None, Some(true));
-
-                    if *balance > 0 {
-                        stake.ft_mint(RECEIVER, balance);
-                    }
+                if *balance > 0 {
+                    stake.ft_mint(SENDER, balance);
                 }
             }
 
-            test(ctx, stake);
+            if let Some(balance) = receiver_balance {
+                let mut ctx = ctx.clone();
+                ctx.predecessor_account_id = RECEIVER.to_string();
+                ctx.attached_deposit = account_manager.storage_balance_bounds().min.value();
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, Some(true));
+
+                if *balance > 0 {
+                    stake.ft_mint(RECEIVER, balance);
+                }
+            }
         }
+
+        test(ctx, stake);
+    }
+
+    #[cfg(test)]
+    mod test_ft_transfer {
+        use super::*;
 
         #[test]
         fn valid_transfer_with_no_memo() {
