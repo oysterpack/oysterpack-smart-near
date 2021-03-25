@@ -1,14 +1,14 @@
 use crate::{BalanceId, ContractNearBalances, ERR_BID_IS_EXPIRED};
-use near_sdk::{
+use oysterpack_smart_near::domain::{Expiration, ExpirationSetting, YoctoNear};
+use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
 };
-use oysterpack_smart_near::domain::{Expiration, ExpirationSetting, YoctoNear};
 
 #[derive(
     BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Copy, Debug, PartialEq,
 )]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct ContractBid {
     pub amount: YoctoNear,
     pub expiration: Option<Expiration>,

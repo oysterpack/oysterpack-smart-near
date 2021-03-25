@@ -1,10 +1,10 @@
-use near_sdk::{
+use oysterpack_smart_near::domain::YoctoNear;
+use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     json_types::ValidAccountId,
     serde::{Deserialize, Serialize},
     AccountId,
 };
-use oysterpack_smart_near::domain::YoctoNear;
 use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 
 /// # **Contract Interface**: Contract Ownership API
@@ -109,7 +109,7 @@ pub const LOG_EVENT_CONTRACT_TRANSFER_FINALIZED: LogEvent =
 #[derive(
     BorshSerialize, BorshDeserialize, Deserialize, Serialize, Clone, Debug, PartialEq, Default,
 )]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct ContractOwnerNearBalance {
     pub total: YoctoNear,
     pub available: YoctoNear,

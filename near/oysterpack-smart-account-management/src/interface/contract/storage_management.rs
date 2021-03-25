@@ -1,12 +1,12 @@
 use crate::{AccountIdHash, StorageUsageBounds};
 use lazy_static::lazy_static;
-use near_sdk::{
+use oysterpack_smart_near::domain::StorageUsageChange;
+use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
     json_types::ValidAccountId,
     serde::{Deserialize, Serialize},
 };
-use oysterpack_smart_near::domain::StorageUsageChange;
 use oysterpack_smart_near::{domain::YoctoNear, eventbus::*, Level, LogEvent};
 use std::fmt::{self, Display, Formatter};
 use std::sync::Mutex;
@@ -129,7 +129,7 @@ pub trait StorageManagement {
 
 /// Tracks account storage balance
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct StorageBalance {
     /// total NEAR funds that is purposed to pay for account storage
     pub total: YoctoNear,
@@ -141,7 +141,7 @@ pub struct StorageBalance {
 #[derive(
     BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, PartialEq, Clone, Copy,
 )]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct StorageBalanceBounds {
     /// the minimum balance that must be maintained for storage by the account on the contract
     /// - it is the amount of tokens required to start using this contract at all, e.g., to register with the contract

@@ -1,6 +1,6 @@
 use crate::AccountDataObject;
 use crate::AccountNearDataObject;
-use near_sdk::borsh::{BorshDeserialize, BorshSerialize};
+use oysterpack_smart_near::near_sdk::borsh::{BorshDeserialize, BorshSerialize};
 use oysterpack_smart_near::{domain::YoctoNear, ErrCode, ErrorConst};
 use std::fmt::Debug;
 

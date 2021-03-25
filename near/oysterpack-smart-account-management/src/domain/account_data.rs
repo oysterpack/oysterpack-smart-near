@@ -1,7 +1,7 @@
 use oysterpack_smart_near::data::Object;
 use oysterpack_smart_near::{eventbus, Hash};
 
-use near_sdk::{
+use oysterpack_smart_near::near_sdk::{
     borsh::{BorshDeserialize, BorshSerialize},
     env,
 };

@@ -5,7 +5,6 @@ authors = ["oysterpack.inc <oysterpack.inc@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-near-sdk = "=3.0.0-pre.2"
 oysterpack-smart-near = { path = "../oysterpack-smart-near" }
 lazy_static = "1.4.0"
 teloc = "0.1.0"

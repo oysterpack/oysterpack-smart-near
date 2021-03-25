@@ -7,7 +7,7 @@ use near_sdk::{
 };
 use oysterpack_smart_near::YOCTO;
 
-pub use near_sdk::{testing_env, MockedBlockchain};
+pub use near_sdk::{self, testing_env, MockedBlockchain};
 pub use near_vm_logic;
 pub use oysterpack_smart_near::to_valid_account_id;
 
@@ -45,6 +45,7 @@ pub fn testing_env_with_promise_results(context: VMContext, promise_results: Vec
         Default::default(),
         promise_results,
         storage,
+        Default::default(),
         Default::default(),
     )));
 }

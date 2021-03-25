@@ -1,9 +1,9 @@
-use near_sdk::serde::{Deserialize, Serialize};
+use oysterpack_smart_near::near_sdk::serde::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
 use std::ops::Deref;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct TransferCallMessage(pub String);
 
 impl Deref for TransferCallMessage {

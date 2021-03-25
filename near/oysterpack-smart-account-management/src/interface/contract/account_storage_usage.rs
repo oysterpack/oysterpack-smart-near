@@ -1,9 +1,9 @@
-use near_sdk::{
+use oysterpack_smart_near::domain::StorageUsage;
+use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     json_types::ValidAccountId,
     serde::{Deserialize, Serialize},
 };
-use oysterpack_smart_near::domain::StorageUsage;
 
 /// # **Contract Interface**: Account Storage Usage API
 ///
@@ -22,7 +22,7 @@ pub trait AccountStorageUsage {
 #[derive(
     BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, PartialEq, Clone, Copy,
 )]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct StorageUsageBounds {
     /// the minimum storage that is required for the account on the contract
     pub min: StorageUsage,

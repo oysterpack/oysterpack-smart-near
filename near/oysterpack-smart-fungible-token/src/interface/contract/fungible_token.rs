@@ -1,6 +1,6 @@
 use crate::*;
-use near_sdk::json_types::ValidAccountId;
-use near_sdk::{Promise, PromiseOrValue};
+use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
+use oysterpack_smart_near::near_sdk::{Promise, PromiseOrValue};
 use oysterpack_smart_near::{ErrCode, Level, LogEvent};
 
 /// # **Contract Interface**: [Fungible Token Core API][1]

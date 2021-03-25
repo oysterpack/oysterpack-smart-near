@@ -10,13 +10,13 @@ use crate::{
     LOG_EVENT_CONTRACT_SALE_CANCELLED, LOG_EVENT_CONTRACT_TRANSFER_CANCELLED,
     LOG_EVENT_CONTRACT_TRANSFER_FINALIZED, LOG_EVENT_CONTRACT_TRANSFER_INITIATED,
 };
-use near_sdk::json_types::ValidAccountId;
-use near_sdk::{env, AccountId, Promise};
 use oysterpack_smart_near::asserts::{
     assert_request, assert_yocto_near_attached, ERR_CODE_BAD_REQUEST,
 };
 use oysterpack_smart_near::component::Deploy;
 use oysterpack_smart_near::domain::{AccountIdHash, YoctoNear, ZERO_NEAR};
+use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
+use oysterpack_smart_near::near_sdk::{env, AccountId, Promise};
 
 pub struct ContractOwnershipComponent;
 

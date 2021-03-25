@@ -1,16 +1,16 @@
 use crate::ContractStorageUsage;
-use near_sdk::{
+use oysterpack_smart_near::domain::YoctoNear;
+use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
     serde::{Deserialize, Serialize},
 };
-use oysterpack_smart_near::domain::YoctoNear;
 
 /// Reports a breakdown of contract storage usage staking costs
 #[derive(
     BorshSerialize, BorshDeserialize, Deserialize, Serialize, Copy, Clone, Debug, PartialEq, Default,
 )]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct ContractStorageUsageCosts {
     total: YoctoNear,
     accounts: YoctoNear,

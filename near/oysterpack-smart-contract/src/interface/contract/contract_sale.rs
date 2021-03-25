@@ -1,9 +1,9 @@
 use crate::ContractBid;
-use near_sdk::{
+use oysterpack_smart_near::domain::{ExpirationSetting, YoctoNear};
+use oysterpack_smart_near::near_sdk::{
     serde::{Deserialize, Serialize},
     AccountId,
 };
-use oysterpack_smart_near::domain::{ExpirationSetting, YoctoNear};
 use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 
 /// # **Contract Interface**: Contract Sale API
@@ -128,7 +128,7 @@ pub trait ContractSale {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct ContractBuyerBid {
     pub buyer: AccountId,
     pub bid: ContractBid,

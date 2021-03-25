@@ -1,4 +1,4 @@
-use near_sdk::{
+use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
 };
@@ -23,7 +23,7 @@ use std::{collections::HashMap, ops::Deref};
     Hash,
     Default,
 )]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct BalanceId(pub u8);
 
 /// used to track NEAR balances that are outside registered accounts - examples
@@ -35,7 +35,7 @@ pub type NearBalances = HashMap<BalanceId, YoctoNear>;
 #[derive(
     BorshSerialize, BorshDeserialize, Deserialize, Serialize, Clone, Debug, PartialEq, Default,
 )]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct ContractNearBalances {
     total: YoctoNear,
     accounts: YoctoNear,
@@ -151,7 +151,7 @@ impl ContractNearBalances {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use near_sdk::test_utils::test_env;
+    use oysterpack_smart_near::near_sdk::test_utils::test_env;
     use oysterpack_smart_near::YOCTO;
 
     const LIQUIDITY_BALANCE_ID: BalanceId = BalanceId(0);

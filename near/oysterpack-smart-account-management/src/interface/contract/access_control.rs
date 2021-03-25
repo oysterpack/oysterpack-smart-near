@@ -1,5 +1,5 @@
 use crate::Permissions;
-use near_sdk::json_types::ValidAccountId;
+use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
 use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 use std::collections::HashMap;
 

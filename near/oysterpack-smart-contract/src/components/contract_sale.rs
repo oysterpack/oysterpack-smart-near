@@ -9,9 +9,9 @@ use crate::{
     LOG_EVENT_CONTRACT_BID_PLACED, LOG_EVENT_CONTRACT_BID_RAISED, LOG_EVENT_CONTRACT_FOR_SALE,
     LOG_EVENT_CONTRACT_SALE_CANCELLED, LOG_EVENT_CONTRACT_SOLD,
 };
-use near_sdk::{env, Promise};
 use oysterpack_smart_near::asserts::{assert_near_attached, ERR_CODE_BAD_REQUEST};
 use oysterpack_smart_near::domain::ExpirationSetting;
+use oysterpack_smart_near::near_sdk::{env, Promise};
 use oysterpack_smart_near::{
     asserts::assert_yocto_near_attached,
     domain::{Expiration, YoctoNear, ZERO_NEAR},

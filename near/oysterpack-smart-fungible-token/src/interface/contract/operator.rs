@@ -1,6 +1,6 @@
 use crate::{Icon, Reference};
-use near_sdk::serde::{Deserialize, Serialize};
 use oysterpack_smart_near::domain::{Gas, TGas};
+use oysterpack_smart_near::near_sdk::serde::{Deserialize, Serialize};
 use oysterpack_smart_near::Hash;
 
 /// # **Contract Interface**: Fungible Token Operator API
@@ -17,7 +17,7 @@ pub trait FungibleTokenOperator {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub enum OperatorCommand {
     SetIcon(Icon),
     ClearIcon,

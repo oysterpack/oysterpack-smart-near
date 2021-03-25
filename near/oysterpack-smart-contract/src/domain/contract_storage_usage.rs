@@ -1,15 +1,15 @@
 use crate::ContractStorageUsageCosts;
-use near_sdk::{
+use oysterpack_smart_near::domain::StorageUsage;
+use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
 };
-use oysterpack_smart_near::domain::StorageUsage;
 
 /// Reports a breakdown of contract storage usage
 #[derive(
     BorshSerialize, BorshDeserialize, Deserialize, Serialize, Copy, Clone, Debug, PartialEq, Default,
 )]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct ContractStorageUsage {
     total: StorageUsage,
     accounts: StorageUsage,

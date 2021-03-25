@@ -1,9 +1,9 @@
 use crate::FT_METADATA_SPEC;
-use near_sdk::{
+use oysterpack_smart_near::asserts::ERR_INVALID;
+use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
 };
-use oysterpack_smart_near::asserts::ERR_INVALID;
 use oysterpack_smart_near::Hash;
 use std::fmt::{self, Display, Formatter};
 use std::ops::Deref;
@@ -21,7 +21,7 @@ use std::ops::Deref;
 ///
 /// NOTE: how optional metadata is stored off-chain is out of scope
 #[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize, PartialEq, Debug)]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct Metadata {
     pub spec: Spec,
     pub name: Name,
@@ -51,7 +51,7 @@ impl Metadata {
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize, PartialEq, Debug)]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct Spec(pub String);
 
 impl Deref for Spec {
@@ -81,7 +81,7 @@ impl Display for Spec {
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize, PartialEq, Debug)]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct Name(pub String);
 
 impl Deref for Name {
@@ -111,7 +111,7 @@ impl Display for Name {
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize, PartialEq, Debug)]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct Symbol(pub String);
 
 impl Deref for Symbol {
@@ -151,7 +151,7 @@ impl Display for Symbol {
 /// - create icons that will work well with both light-mode and dark-mode websites by either using
 /// middle-tone color schemes, or by embedding media queries in the SVG.
 #[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize, PartialEq, Debug)]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct Icon(pub String);
 
 impl Deref for Icon {
@@ -187,7 +187,7 @@ impl Display for Icon {
 /// If the information given in this document conflicts with the on-chain attributes, then the values
 /// in reference shall be considered the source of truth.
 #[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize, PartialEq, Debug)]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct Reference(pub String);
 
 impl Deref for Reference {

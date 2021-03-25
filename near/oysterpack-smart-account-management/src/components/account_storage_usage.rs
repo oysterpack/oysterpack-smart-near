@@ -1,5 +1,5 @@
-use near_sdk::json_types::ValidAccountId;
 use oysterpack_smart_near::domain::StorageUsage;
+use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
 
 use crate::{AccountNearDataObject, AccountStorageUsage, StorageUsageBounds};
 use oysterpack_smart_near::component::{Component, Deploy};

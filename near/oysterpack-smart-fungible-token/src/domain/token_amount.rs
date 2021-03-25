@@ -1,10 +1,10 @@
-use near_sdk::serde::{Deserialize, Serialize};
 use oysterpack_smart_near::data::numbers::U128;
+use oysterpack_smart_near::near_sdk::serde::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
 use std::ops::{Deref, DerefMut};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct TokenAmount(pub U128);
 
 impl Deref for TokenAmount {

@@ -6,7 +6,7 @@
 //!   - config: [`AccountManagementComponentConfig`]
 
 use crate::*;
-use near_sdk::{
+use oysterpack_smart_near::near_sdk::{
     borsh::{BorshDeserialize, BorshSerialize},
     env,
     json_types::ValidAccountId,
@@ -849,6 +849,7 @@ impl Deref for MaxStorageBalance {
 mod tests_service {
     use super::*;
     use crate::StorageUsageBounds;
+    use oysterpack_smart_near::near_sdk;
     use oysterpack_smart_near_test::*;
 
     pub type AccountManager = AccountManagementComponent<()>;
@@ -891,6 +892,7 @@ mod tests_service {
 mod tests_teloc {
     use super::*;
     use crate::StorageUsageBounds;
+    use oysterpack_smart_near::near_sdk;
     use oysterpack_smart_near_test::*;
 
     pub type AccountManager = AccountManagementComponent<()>;
@@ -938,6 +940,7 @@ mod tests_storage_management {
     use super::*;
     use crate::{AccountMetrics, StorageUsageBounds};
     use oysterpack_smart_near::domain::StorageUsage;
+    use oysterpack_smart_near::near_sdk;
     use oysterpack_smart_near_test::*;
 
     const STORAGE_USAGE_BOUNDS: StorageUsageBounds = StorageUsageBounds {
@@ -2742,6 +2745,7 @@ mod tests_storage_management {
 #[cfg(test)]
 mod tests_account_storage_usage {
     use super::*;
+    use oysterpack_smart_near::near_sdk;
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
@@ -2795,6 +2799,7 @@ mod tests_account_storage_usage {
 #[cfg(test)]
 mod tests_account_metrics {
     use super::*;
+    use oysterpack_smart_near::near_sdk;
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
@@ -2919,6 +2924,7 @@ mod tests_account_metrics {
 #[cfg(test)]
 mod tests_account_repository {
     use super::*;
+    use oysterpack_smart_near::near_sdk;
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
@@ -3013,7 +3019,8 @@ mod tests_account_repository {
 #[cfg(test)]
 mod test_permission_management {
     use super::*;
-    use near_sdk::{test_utils, VMContext};
+    use oysterpack_smart_near::near_sdk;
+    use oysterpack_smart_near::near_sdk::{test_utils, VMContext};
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
     use std::convert::TryInto;
@@ -3594,7 +3601,7 @@ mod test_permission_management {
 #[cfg(test)]
 mod test_contract_permissions {
     use super::*;
-    use near_sdk::test_utils;
+    use oysterpack_smart_near::near_sdk::test_utils;
 
     #[test]
     fn contract_permissions() {

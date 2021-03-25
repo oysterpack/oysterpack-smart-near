@@ -3,12 +3,12 @@ use crate::{
     ERR_CURRENT_OR_PROSPECTIVE_OWNER_ACCESS_REQUIRED, ERR_OWNER_ACCESS_REQUIRED,
     ERR_PROSPECTIVE_OWNER_ACCESS_REQUIRED,
 };
-use near_sdk::json_types::ValidAccountId;
-use near_sdk::{
+use oysterpack_smart_near::domain::{AccountIdHash, YoctoNear};
+use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
+use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env, AccountId,
 };
-use oysterpack_smart_near::domain::{AccountIdHash, YoctoNear};
 use oysterpack_smart_near::{data::Object, ErrCode, ErrorConst};
 use std::ops::{Deref, DerefMut};
 

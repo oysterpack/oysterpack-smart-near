@@ -1,11 +1,11 @@
 use crate::{ContractNearBalances, ContractStorageUsage, ContractStorageUsageCosts};
-use near_sdk::{
-    borsh::{self, BorshDeserialize, BorshSerialize},
-    serde::{Deserialize, Serialize},
-};
 use oysterpack_smart_account_management::AccountMetrics;
 use oysterpack_smart_near::data::numbers::U128;
 use oysterpack_smart_near::domain::BlockTime;
+use oysterpack_smart_near::near_sdk::{
+    borsh::{self, BorshDeserialize, BorshSerialize},
+    serde::{Deserialize, Serialize},
+};
 
 /// # **Contract Interface**: Contract Metrics API
 /// Provides metrics that track storage usage and NEAR balances
@@ -25,7 +25,7 @@ pub trait ContractMetrics {
 
 /// Provides a point in time metrics snapshot
 #[derive(BorshSerialize, BorshDeserialize, Deserialize, Serialize, Clone, Debug, PartialEq)]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct ContractMetricsSnapshot {
     pub block_time: BlockTime,
     pub total_registered_accounts: U128,

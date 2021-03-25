@@ -1,7 +1,7 @@
 use crate::{
     AccountIdHash, AccountStorageEvent, Permissions, StorageBalance, ERR_ACCOUNT_NOT_REGISTERED,
 };
-use near_sdk::{
+use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
 };

@@ -1,10 +1,10 @@
-use near_sdk::{
+use oysterpack_smart_near::near_sdk::{
     serde::Deserialize,
     serde_json::{self, *},
 };
 
 #[derive(Deserialize, Debug)]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 struct User {
     fingerprint: String,
     location: String,

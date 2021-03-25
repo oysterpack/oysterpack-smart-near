@@ -1,5 +1,5 @@
 use crate::AccountStorageEvent;
-use near_sdk::{
+use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
 };
@@ -21,7 +21,7 @@ type DAO = Object<u128, AccountMetrics>;
 #[derive(
     BorshSerialize, BorshDeserialize, Deserialize, Serialize, Copy, Clone, Debug, PartialEq, Default,
 )]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct AccountMetrics {
     pub total_registered_accounts: U128,
     pub total_near_balance: YoctoNear,

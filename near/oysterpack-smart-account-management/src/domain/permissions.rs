@@ -1,8 +1,8 @@
-use near_sdk::{
+use oysterpack_smart_near::data::numbers::U64;
+use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
 };
-use oysterpack_smart_near::data::numbers::U64;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::ops::{Deref, DerefMut};
 
@@ -35,7 +35,7 @@ pub type Permission = u64;
     Hash,
     Default,
 )]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct Permissions(pub U64);
 
 impl Deref for Permissions {

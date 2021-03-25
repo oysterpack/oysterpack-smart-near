@@ -13,13 +13,6 @@ use crate::{
     LOG_EVENT_FT_TRANSFER_CALL_PARTIAL_REFUND, LOG_EVENT_FT_TRANSFER_CALL_RECEIVER_DEBIT,
     LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED, LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT,
 };
-use near_sdk::{
-    borsh::{BorshDeserialize, BorshSerialize},
-    env,
-    json_types::ValidAccountId,
-    serde::{Deserialize, Serialize},
-    serde_json, AccountId, Promise, PromiseResult,
-};
 use oysterpack_smart_account_management::{
     components::account_management::{
         AccountManagementComponent, UnregisterAccount, ERR_CODE_UNREGISTER_FAILURE,
@@ -31,6 +24,13 @@ use oysterpack_smart_near::domain::{
     ActionType, ByteLen, Gas, SenderIsReceiver, StorageUsage, TGas, TransactionResource,
 };
 use oysterpack_smart_near::eventbus::post;
+use oysterpack_smart_near::near_sdk::{
+    borsh::{BorshDeserialize, BorshSerialize},
+    env,
+    json_types::ValidAccountId,
+    serde::{Deserialize, Serialize},
+    serde_json, AccountId, Promise, PromiseResult,
+};
 use oysterpack_smart_near::{
     asserts::{
         assert_yocto_near_attached, ERR_CODE_BAD_REQUEST, ERR_INSUFFICIENT_FUNDS, ERR_INVALID,
@@ -70,7 +70,7 @@ where
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct Config {
     pub metadata: Metadata,
     /// initial token supply
@@ -326,7 +326,7 @@ where
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct OnTransferArgs {
     sender_id: AccountId,
     amount: TokenAmount,
@@ -334,7 +334,7 @@ pub struct OnTransferArgs {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(crate = "near_sdk::serde")]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct ResolveTransferArgs {
     sender_id: AccountId,
     receiver_id: AccountId,
