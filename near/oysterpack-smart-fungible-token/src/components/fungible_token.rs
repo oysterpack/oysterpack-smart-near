@@ -8,10 +8,10 @@
 use crate::{
     contract::operator::{FungibleTokenOperator, OperatorCommand},
     FungibleToken, FungibleTokenMetadataProvider, Memo, Metadata, ResolveTransferCall, TokenAmount,
-    TokenService, TransferCallMessage, LOG_EVENT_FT_BURN, LOG_EVENT_FT_MINT, LOG_EVENT_FT_TRANSFER,
-    LOG_EVENT_FT_TRANSFER_CALL_FAILURE, LOG_EVENT_FT_TRANSFER_CALL_PARTIAL_REFUND,
-    LOG_EVENT_FT_TRANSFER_CALL_RECEIVER_DEBIT, LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED,
-    LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT,
+    TokenService, TransferCallMessage, ERR_CODE_FT_RESOLVE_TRANSFER, LOG_EVENT_FT_BURN,
+    LOG_EVENT_FT_MINT, LOG_EVENT_FT_TRANSFER, LOG_EVENT_FT_TRANSFER_CALL_FAILURE,
+    LOG_EVENT_FT_TRANSFER_CALL_PARTIAL_REFUND, LOG_EVENT_FT_TRANSFER_CALL_RECEIVER_DEBIT,
+    LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED, LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT,
 };
 use near_sdk::{
     borsh::{BorshDeserialize, BorshSerialize},
@@ -363,9 +363,19 @@ where
         let unused_amount = match env::promise_result(0) {
             PromiseResult::NotReady => unreachable!(),
             PromiseResult::Successful(value) => {
-                if let Ok(unused_amount) = near_sdk::serde_json::from_slice::<TokenAmount>(&value) {
-                    min(amount, unused_amount)
+                if let Ok(unused_amount) = serde_json::from_slice::<TokenAmount>(&value) {
+                    if unused_amount > amount {
+                        ERR_CODE_FT_RESOLVE_TRANSFER
+                            .error("unused amount was greater than the transfer amount - full transfer amount will be refunded")
+                            .log();
+                        amount
+                    } else {
+                        unused_amount
+                    }
                 } else {
+                    ERR_CODE_FT_RESOLVE_TRANSFER
+                        .error("failed to deserialize unused amount - full amount will be refunded")
+                        .log();
                     amount
                 }
             }
@@ -375,43 +385,42 @@ where
             }
         };
 
-        if *unused_amount > 0 {
-            // try to refund the unused amount from the receiver back to the sender
-            if let Some(mut receiver_account_balance) =
-                ft_load_account_balance(receiver_id.as_ref())
-            {
-                let receiver_balance = *receiver_account_balance;
-                if receiver_balance > 0 {
-                    let refund_amount = min(receiver_balance, *unused_amount);
-                    if refund_amount < *unused_amount {
-                        LOG_EVENT_FT_TRANSFER_CALL_PARTIAL_REFUND.log("partial refund will be applied because receiver account has insufficient fund");
-                    }
-                    *receiver_account_balance -= refund_amount;
-                    receiver_account_balance.save();
-                    LOG_EVENT_FT_TRANSFER_CALL_RECEIVER_DEBIT.log(refund_amount);
+        if *unused_amount == 0 {
+            return unused_amount;
+        }
 
-                    match ft_load_account_balance(sender_id.as_ref()) {
-                        Some(mut sender_account_balance) => {
-                            *sender_account_balance += refund_amount;
-                            sender_account_balance.save();
-                            LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT.log(refund_amount);
-                        }
-                        None => {
-                            burn_tokens(refund_amount);
-                            LOG_EVENT_FT_BURN
-                                .log(format!(
-                                "tokens were burned because sender account is not registered: {}"
-                            ,refund_amount));
-                        }
+        // try to refund the unused amount from the receiver back to the sender
+        if let Some(mut receiver_account_balance) = ft_load_account_balance(receiver_id.as_ref()) {
+            let receiver_balance = *receiver_account_balance;
+            if receiver_balance > 0 {
+                let refund_amount = min(receiver_balance, *unused_amount);
+                if refund_amount < *unused_amount {
+                    LOG_EVENT_FT_TRANSFER_CALL_PARTIAL_REFUND.log("partial refund will be applied because receiver account has insufficient fund");
+                }
+                *receiver_account_balance -= refund_amount;
+                receiver_account_balance.save();
+                LOG_EVENT_FT_TRANSFER_CALL_RECEIVER_DEBIT.log(refund_amount);
+
+                match ft_load_account_balance(sender_id.as_ref()) {
+                    Some(mut sender_account_balance) => {
+                        *sender_account_balance += refund_amount;
+                        sender_account_balance.save();
+                        LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT.log(refund_amount);
                     }
-                } else {
-                    LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED
-                        .log("receiver account has zero balance");
+                    None => {
+                        burn_tokens(refund_amount);
+                        LOG_EVENT_FT_BURN.log(format!(
+                            "sender account is not registered: {}",
+                            refund_amount
+                        ));
+                    }
                 }
             } else {
                 LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED
-                    .log("receiver account not registered");
+                    .log("receiver account has zero balance");
             }
+        } else {
+            LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED.log("receiver account not registered");
         }
 
         unused_amount
@@ -1238,6 +1247,32 @@ mod tests {
                     Some(Memo("memo".to_string())),
                     TransferCallMessage("msg".to_string()),
                 );
+            });
+        }
+    }
+
+    #[cfg(test)]
+    mod test_resolve_transfer_call {
+        use super::*;
+
+        #[test]
+        fn zero_refund() {
+            run_test(None, Some(1000.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = ctx.current_account_id.clone();
+                let refund_amount = TokenAmount(0.into());
+                let refund_amount_bytes = serde_json::to_vec(&refund_amount).unwrap();
+                testing_env_with_promise_results(
+                    ctx,
+                    vec![PromiseResult::Successful(refund_amount_bytes)],
+                );
+                stake.ft_resolve_transfer_call(
+                    to_valid_account_id(SENDER),
+                    to_valid_account_id(RECEIVER),
+                    TokenAmount(0.into()),
+                );
+
+                let logs = test_utils::get_logs();
+                assert!(logs.is_empty());
             });
         }
     }

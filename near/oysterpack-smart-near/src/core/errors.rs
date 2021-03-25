@@ -49,6 +49,10 @@ where
     pub fn panic(&self) {
         env::panic(self.to_string().as_bytes())
     }
+
+    pub fn log(&self) {
+        env::log(self.to_string().as_bytes())
+    }
 }
 
 /// Error that can be defined as a constant, i.e., the error message is constant

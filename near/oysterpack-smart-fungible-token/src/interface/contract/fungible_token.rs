@@ -1,7 +1,7 @@
 use crate::*;
 use near_sdk::json_types::ValidAccountId;
 use near_sdk::{Promise, PromiseOrValue};
-use oysterpack_smart_near::{Level, LogEvent};
+use oysterpack_smart_near::{ErrCode, Level, LogEvent};
 
 /// # **Contract Interface**: [Fungible Token Core API][1]
 ///
@@ -167,6 +167,8 @@ pub const LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT: LogEvent =
 
 pub const LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED: LogEvent =
     LogEvent(Level::WARN, "FT_TRANSFER_CALL_REFUND_NOT_APPLIED");
+
+pub const ERR_CODE_FT_RESOLVE_TRANSFER: ErrCode = ErrCode("FT_RESOLVE_TRANSFER");
 
 /// # **Contract Interface**: [Fungible Token Transfer Call Receiver API][1]
 /// Contracts that want to receive token transfers as part of the transfer call workflow should
