@@ -69,6 +69,28 @@ where
     }
 }
 
+/// Must be registered with [`AccountManagementComponent`]
+///
+/// When an account is forced unregistered, any tokens it owned will be burned, which reduces the total
+/// token supply.
+pub struct FungibleTokenUnregisterAccountHandler;
+
+impl UnregisterAccount for FungibleTokenUnregisterAccountHandler {
+    fn unregister_account(&self, force: bool) {
+        let account_id = &env::predecessor_account_id();
+        if let Some(ft_balance) = ft_load_account_balance(&account_id) {
+            ERR_CODE_UNREGISTER_FAILURE.assert(|| force, || "account has non-zero token balance");
+            let amount = *ft_balance;
+            ft_balance.delete();
+            burn_tokens(amount);
+            LOG_EVENT_FT_BURN.log(format!(
+                "account forced unregistered with token balance: account: account: {}, amount: {}",
+                account_id, amount
+            ));
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct Config {
@@ -216,7 +238,7 @@ where
 
         burn_tokens(*amount);
 
-        LOG_EVENT_FT_BURN.log(format!("account_id: {}, amount: {}", account_id, amount));
+        LOG_EVENT_FT_BURN.log(format!("account: {}, amount: {}", account_id, amount));
     }
 }
 
@@ -500,43 +522,6 @@ fn ft_load_account_balance(account_id: &str) -> Option<AccountFTBalance> {
 
 fn ft_account_id_hash(account_id: &str) -> Hash {
     Hash::from((account_id, FT_ACCOUNT_KEY))
-}
-
-/// Must be registered with [`AccountManagementComponent`]
-///
-/// When an account is forced unregistered, any tokens it owned will be burned, which reduces the total
-/// token supply.
-#[derive(Dependency)]
-pub struct UnregisterFungibleTokenAccount;
-
-impl UnregisterAccount for UnregisterFungibleTokenAccount {
-    /// if force = true, then any tokens that the account owned will be burned, which will reduce
-    /// the total token supply
-    fn unregister_account(&mut self, force: bool) {
-        let delete_account = || {
-            let account_hash_id =
-                Hash::from((env::predecessor_account_id().as_str(), FT_ACCOUNT_KEY));
-            AccountFTBalance::delete_by_key(&account_hash_id);
-        };
-
-        if force {
-            // burn any account token balance
-            let token_balance = *ft_balance_of(&env::predecessor_account_id());
-            if token_balance > 0 {
-                let mut token_supply = TokenSupply::load(&TOKEN_SUPPLY).unwrap();
-                *token_supply -= token_balance;
-                token_supply.save();
-            }
-
-            delete_account();
-        } else {
-            ERR_CODE_UNREGISTER_FAILURE.assert(
-                || *ft_balance_of(&env::predecessor_account_id()) == 0,
-                || "account failed to unregister because the account has a token balance",
-            );
-            delete_account();
-        }
-    }
 }
 
 #[cfg(test)]

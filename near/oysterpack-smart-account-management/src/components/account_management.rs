@@ -209,7 +209,7 @@ pub trait UnregisterAccount {
     /// ##NOTES
     ///- the predecessor account is being unregistered
     /// - implementations should use [`ERR_CODE_UNREGISTER_FAILURE`] for failures
-    fn unregister_account(&mut self, force: bool);
+    fn unregister_account(&self, force: bool);
 }
 
 /// Default implementation that performs no contract specific operation, i.e., no-operation
@@ -219,7 +219,7 @@ pub trait UnregisterAccount {
 pub struct UnregisterAccountNOOP;
 
 impl UnregisterAccount for UnregisterAccountNOOP {
-    fn unregister_account(&mut self, _force: bool) {
+    fn unregister_account(&self, _force: bool) {
         // no action required
     }
 }
@@ -2671,7 +2671,7 @@ mod tests_storage_management {
         }
 
         impl UnregisterAccount for UnregisterMock {
-            fn unregister_account(&mut self, force: bool) {
+            fn unregister_account(&self, force: bool) {
                 if !force && self.fail {
                     panic!("account cannot be unregistered because ...");
                 }

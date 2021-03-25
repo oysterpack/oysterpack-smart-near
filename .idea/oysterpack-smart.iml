@@ -12,6 +12,7 @@
       <sourceFolder url="file://$MODULE_DIR$/near/oysterpack-smart-contract/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/near/oysterpack-smart-fungible-token/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/near/oysterpack-smart-contract/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/near/oysterpack-smart-near/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/near/target" />
       <excludeFolder url="file://$MODULE_DIR$/near-contract/target" />
     </content>
