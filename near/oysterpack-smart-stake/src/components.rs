@@ -8,6 +8,8 @@ pub type AccountData = ();
 
 pub type AccountManager = AccountManagementComponent<AccountData>;
 
+pub type StakeFungibleToken = FungibleTokenComponent<AccountData>;
+
 impl Contract {
     pub fn account_manager() -> AccountManager {
         let container = ServiceProvider::new()

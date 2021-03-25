@@ -295,13 +295,25 @@ where
     type Config = AccountManagementComponentConfig;
 
     fn deploy(config: Self::Config) {
-        let storage_usage_bounds =
+        let mut storage_usage_bounds =
             config
                 .storage_usage_bounds
                 .unwrap_or_else(|| StorageUsageBounds {
                     min: Self::measure_storage_usage(Default::default()),
                     max: None,
                 });
+
+        let storage_usage_bounds =
+            config
+                .component_account_storage_mins
+                .map_or(storage_usage_bounds, |funcs| {
+                    let account_storage_min: StorageUsage = funcs
+                        .iter()
+                        .fold(storage_usage_bounds.min, |sum, f| (sum + f()));
+                    storage_usage_bounds.min = account_storage_min;
+                    storage_usage_bounds
+                });
+
         AccountStorageUsageComponent::deploy(storage_usage_bounds);
 
         let storage_balance_bounds: StorageBalanceBounds = storage_usage_bounds.into();
@@ -321,6 +333,10 @@ where
 pub struct AccountManagementComponentConfig {
     /// if not specified then the default min will be measured and max will be unbounded
     pub storage_usage_bounds: Option<StorageUsageBounds>,
+
+    /// components that manage account data must register functions that provide min account storage requirements
+    pub component_account_storage_mins: Option<Vec<fn() -> StorageUsage>>,
+
     /// required to seed the contract with an admin account
     /// - storage usage costs will be paid for by the contract owner - normally the initial admin
     ///   account will be the contract owner
@@ -332,6 +348,7 @@ impl AccountManagementComponentConfig {
         Self {
             admin_account,
             storage_usage_bounds: None,
+            component_account_storage_mins: None,
         }
     }
 }
@@ -834,11 +851,10 @@ mod tests_service {
     use crate::StorageUsageBounds;
     use oysterpack_smart_near_test::*;
 
-    fn deploy_account_service() {
-        AccountStorageUsageComponent::deploy(StorageUsageBounds {
-            min: 1000.into(),
-            max: None,
-        });
+    pub type AccountManager = AccountManagementComponent<()>;
+
+    fn comp_account_storage_min() -> StorageUsage {
+        1000.into()
     }
 
     #[test]
@@ -849,14 +865,21 @@ mod tests_service {
         testing_env!(ctx);
 
         // Act
-        deploy_account_service();
+        AccountManager::deploy(AccountManagementComponentConfig {
+            storage_usage_bounds: Some(StorageUsageBounds {
+                min: 1000.into(),
+                max: None,
+            }),
+            component_account_storage_mins: Some(vec![comp_account_storage_min]),
+            admin_account: to_valid_account_id("owner"),
+        });
 
-        let service: AccountManagementComponent<()> =
-            AccountManagementComponent::new(Box::new(UnregisterAccountNOOP), &Default::default());
+        let service: AccountManager =
+            AccountManager::new(Box::new(UnregisterAccountNOOP), &Default::default());
         let storage_balance_bounds = service.storage_balance_bounds();
         assert_eq!(
             storage_balance_bounds.min,
-            (env::storage_byte_cost() * 1000).into()
+            (env::storage_byte_cost() * 2000).into()
         );
         assert!(storage_balance_bounds.max.is_none());
 
@@ -879,6 +902,7 @@ mod tests_teloc {
                 min: 1000.into(),
                 max: None,
             }),
+            component_account_storage_mins: None,
         });
     }
 
@@ -1557,6 +1581,7 @@ mod tests_storage_management {
                         max: Some(2000.into()),
                     }),
                     admin_account: to_valid_account_id("admin"),
+                    component_account_storage_mins: None,
                 });
 
                 let mut service = AccountManagementComponent::<()>::new(
@@ -2666,6 +2691,7 @@ mod tests_storage_management {
                     min: 1000.into(),
                     max: None,
                 }),
+                component_account_storage_mins: None,
             });
 
             let mut service =
@@ -2693,6 +2719,7 @@ mod tests_storage_management {
                     max: None,
                 }),
                 admin_account: to_valid_account_id("admin"),
+                component_account_storage_mins: None,
             });
 
             let mut service =
@@ -2734,6 +2761,7 @@ mod tests_account_storage_usage {
         AccountManager::deploy(AccountManagementComponentConfig {
             storage_usage_bounds: Some(storage_usage_bounds),
             admin_account: to_valid_account_id("admin"),
+            component_account_storage_mins: None,
         });
 
         let mut service = AccountManager::new(Box::new(UnregisterAccountNOOP), &Default::default());
@@ -2792,6 +2820,7 @@ mod tests_account_metrics {
         AccountManager::deploy(AccountManagementComponentConfig {
             storage_usage_bounds: Some(storage_usage_bounds),
             admin_account: to_valid_account_id("admin"),
+            component_account_storage_mins: None,
         });
 
         let mut service = AccountManager::new(Box::new(UnregisterAccountNOOP), &Default::default());
@@ -2909,6 +2938,7 @@ mod tests_account_repository {
         AccountManager::deploy(AccountManagementComponentConfig {
             storage_usage_bounds: Some(storage_usage_bounds),
             admin_account: to_valid_account_id("admin"),
+            component_account_storage_mins: None,
         });
 
         let mut account_manager =
@@ -2968,6 +2998,7 @@ mod tests_account_repository {
         AccountManager::deploy(AccountManagementComponentConfig {
             storage_usage_bounds: Some(storage_usage_bounds),
             admin_account: to_valid_account_id("admin"),
+            component_account_storage_mins: None,
         });
 
         let mut account_manager =
@@ -3016,6 +3047,7 @@ mod test_permission_management {
         AccountManager::deploy(AccountManagementComponentConfig {
             storage_usage_bounds: Some(storage_usage_bounds),
             admin_account: to_valid_account_id("admin"),
+            component_account_storage_mins: None,
         });
 
         let mut account_manager =

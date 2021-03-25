@@ -81,6 +81,7 @@ mod tests {
                 max: None,
             }),
             admin_account: to_valid_account_id(ADMIN),
+            component_account_storage_mins: None,
         });
     }
 

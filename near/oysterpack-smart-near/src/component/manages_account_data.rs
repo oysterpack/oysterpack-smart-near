@@ -5,5 +5,5 @@ use crate::domain::StorageUsage;
 /// to register.
 pub trait ManagesAccountData {
     /// returns the minimum account storage required by this component
-    fn account_storage_min(&self) -> StorageUsage;
+    fn account_storage_min() -> StorageUsage;
 }

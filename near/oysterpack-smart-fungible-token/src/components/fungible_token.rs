@@ -224,7 +224,7 @@ impl<T> ManagesAccountData for FungibleTokenComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    fn account_storage_min(&self) -> StorageUsage {
+    fn account_storage_min() -> StorageUsage {
         let account_id = "19544499980228477895959808916967586760";
         let initial_storage = env::storage_usage();
         ft_set_balance(account_id, 1);
