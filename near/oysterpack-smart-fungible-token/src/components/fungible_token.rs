@@ -24,11 +24,13 @@ use oysterpack_smart_account_management::{
     components::account_management::{
         AccountManagementComponent, UnregisterAccount, ERR_CODE_UNREGISTER_FAILURE,
     },
-    AccountRepository, ERR_ACCOUNT_NOT_REGISTERED, ERR_NOT_AUTHORIZED,
+    AccountRepository, AccountStorageEvent, ERR_ACCOUNT_NOT_REGISTERED, ERR_NOT_AUTHORIZED,
 };
+use oysterpack_smart_near::component::ManagesAccountData;
 use oysterpack_smart_near::domain::{
-    ActionType, ByteLen, Gas, SenderIsReceiver, TGas, TransactionResource,
+    ActionType, ByteLen, Gas, SenderIsReceiver, StorageUsage, TGas, TransactionResource,
 };
+use oysterpack_smart_near::eventbus::post;
 use oysterpack_smart_near::{
     asserts::{
         assert_yocto_near_attached, ERR_CODE_BAD_REQUEST, ERR_INSUFFICIENT_FUNDS, ERR_INVALID,
@@ -215,6 +217,20 @@ where
         burn_tokens(*amount);
 
         LOG_EVENT_FT_BURN.log(format!("account_id: {}, amount: {}", account_id, amount));
+    }
+}
+
+impl<T> ManagesAccountData for FungibleTokenComponent<T>
+where
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+{
+    fn account_storage_min(&self) -> StorageUsage {
+        let account_id = "19544499980228477895959808916967586760";
+        let initial_storage = env::storage_usage();
+        ft_set_balance(account_id, 1);
+        let account_storage_usage = env::storage_usage() - initial_storage;
+        ft_set_balance(account_id, 0);
+        account_storage_usage.into()
     }
 }
 
@@ -437,7 +453,34 @@ type AccountFTBalance = Object<Hash, u128>;
 
 fn ft_set_balance(account_id: &str, balance: u128) {
     let account_hash_id = ft_account_id_hash(account_id);
-    AccountFTBalance::new(account_hash_id, balance).save();
+    match AccountFTBalance::load(&account_hash_id) {
+        None => {
+            if balance == 0 {
+                return;
+            }
+            let initial_storage_usage = env::storage_usage();
+            AccountFTBalance::new(account_hash_id, balance).save();
+            let storage_usage_change = env::storage_usage() - initial_storage_usage;
+            post(&AccountStorageEvent::StorageUsageChanged(
+                account_id.into(),
+                storage_usage_change.into(),
+            ));
+        }
+        Some(mut account_balance) => {
+            if balance == 0 {
+                let initial_storage_usage = env::storage_usage();
+                account_balance.delete();
+                let storage_usage_change = initial_storage_usage - env::storage_usage();
+                post(&AccountStorageEvent::StorageUsageChanged(
+                    account_id.into(),
+                    (storage_usage_change as i64 * -1).into(),
+                ));
+            } else {
+                *account_balance = balance;
+                account_balance.save();
+            }
+        }
+    }
 }
 
 fn account_ft_balance(account_id: &str) -> AccountFTBalance {
@@ -811,7 +854,12 @@ mod tests {
                 );
 
                 let logs = test_utils::get_logs();
-                assert!(logs.is_empty());
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 1);
+                assert_eq!(
+                    &logs[0],
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(88)"
+                );
             });
         }
 
@@ -830,7 +878,15 @@ mod tests {
                 );
 
                 let logs = test_utils::get_logs();
-                assert!(logs.is_empty());
+                println!("{:#?}", logs);
+                assert_eq!(
+                    &logs[0],
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-88)" // caused by sender debit zeroing FT balance
+                );
+                assert_eq!(
+                    &logs[1],
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(88)" // caused by receiver credit
+                );
             });
         }
 
@@ -854,8 +910,12 @@ mod tests {
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
-                assert_eq!(logs.len(), 1);
-                assert_eq!(&logs[0], "[INFO] [FT_TRANSFER] memo");
+                assert_eq!(logs.len(), 2);
+                assert_eq!(
+                    &logs[0],
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(88)"
+                );
+                assert_eq!(&logs[1], "[INFO] [FT_TRANSFER] memo");
             });
         }
 
@@ -978,7 +1038,12 @@ mod tests {
                 );
 
                 let logs = test_utils::get_logs();
-                assert!(logs.is_empty());
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 1);
+                assert_eq!(
+                    &logs[0],
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(88)"
+                );
 
                 let receipts = deserialize_receipts();
                 assert_eq!(receipts.len(), 2);
@@ -1043,7 +1108,16 @@ mod tests {
                 );
 
                 let logs = test_utils::get_logs();
-                assert!(logs.is_empty());
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 2);
+                assert_eq!(
+                    &logs[0],
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-88)"
+                );
+                assert_eq!(
+                    &logs[1],
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(88)"
+                );
 
                 let receipts = deserialize_receipts();
                 assert_eq!(receipts.len(), 2);
@@ -1109,8 +1183,12 @@ mod tests {
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
-                assert_eq!(logs.len(), 1);
-                assert_eq!(&logs[0], "[INFO] [FT_TRANSFER] memo");
+                assert_eq!(logs.len(), 2);
+                assert_eq!(
+                    &logs[0],
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(88)"
+                );
+                assert_eq!(&logs[1], "[INFO] [FT_TRANSFER] memo");
 
                 let receipts = deserialize_receipts();
                 assert_eq!(receipts.len(), 2);
@@ -1299,9 +1377,13 @@ mod tests {
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
-                assert_eq!(logs.len(), 2);
+                assert_eq!(logs.len(), 3);
                 assert_eq!(&logs[0], "[INFO] [FT_TRANSFER_CALL_RECEIVER_DEBIT] 500");
-                assert_eq!(&logs[1], "[INFO] [FT_TRANSFER_CALL_SENDER_CREDIT] 500");
+                assert_eq!(
+                    &logs[1],
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(88)"
+                );
+                assert_eq!(&logs[2], "[INFO] [FT_TRANSFER_CALL_SENDER_CREDIT] 500");
             });
         }
     }
