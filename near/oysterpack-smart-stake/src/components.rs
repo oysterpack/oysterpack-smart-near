@@ -20,6 +20,16 @@ impl Contract {
 
         container.resolve()
     }
+
+    pub fn ft_stake() -> StakeFungibleToken {
+        let container = ServiceProvider::new()
+            .add_transient_c::<Box<dyn UnregisterAccount>, Box<UnregisterHandler>>()
+            .add_instance(ContractPermissions::default())
+            .add_transient::<AccountManager>()
+            .add_transient::<StakeFungibleToken>();
+
+        container.resolve()
+    }
 }
 
 #[derive(Dependency)]

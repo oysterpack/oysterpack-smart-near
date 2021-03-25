@@ -13,7 +13,7 @@ pub trait FungibleTokenOperator {
     fn ft_operator_command(&mut self, command: OperatorCommand);
 
     /// returns the amount of gas configured for the resolve transfer callback
-    fn ft_operator_transfer_callback_gas() -> Gas;
+    fn ft_operator_transfer_callback_gas(&self) -> Gas;
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

@@ -189,7 +189,7 @@ where
         metadata.save();
     }
 
-    fn ft_operator_transfer_callback_gas() -> Gas {
+    fn ft_operator_transfer_callback_gas(&self) -> Gas {
         transfer_callback_gas()
     }
 }
