@@ -943,5 +943,70 @@ mod tests {
     #[cfg(test)]
     mod test_ft_transfer_call {
         use super::*;
+
+        #[test]
+        fn valid_transfer_with_no_memo() {
+            run_test(Some(1000.into()), Some(0.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = SENDER.to_string();
+                ctx.attached_deposit = 1;
+                testing_env!(ctx.clone());
+                stake.ft_transfer_call(
+                    to_valid_account_id(RECEIVER),
+                    400.into(),
+                    None,
+                    TransferCallMessage("msg".to_string()),
+                );
+
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(SENDER)), 600.into());
+                assert_eq!(
+                    stake.ft_balance_of(to_valid_account_id(RECEIVER)),
+                    400.into()
+                );
+
+                let logs = test_utils::get_logs();
+                assert!(logs.is_empty());
+
+                let receipts = deserialize_receipts();
+                assert_eq!(receipts.len(), 2);
+                {
+                    let receipt = &receipts[0];
+                    assert_eq!(receipt.receiver_id, RECEIVER);
+                    assert_eq!(receipt.actions.len(), 1);
+                    let action = &receipt.actions[0];
+                    match action {
+                        Action::FunctionCall(action) => {
+                            assert_eq!(action.method_name, "ft_on_transfer");
+                            assert_eq!(action.deposit, 0);
+                            let args: OnTransferArgs =
+                                serde_json::from_str(action.args.as_str()).unwrap();
+                            assert_eq!(args.sender_id, SENDER);
+                            assert_eq!(args.amount, 400.into());
+                            assert_eq!(args.msg, TransferCallMessage("msg".to_string()));
+                        }
+                        _ => panic!("expected FunctionCall action"),
+                    }
+                }
+
+                {
+                    let receipt = &receipts[1];
+                    assert_eq!(receipt.receiver_id, env::current_account_id());
+                    assert_eq!(receipt.actions.len(), 1);
+                    let action = &receipt.actions[0];
+                    match action {
+                        Action::FunctionCall(action) => {
+                            assert_eq!(action.method_name, "ft_resolve_transfer_call");
+                            assert_eq!(action.deposit, 0);
+                            let args: ResolveTransferArgs =
+                                serde_json::from_str(action.args.as_str()).unwrap();
+                            assert_eq!(args.sender_id, SENDER);
+                            assert_eq!(args.amount, 400.into());
+                            assert_eq!(args.receiver_id, RECEIVER);
+                            assert_eq!(action.gas, transfer_callback_gas().value());
+                        }
+                        _ => panic!("expected FunctionCall action"),
+                    }
+                }
+            });
+        }
     }
 }
