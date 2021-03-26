@@ -1,3 +1,5 @@
+//! [`ContractSaleComponent`]
+
 use crate::components::contract_ownership::ContractOwnershipComponent;
 use crate::{ContractBid, ContractSale};
 use crate::{

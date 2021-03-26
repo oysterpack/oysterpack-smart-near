@@ -1,3 +1,5 @@
+//! [`ContractMetricsComponent`]
+
 use crate::{ContractMetrics, ContractMetricsSnapshot};
 use crate::{ContractNearBalances, ContractStorageUsage, ContractStorageUsageCosts};
 use oysterpack_smart_account_management::AccountMetrics;
