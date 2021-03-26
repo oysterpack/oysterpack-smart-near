@@ -6,7 +6,7 @@ use std::fmt::Debug;
 
 pub type Account<T> = (AccountNearDataObject, Option<AccountDataObject<T>>);
 
-/// Used for account data access
+/// Provides account data access, i.e., CRUD
 pub trait AccountRepository<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,

@@ -1,15 +1,6 @@
-use crate::{AccountIdHash, StorageUsageBounds};
-use lazy_static::lazy_static;
-use oysterpack_smart_near::domain::StorageUsageChange;
-use oysterpack_smart_near::near_sdk::{
-    borsh::{self, BorshDeserialize, BorshSerialize},
-    env,
-    json_types::ValidAccountId,
-    serde::{Deserialize, Serialize},
-};
-use oysterpack_smart_near::{domain::YoctoNear, eventbus::*, Level, LogEvent};
-use std::fmt::{self, Display, Formatter};
-use std::sync::Mutex;
+use crate::{StorageBalance, StorageBalanceBounds};
+use oysterpack_smart_near::domain::YoctoNear;
+use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
 
 /// # **Contract Interface**: [Account Storage API][3]
 ///
@@ -25,10 +16,6 @@ use std::sync::Mutex;
 ///    account. The initial deposit for the account must be at least the minimum amount required by the contract.
 /// 3. Account storage total and available balance can be looked up. The amount required to pay for the account's storage usage
 ///    will be locked up in the contract. Any storage balance above storage staking costs is available for withdrawal.
-///
-/// ### Out of Scope
-/// - Managing funds for purposes other than account storage is outside the scope of this API.
-/// - The contract should account for changes in price for storage on the NEAR blockchain over time. However, how it does so is outside the scope of this contract.
 ///
 /// [1]: https://docs.near.org/docs/concepts/storage#how-much-does-it-cost
 /// [2]: https://docs.near.org/docs/concepts/storage#the-million-cheap-data-additions-attack
@@ -125,100 +112,4 @@ pub trait StorageManagement {
     ///
     /// Returns None if the account is not registered with the contract
     fn storage_balance_of(&self, account_id: ValidAccountId) -> Option<StorageBalance>;
-}
-
-/// Tracks account storage balance
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
-#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
-pub struct StorageBalance {
-    /// total NEAR funds that is purposed to pay for account storage
-    pub total: YoctoNear,
-    /// the amount of NEAR funds that are available for withdrawal from the account's storage balance
-    pub available: YoctoNear,
-}
-
-/// Defines storage balance bounds for the contract
-#[derive(
-    BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, PartialEq, Clone, Copy,
-)]
-#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
-pub struct StorageBalanceBounds {
-    /// the minimum balance that must be maintained for storage by the account on the contract
-    /// - it is the amount of tokens required to start using this contract at all, e.g., to register with the contract
-    pub min: YoctoNear,
-    /// the maximum storage balance that is permitted
-    ///
-    /// A contract may implement `max` equal to `min` if it only charges for initial registration,
-    /// and does not adjust per-user storage over time. A contract which implements `max` must
-    /// refund deposits that would increase a user's storage balance beyond this amount.
-    pub max: Option<YoctoNear>,
-}
-
-impl From<StorageUsageBounds> for StorageBalanceBounds {
-    fn from(bounds: StorageUsageBounds) -> Self {
-        let storage_byte_cost = env::storage_byte_cost();
-        Self {
-            min: (storage_byte_cost * bounds.min.value() as u128).into(),
-            max: bounds
-                .max
-                .map(|max| (storage_byte_cost * max.value() as u128).into()),
-        }
-    }
-}
-
-/// Account storage related events
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub enum AccountStorageEvent {
-    /// an account was registered
-    Registered(StorageBalance),
-    // an account made a deposit
-    Deposit(YoctoNear),
-    /// an account made a withdrawal from its storage available balance
-    Withdrawal(YoctoNear),
-    /// account storage usage changed
-    StorageUsageChanged(AccountIdHash, StorageUsageChange),
-    /// an account was unregistered
-    /// - its NEAR balance was refunded
-    Unregistered(YoctoNear),
-}
-
-impl Display for AccountStorageEvent {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            AccountStorageEvent::StorageUsageChanged(_, change) => write!(f, "{:?}", change),
-            _ => write!(f, "{:?}", self),
-        }
-    }
-}
-
-/// log event for [`AccountStorageEvent`]
-pub const LOG_EVENT_ACCOUNT_STORAGE_CHANGED: LogEvent =
-    LogEvent(Level::INFO, "ACCOUNT_STORAGE_CHANGED");
-
-impl AccountStorageEvent {
-    pub fn log(&self) {
-        LOG_EVENT_ACCOUNT_STORAGE_CHANGED.log(self.to_string());
-    }
-}
-
-// TODO: create macro to generate boilerplate code for event: #[event]
-lazy_static! {
-    static ref ACCOUNT_STORAGE_EVENTS: Mutex<EventHandlers<AccountStorageEvent>> =
-        Mutex::new(EventHandlers::new());
-}
-
-impl Event for AccountStorageEvent {
-    fn handlers<F>(f: F)
-    where
-        F: FnOnce(&EventHandlers<Self>),
-    {
-        f(&*ACCOUNT_STORAGE_EVENTS.lock().unwrap())
-    }
-
-    fn handlers_mut<F>(f: F)
-    where
-        F: FnOnce(&mut EventHandlers<Self>),
-    {
-        f(&mut *ACCOUNT_STORAGE_EVENTS.lock().unwrap())
-    }
 }

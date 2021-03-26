@@ -36,6 +36,14 @@ pub const ERR_INSUFFICIENT_STORAGE_BALANCE: ErrorConst = ErrorConst(
 /// 1. [`AccountRepository`]
 /// 2. [`StorageManagement`] - NEP-145
 /// 3. [`AccountStorageUsage`]
+/// 4. [`PermissionsManagement`]
+///
+/// ## Deployment
+/// - [`AccountManagementComponent::deploy`]
+/// - [`AccountManagementComponentConfig`]
+///
+/// ## Constructor
+/// - [AccountManagementComponent::new]
 pub struct AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
