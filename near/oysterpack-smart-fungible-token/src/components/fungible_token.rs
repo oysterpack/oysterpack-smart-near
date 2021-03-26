@@ -435,43 +435,44 @@ where
         let refund_amount = if let Some(mut receiver_account_balance) =
             AccountFTBalance::load(receiver_id.as_ref())
         {
-            let receiver_balance = *receiver_account_balance;
-            if receiver_balance > 0 {
-                let refund_amount = if receiver_balance < *refund_amount {
-                    LOG_EVENT_FT_TRANSFER_CALL_PARTIAL_REFUND.log("partial refund will be applied because receiver account has insufficient fund");
-                    receiver_balance
-                } else {
-                    *refund_amount
-                };
-                *receiver_account_balance -= refund_amount;
-                receiver_account_balance.save(receiver_id.as_ref());
+            let refund_amount = if *receiver_account_balance < *refund_amount {
+                LOG_EVENT_FT_TRANSFER_CALL_PARTIAL_REFUND.log(
+                    "partial refund will be applied because receiver account has insufficient fund",
+                );
+                *receiver_account_balance
+            } else {
+                *refund_amount
+            };
+            *receiver_account_balance -= refund_amount;
+            receiver_account_balance.save(receiver_id.as_ref());
 
-                LOG_EVENT_FT_TRANSFER_CALL_RECEIVER_DEBIT.log(refund_amount);
+            LOG_EVENT_FT_TRANSFER_CALL_RECEIVER_DEBIT.log(refund_amount);
 
-                match AccountFTBalance::load(sender_id.as_ref()) {
-                    Some(mut sender_account_balance) => {
-                        *sender_account_balance += refund_amount;
-                        sender_account_balance.save(sender_id.as_ref());
+            match AccountFTBalance::load(sender_id.as_ref()) {
+                Some(mut sender_account_balance) => {
+                    *sender_account_balance += refund_amount;
+                    sender_account_balance.save(sender_id.as_ref());
+                    LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT.log(refund_amount);
+                }
+                None => {
+                    // - if balance is zero, then storage was cleaned up
+                    // - the sender account most likely still exists, but might have been unregistered
+                    //   while the transfer call workflow was in flight
+                    if self.account_manager.account_exists(sender_id.as_ref()) {
+                        AccountFTBalance::set_balance(sender_id.as_ref(), refund_amount);
                         LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT.log(refund_amount);
-                    }
-                    None => {
-                        // - if balance is zero, then storage was cleaned up
-                        // - the sender account most likely still exists, but might have been unregistered
-                        //   while the transfer call workflow was in flight
-                        if self.account_manager.account_exists(sender_id.as_ref()) {
-                            AccountFTBalance::set_balance(sender_id.as_ref(), refund_amount);
-                            LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT.log(refund_amount);
-                        } else {
-                            burn_tokens(refund_amount);
-                            LOG_EVENT_FT_BURN.log(format!(
-                                "sender account is not registered: {}",
-                                refund_amount
-                            ));
-                        }
+                    } else {
+                        burn_tokens(refund_amount);
+                        LOG_EVENT_FT_BURN.log(format!(
+                            "sender account is not registered: {}",
+                            refund_amount
+                        ));
                     }
                 }
-                refund_amount.into()
-            } else {
+            }
+            refund_amount.into()
+        } else {
+            if self.account_manager.account_exists(receiver_id.as_ref()) {
                 // this could happen if:
                 // - the receiver account transferred out the tokens while this transfer call workflow
                 //   was in flight
@@ -479,14 +480,14 @@ where
                 // - the receiver contract is acting maliciously
                 LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED
                     .log("receiver account has zero balance");
-                0.into()
+            } else {
+                // if the receiver account is no longer registered then the refund amount of tokens
+                // will be handled when the account unregistered
+                // - the account will not be allowed to unregister with a non-zero token balance,
+                //   otherwise if forced, the tokens will be burned
+                LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED
+                    .log("receiver account not registered");
             }
-        } else {
-            // if the receiver account is no longer registered then the refund amount of tokens
-            // will be handled when the account unregistered
-            // - the account will not be allowed to unregister with a non-zero token balance,
-            //   otherwise if forced, the tokens will be burned
-            LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED.log("receiver account not registered");
             0.into()
         };
 
@@ -1701,6 +1702,78 @@ mod tests {
 
                 assert_eq!(stake.ft_balance_of(to_valid_account_id(SENDER)), 200.into());
                 assert_eq!(stake.ft_balance_of(to_valid_account_id(RECEIVER)), 0.into());
+            });
+        }
+
+        #[test]
+        fn refund_specified_receiver_having_zero_balance() {
+            run_test(Some(100.into()), Some(0.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = ctx.current_account_id.clone();
+                let transfer_amount = TokenAmount(500.into());
+                let refund_amount = TokenAmount(200.into());
+                let refund_amount_bytes = serde_json::to_vec(&refund_amount).unwrap();
+                testing_env_with_promise_results(
+                    ctx,
+                    vec![PromiseResult::Successful(refund_amount_bytes)],
+                );
+                let actual_refund_amount = stake.ft_resolve_transfer_call(
+                    to_valid_account_id(SENDER),
+                    to_valid_account_id(RECEIVER),
+                    transfer_amount,
+                );
+                assert_eq!(actual_refund_amount, 0.into());
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 1);
+                assert_eq!(
+                    &logs[0],
+                    "[WARN] [FT_TRANSFER_CALL_REFUND_NOT_APPLIED] receiver account has zero balance"
+                );
+
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(SENDER)), 100.into());
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(RECEIVER)), 0.into());
+            });
+        }
+
+        #[test]
+        fn refund_specified_sender_not_registered() {
+            run_test(None, Some(1000.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = ctx.current_account_id.clone();
+                let transfer_amount = TokenAmount(500.into());
+                let refund_amount = TokenAmount(200.into());
+                let refund_amount_bytes = serde_json::to_vec(&refund_amount).unwrap();
+                testing_env_with_promise_results(
+                    ctx,
+                    vec![PromiseResult::Successful(refund_amount_bytes)],
+                );
+                let initial_token_supply = stake.ft_total_supply();
+                let actual_refund_amount = stake.ft_resolve_transfer_call(
+                    to_valid_account_id(SENDER),
+                    to_valid_account_id(RECEIVER),
+                    transfer_amount,
+                );
+                assert_eq!(actual_refund_amount, 200.into());
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 2);
+                assert_eq!(&logs[0], "[INFO] [FT_TRANSFER_CALL_RECEIVER_DEBIT] 200");
+                assert_eq!(
+                    &logs[1],
+                    "[INFO] [FT_BURN] sender account is not registered: 200"
+                );
+
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(SENDER)), 0.into());
+                assert_eq!(
+                    stake.ft_balance_of(to_valid_account_id(RECEIVER)),
+                    800.into()
+                );
+                // Assert token supply is reduced when tokens are burned
+                assert_eq!(
+                    stake.ft_total_supply(),
+                    (*initial_token_supply - 200).into()
+                );
             });
         }
     }
