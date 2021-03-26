@@ -13,10 +13,6 @@ use oysterpack_smart_near::{
 };
 use std::sync::Mutex;
 
-const ACCOUNT_METRICS_KEY: u128 = 1952364736129901845182088441739779955;
-
-type DAO = Object<u128, AccountMetrics>;
-
 /// Account metrics
 #[derive(
     BorshSerialize, BorshDeserialize, Deserialize, Serialize, Copy, Clone, Debug, PartialEq, Default,
@@ -31,6 +27,9 @@ pub struct AccountMetrics {
 lazy_static! {
     static ref ACCOUNT_STORAGE_EVENT_HANDLER_REGISTERED: Mutex<bool> = Mutex::new(false);
 }
+
+const ACCOUNT_METRICS_KEY: u128 = 1952364736129901845182088441739779955;
+type DAO = Object<u128, AccountMetrics>;
 
 impl AccountMetrics {
     pub fn load() -> AccountMetrics {
