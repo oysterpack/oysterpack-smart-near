@@ -12,6 +12,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+/// TeraGas
 #[derive(
     BorshSerialize, BorshDeserialize, Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Default,
 )]
