@@ -22,6 +22,10 @@ pub trait TokenService {
     /// - if the account is not registered
     /// - if amount is zero
     fn ft_burn(&mut self, account_id: &str, amount: TokenAmount);
+
+    /// Attempts to burn the account's total token balance.
+    /// - logs [`LOG_EVENT_FT_BURN`]
+    fn ft_burn_all(&mut self, account_id: &str);
 }
 
 pub const LOG_EVENT_FT_MINT: LogEvent = LogEvent(Level::INFO, "FT_MINT");

@@ -233,11 +233,26 @@ where
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(account_id));
 
         let mut ft_balance = AccountFTBalance::load(account_id).unwrap();
+        ERR_INVALID.assert(
+            || *ft_balance >= *amount,
+            || "account has insufficient funds",
+        );
         *ft_balance -= *amount;
         ft_balance.save(account_id);
 
         burn_tokens(*amount);
         LOG_EVENT_FT_BURN.log(format!("account: {}, amount: {}", account_id, amount));
+    }
+
+    fn ft_burn_all(&mut self, account_id: &str) {
+        if let Some(mut ft_balance) = AccountFTBalance::load(account_id) {
+            let amount = *ft_balance;
+            *ft_balance = 0;
+            ft_balance.save(account_id);
+
+            burn_tokens(amount);
+            LOG_EVENT_FT_BURN.log(format!("account: {}, amount: {}", account_id, amount));
+        }
     }
 }
 
@@ -2036,6 +2051,74 @@ mod tests_token_service {
         fn burn_zero_amount() {
             run_test(Some(1000.into()), |_ctx, mut stake| {
                 stake.ft_burn(ACCOUNT, 0.into());
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [INVALID] account has insufficient funds")]
+        fn account_has_insufficient_funds() {
+            run_test(Some(1.into()), |_ctx, mut stake| {
+                stake.ft_burn(ACCOUNT, 10000.into());
+            });
+        }
+    }
+
+    #[cfg(test)]
+    mod tests_burn_all {
+        use super::*;
+
+        #[test]
+        fn account_registered_with_balance() {
+            run_test(Some(10000.into()), |ctx, mut stake| {
+                testing_env!(ctx);
+                let initial_token_supply = stake.ft_total_supply();
+                stake.ft_burn_all(ACCOUNT);
+                assert_eq!(
+                    stake.ft_total_supply(),
+                    (*initial_token_supply - 10000).into()
+                );
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(
+                    logs,
+                    vec![
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-88)",
+                        "[INFO] [FT_BURN] account: bob, amount: 10000",
+                    ]
+                );
+
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(ACCOUNT)), 0.into());
+            });
+        }
+
+        #[test]
+        fn account_registered_with_zero_balance() {
+            run_test(Some(0.into()), |ctx, mut stake| {
+                testing_env!(ctx);
+                let initial_token_supply = stake.ft_total_supply();
+                stake.ft_burn_all(ACCOUNT);
+                assert_eq!(stake.ft_total_supply(), initial_token_supply);
+
+                let logs = test_utils::get_logs();
+                assert!(logs.is_empty());
+
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(ACCOUNT)), 0.into());
+            });
+        }
+
+        #[test]
+        fn account_not_registered() {
+            run_test(Some(0.into()), |ctx, mut stake| {
+                testing_env!(ctx);
+                let initial_token_supply = stake.ft_total_supply();
+                stake.ft_burn_all("doesnotexist");
+                assert_eq!(stake.ft_total_supply(), initial_token_supply);
+
+                let logs = test_utils::get_logs();
+                assert!(logs.is_empty());
+
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(ACCOUNT)), 0.into());
             });
         }
     }
