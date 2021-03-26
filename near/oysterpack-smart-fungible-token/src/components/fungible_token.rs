@@ -214,7 +214,7 @@ where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     fn ft_mint(&mut self, account_id: &str, amount: TokenAmount) {
-        ERR_INVALID.assert(|| *amount > 0, || "amount cannot be zero");
+        ERR_INVALID.assert(|| *amount > 0, || "amount to mint cannot be zero");
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(account_id));
 
         let mut ft_balance = AccountFTBalance::get(account_id);
@@ -225,7 +225,7 @@ where
         *token_supply += *amount;
         token_supply.save();
 
-        LOG_EVENT_FT_MINT.log(format!("account_id: {}, amount: {}", account_id, amount));
+        LOG_EVENT_FT_MINT.log(format!("account: {}, amount: {}", account_id, amount));
     }
 
     fn ft_burn(&mut self, account_id: &str, amount: TokenAmount) {
@@ -596,7 +596,7 @@ impl DerefMut for AccountFTBalance {
 }
 
 #[cfg(test)]
-mod tests {
+mod tests_fungible_token {
     use super::*;
     use crate::FungibleToken;
     use crate::*;
@@ -604,7 +604,7 @@ mod tests {
     use oysterpack_smart_account_management::components::account_management::{
         AccountManagementComponentConfig, ContractPermissions, UnregisterAccountNOOP,
     };
-    use oysterpack_smart_account_management::{PermissionsManagement, StorageManagement};
+    use oysterpack_smart_account_management::StorageManagement;
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
@@ -706,130 +706,6 @@ mod tests {
             stake.ft_balance_of(to_valid_account_id(receiver)),
             40.into()
         );
-    }
-
-    #[test]
-    fn operator_commands() {
-        // Arrange
-        let operator = "operator";
-        let mut ctx = new_context(operator);
-        testing_env!(ctx.clone());
-
-        deploy_comps();
-
-        let mut account_manager = AccountManager::new(
-            Box::new(UnregisterAccountNOOP),
-            &ContractPermissions::default(),
-        );
-
-        // register operator account
-        {
-            ctx.attached_deposit = YOCTO;
-            testing_env!(ctx.clone());
-            account_manager.storage_deposit(None, None);
-
-            ctx.attached_deposit = 0;
-            ctx.predecessor_account_id = ADMIN.to_string();
-            testing_env!(ctx.clone());
-            account_manager.ops_permissions_grant_operator(to_valid_account_id(operator));
-        }
-
-        let mut stake = STAKE::new(account_manager);
-
-        fn run_operator_commands(mut ctx: VMContext, stake: &mut STAKE, account_id: &str) {
-            // Act
-            ctx.predecessor_account_id = account_id.to_string();
-            testing_env!(ctx.clone());
-            let icon = Icon("data://image/svg+xml,<svg></svg>".to_string());
-            let command = OperatorCommand::SetIcon(icon.clone());
-            println!("{}", serde_json::to_string(&command).unwrap());
-            stake.ft_operator_command(command);
-            // Assert
-            let metadata = stake.ft_metadata();
-            assert_eq!(metadata.icon, Some(icon));
-
-            // Act
-            ctx.predecessor_account_id = account_id.to_string();
-            testing_env!(ctx.clone());
-            let reference = Reference("http://stake.json".to_string());
-            let hash = Hash::from("reference");
-            let command = OperatorCommand::SetReference(reference.clone(), hash);
-            println!("{}", serde_json::to_string(&command).unwrap());
-            stake.ft_operator_command(command);
-            // Assert
-            let metadata = stake.ft_metadata();
-            assert_eq!(metadata.reference, Some(reference));
-            assert_eq!(metadata.reference_hash, Some(hash));
-
-            // Act
-            ctx.predecessor_account_id = account_id.to_string();
-            testing_env!(ctx.clone());
-            let command = OperatorCommand::ClearIcon;
-            println!("{}", serde_json::to_string(&command).unwrap());
-            stake.ft_operator_command(command);
-            // Assert
-            let metadata = stake.ft_metadata();
-            assert!(metadata.icon.is_none());
-
-            // Act
-            ctx.predecessor_account_id = account_id.to_string();
-            testing_env!(ctx.clone());
-            let command = OperatorCommand::ClearReference;
-            println!("{}", serde_json::to_string(&command).unwrap());
-            stake.ft_operator_command(command);
-            // Assert
-            let metadata = stake.ft_metadata();
-            assert!(metadata.reference.is_none());
-            assert!(metadata.reference_hash.is_none());
-        }
-
-        run_operator_commands(ctx.clone(), &mut stake, ADMIN);
-        run_operator_commands(ctx.clone(), &mut stake, operator);
-    }
-
-    #[test]
-    #[should_panic(expected = "[ERR] [NOT_AUTHORIZED]")]
-    fn operator_commands_as_not_operator() {
-        // Arrange
-        let account = "account";
-        let mut ctx = new_context(account);
-        testing_env!(ctx.clone());
-
-        deploy_comps();
-
-        let mut account_manager = AccountManager::new(
-            Box::new(UnregisterAccountNOOP),
-            &ContractPermissions::default(),
-        );
-
-        // register normal account with no permissions
-        {
-            ctx.attached_deposit = YOCTO;
-            testing_env!(ctx.clone());
-            account_manager.storage_deposit(None, None);
-        }
-
-        let mut stake = STAKE::new(account_manager);
-        stake.ft_operator_command(OperatorCommand::ClearReference);
-    }
-
-    #[test]
-    #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED]")]
-    fn operator_commands_with_unregistered_account() {
-        // Arrange
-        let account = "account";
-        let ctx = new_context(account);
-        testing_env!(ctx);
-
-        deploy_comps();
-
-        let account_manager = AccountManager::new(
-            Box::new(UnregisterAccountNOOP),
-            &ContractPermissions::default(),
-        );
-
-        let mut stake = STAKE::new(account_manager);
-        stake.ft_operator_command(OperatorCommand::ClearReference);
     }
 
     const SENDER: &str = "sender";
@@ -1773,6 +1649,351 @@ mod tests {
                 assert_eq!(
                     stake.ft_total_supply(),
                     (*initial_token_supply - 200).into()
+                );
+            });
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests_operator {
+    use super::*;
+    use crate::*;
+    use near_sdk::VMContext;
+    use oysterpack_smart_account_management::components::account_management::{
+        AccountManagementComponentConfig, ContractPermissions, UnregisterAccountNOOP,
+    };
+    use oysterpack_smart_account_management::{PermissionsManagement, StorageManagement};
+    use oysterpack_smart_near::YOCTO;
+    use oysterpack_smart_near_test::*;
+
+    type AccountDataType = ();
+    type AccountManager = AccountManagementComponent<AccountDataType>;
+    type STAKE = FungibleTokenComponent<AccountDataType>;
+
+    const ADMIN: &str = "admin";
+
+    fn deploy_comps() {
+        AccountManager::deploy(AccountManagementComponentConfig::new(to_valid_account_id(
+            ADMIN,
+        )));
+
+        STAKE::deploy(Config {
+            metadata: Metadata {
+                spec: FT_METADATA_SPEC.into(),
+                name: "STAKE".into(),
+                symbol: "STAKE".into(),
+                icon: None,
+                reference: None,
+                reference_hash: None,
+                decimals: 24,
+            },
+            token_supply: YOCTO,
+        });
+    }
+
+    #[test]
+    fn operator_commands() {
+        // Arrange
+        let operator = "operator";
+        let mut ctx = new_context(operator);
+        testing_env!(ctx.clone());
+
+        deploy_comps();
+
+        let mut account_manager = AccountManager::new(
+            Box::new(UnregisterAccountNOOP),
+            &ContractPermissions::default(),
+        );
+
+        // register operator account
+        {
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx.clone());
+            account_manager.storage_deposit(None, None);
+
+            ctx.attached_deposit = 0;
+            ctx.predecessor_account_id = ADMIN.to_string();
+            testing_env!(ctx.clone());
+            account_manager.ops_permissions_grant_operator(to_valid_account_id(operator));
+        }
+
+        let mut stake = STAKE::new(account_manager);
+
+        fn run_operator_commands(mut ctx: VMContext, stake: &mut STAKE, account_id: &str) {
+            // Act
+            ctx.predecessor_account_id = account_id.to_string();
+            testing_env!(ctx.clone());
+            let icon = Icon("data://image/svg+xml,<svg></svg>".to_string());
+            let command = OperatorCommand::SetIcon(icon.clone());
+            println!("{}", serde_json::to_string(&command).unwrap());
+            stake.ft_operator_command(command);
+            // Assert
+            let metadata = stake.ft_metadata();
+            assert_eq!(metadata.icon, Some(icon));
+
+            // Act
+            ctx.predecessor_account_id = account_id.to_string();
+            testing_env!(ctx.clone());
+            let reference = Reference("http://stake.json".to_string());
+            let hash = Hash::from("reference");
+            let command = OperatorCommand::SetReference(reference.clone(), hash);
+            println!("{}", serde_json::to_string(&command).unwrap());
+            stake.ft_operator_command(command);
+            // Assert
+            let metadata = stake.ft_metadata();
+            assert_eq!(metadata.reference, Some(reference));
+            assert_eq!(metadata.reference_hash, Some(hash));
+
+            // Act
+            ctx.predecessor_account_id = account_id.to_string();
+            testing_env!(ctx.clone());
+            let command = OperatorCommand::ClearIcon;
+            println!("{}", serde_json::to_string(&command).unwrap());
+            stake.ft_operator_command(command);
+            // Assert
+            let metadata = stake.ft_metadata();
+            assert!(metadata.icon.is_none());
+
+            // Act
+            ctx.predecessor_account_id = account_id.to_string();
+            testing_env!(ctx.clone());
+            let command = OperatorCommand::ClearReference;
+            println!("{}", serde_json::to_string(&command).unwrap());
+            stake.ft_operator_command(command);
+            // Assert
+            let metadata = stake.ft_metadata();
+            assert!(metadata.reference.is_none());
+            assert!(metadata.reference_hash.is_none());
+        }
+
+        run_operator_commands(ctx.clone(), &mut stake, ADMIN);
+        run_operator_commands(ctx.clone(), &mut stake, operator);
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [NOT_AUTHORIZED]")]
+    fn operator_commands_as_not_operator() {
+        // Arrange
+        let account = "account";
+        let mut ctx = new_context(account);
+        testing_env!(ctx.clone());
+
+        deploy_comps();
+
+        let mut account_manager = AccountManager::new(
+            Box::new(UnregisterAccountNOOP),
+            &ContractPermissions::default(),
+        );
+
+        // register normal account with no permissions
+        {
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx.clone());
+            account_manager.storage_deposit(None, None);
+        }
+
+        let mut stake = STAKE::new(account_manager);
+        stake.ft_operator_command(OperatorCommand::ClearReference);
+    }
+
+    #[test]
+    #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED]")]
+    fn operator_commands_with_unregistered_account() {
+        // Arrange
+        let account = "account";
+        let ctx = new_context(account);
+        testing_env!(ctx);
+
+        deploy_comps();
+
+        let account_manager = AccountManager::new(
+            Box::new(UnregisterAccountNOOP),
+            &ContractPermissions::default(),
+        );
+
+        let mut stake = STAKE::new(account_manager);
+        stake.ft_operator_command(OperatorCommand::ClearReference);
+    }
+}
+
+#[cfg(test)]
+mod tests_token_service {
+    use super::*;
+
+    use crate::*;
+    use near_sdk::{test_utils, VMContext};
+    use oysterpack_smart_account_management::components::account_management::{
+        AccountManagementComponentConfig, ContractPermissions, UnregisterAccountNOOP,
+    };
+    use oysterpack_smart_account_management::StorageManagement;
+    use oysterpack_smart_near::YOCTO;
+    use oysterpack_smart_near_test::*;
+
+    type AccountDataType = ();
+    type AccountManager = AccountManagementComponent<AccountDataType>;
+    type STAKE = FungibleTokenComponent<AccountDataType>;
+
+    const ADMIN: &str = "admin";
+
+    fn deploy_comps() {
+        AccountManager::deploy(AccountManagementComponentConfig::new(to_valid_account_id(
+            ADMIN,
+        )));
+
+        STAKE::deploy(Config {
+            metadata: Metadata {
+                spec: FT_METADATA_SPEC.into(),
+                name: "STAKE".into(),
+                symbol: "STAKE".into(),
+                icon: None,
+                reference: None,
+                reference_hash: None,
+                decimals: 24,
+            },
+            token_supply: YOCTO,
+        });
+    }
+
+    const ACCOUNT: &str = "bob";
+
+    /// - if the balances are Some then register them and mint tokens for them
+    fn run_test<F>(account_balance: Option<TokenAmount>, test: F)
+    where
+        F: FnOnce(VMContext, STAKE),
+    {
+        // Arrange
+        let ctx = new_context(ACCOUNT);
+        testing_env!(ctx.clone());
+
+        deploy_comps();
+
+        let account_manager = AccountManager::new(
+            Box::new(UnregisterAccountNOOP),
+            &ContractPermissions::default(),
+        );
+
+        let mut stake = STAKE::new(account_manager);
+
+        // register accounts
+        {
+            let mut account_manager = AccountManager::new(
+                Box::new(UnregisterAccountNOOP),
+                &ContractPermissions::default(),
+            );
+
+            if let Some(balance) = account_balance {
+                let mut ctx = ctx.clone();
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = account_manager.storage_balance_bounds().min.value();
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, Some(true));
+
+                if *balance > 0 {
+                    stake.ft_mint(ACCOUNT, balance);
+                }
+            }
+        }
+
+        test(ctx, stake);
+    }
+
+    #[cfg(test)]
+    mod tests_mint {
+        use super::*;
+
+        #[test]
+        fn account_registered_with_zero_token_balance() {
+            run_test(Some(0.into()), |ctx, mut stake| {
+                testing_env!(ctx);
+                let initial_token_supply = stake.ft_total_supply();
+                stake.ft_mint(ACCOUNT, 1000.into());
+                assert_eq!(
+                    stake.ft_total_supply(),
+                    (*initial_token_supply + 1000).into()
+                );
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 2);
+                assert_eq!(
+                    &logs[0],
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(88)"
+                );
+                assert_eq!(&logs[1], "[INFO] [FT_MINT] account: bob, amount: 1000");
+
+                assert_eq!(
+                    stake.ft_balance_of(to_valid_account_id(ACCOUNT)),
+                    1000.into()
+                );
+            });
+        }
+
+        #[test]
+        fn account_registered_with_token_balance() {
+            run_test(Some(1000.into()), |ctx, mut stake| {
+                testing_env!(ctx);
+                let initial_token_supply = stake.ft_total_supply();
+                stake.ft_mint(ACCOUNT, 1000.into());
+                assert_eq!(
+                    stake.ft_total_supply(),
+                    (*initial_token_supply + 1000).into()
+                );
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 1);
+                assert_eq!(&logs[0], "[INFO] [FT_MINT] account: bob, amount: 1000");
+
+                assert_eq!(
+                    stake.ft_balance_of(to_valid_account_id(ACCOUNT)),
+                    2000.into()
+                );
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED]")]
+        fn account_not_registered() {
+            run_test(None, |ctx, mut stake| {
+                testing_env!(ctx);
+                stake.ft_mint(ACCOUNT, 1000.into());
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [INVALID] amount to mint cannot be zero")]
+        fn zero_amount() {
+            run_test(Some(1000.into()), |ctx, mut stake| {
+                testing_env!(ctx);
+                stake.ft_mint(ACCOUNT, 0.into());
+            });
+        }
+    }
+
+    #[cfg(test)]
+    mod tests_burn {
+        use super::*;
+
+        #[test]
+        fn burn_with_account_ft_balance_remaining() {
+            run_test(Some(10000.into()), |ctx, mut stake| {
+                testing_env!(ctx);
+                let initial_token_supply = stake.ft_total_supply();
+                stake.ft_burn(ACCOUNT, 1000.into());
+                assert_eq!(
+                    stake.ft_total_supply(),
+                    (*initial_token_supply - 1000).into()
+                );
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 1);
+                assert_eq!(&logs[0], "[INFO] [FT_BURN] account: bob, amount: 1000");
+
+                assert_eq!(
+                    stake.ft_balance_of(to_valid_account_id(ACCOUNT)),
+                    9000.into()
                 );
             });
         }
