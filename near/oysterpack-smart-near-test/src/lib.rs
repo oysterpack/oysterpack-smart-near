@@ -15,6 +15,7 @@ pub const DEFAULT_CONTRACT_ACCOUNT_ID: &str = "contract.near";
 
 pub const DEFAULT_CONTRACT_ACCOUNT_BALANCE: u128 = 10000 * YOCTO;
 
+/// Creates a new NEAR test context.
 /// - `predecessor_account_id` is also used as the `signer_account_id`
 /// - `account_balance` is set to 10000 NEAR
 pub fn new_context(predecessor_account_id: &str) -> VMContext {
