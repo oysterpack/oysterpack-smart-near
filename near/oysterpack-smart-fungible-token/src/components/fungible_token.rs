@@ -1976,7 +1976,7 @@ mod tests_token_service {
         use super::*;
 
         #[test]
-        fn burn_with_account_ft_balance_remaining() {
+        fn burn_account_partial_balance() {
             run_test(Some(10000.into()), |ctx, mut stake| {
                 testing_env!(ctx);
                 let initial_token_supply = stake.ft_total_supply();
@@ -1995,6 +1995,31 @@ mod tests_token_service {
                     stake.ft_balance_of(to_valid_account_id(ACCOUNT)),
                     9000.into()
                 );
+            });
+        }
+
+        #[test]
+        fn burn_account_full_balance() {
+            run_test(Some(10000.into()), |ctx, mut stake| {
+                testing_env!(ctx);
+                let initial_token_supply = stake.ft_total_supply();
+                stake.ft_burn(ACCOUNT, 10000.into());
+                assert_eq!(
+                    stake.ft_total_supply(),
+                    (*initial_token_supply - 10000).into()
+                );
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(
+                    logs,
+                    vec![
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-88)",
+                        "[INFO] [FT_BURN] account: bob, amount: 10000",
+                    ]
+                );
+
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(ACCOUNT)), 0.into());
             });
         }
     }
