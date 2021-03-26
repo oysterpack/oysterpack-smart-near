@@ -1,4 +1,8 @@
-use near_sdk::env;
+use near_sdk::{
+    borsh::{self, BorshDeserialize, BorshSerialize},
+    env,
+    serde::{Deserialize, Serialize},
+};
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -55,6 +59,18 @@ where
     }
 }
 
+impl<Msg, T> Into<Result<T, Err>> for Error<Msg>
+where
+    Msg: Display,
+{
+    fn into(self) -> Result<T, Err> {
+        Err(Err {
+            code: self.0 .0.to_string(),
+            msg: self.1.to_string(),
+        })
+    }
+}
+
 /// Error that can be defined as a constant, i.e., the error message is constant
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ErrorConst(pub ErrCode, pub &'static str);
@@ -87,6 +103,19 @@ impl ErrorConst {
         Msg: Display,
     {
         self.0.assert(check, msg)
+    }
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Deserialize, Serialize, Debug, Clone, Eq, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+pub struct Err {
+    pub code: String,
+    pub msg: String,
+}
+
+impl Display for Err {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "[ERR] [{}] {}", self.code, self.msg)
     }
 }
 
@@ -147,5 +176,18 @@ mod tests {
         const ERR: ErrCode = ErrCode("INVALID_ACCOUNT_ID");
 
         ERR.assert(|| false, || "BOOM");
+    }
+
+    #[test]
+    fn into_result() {
+        const ERR: ErrCode = ErrCode("INVALID_ACCOUNT_ID");
+        fn foo() -> Result<u128, Err> {
+            ERR.error("invalid").into()
+        }
+
+        match foo() {
+            Ok(_) => panic!("expected Err"),
+            Err(err) => println!("{}", err),
+        }
     }
 }
