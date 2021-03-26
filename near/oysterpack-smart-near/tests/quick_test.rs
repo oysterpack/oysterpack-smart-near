@@ -31,8 +31,6 @@ struct Controller {
     number_service: Box<dyn NumberService>,
 }
 
-fn foo(bar: u128) {}
-
 #[test]
 fn test() {
     let options = NumberServiceOptions(10);

@@ -11,19 +11,19 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 /// Every contract has an owner
 pub trait ContractOwnership {
     /// returns the contract owner account ID
-    fn ops_owner() -> AccountId;
+    fn ops_owner(&self) -> AccountId;
 
     /// Returns how much of the contract's NEAR balance is owned by the contract owner and what amount
     /// is available for withdrawal.
     ///
     /// The owner must retain enough NEAR deposit on the contract to cover storage costs that are
     /// the contract's responsibility to pay for, i.e., excluding account storage.
-    fn ops_owner_balance() -> ContractOwnerNearBalance;
+    fn ops_owner_balance(&self) -> ContractOwnerNearBalance;
 
     /// Returns the prospective owner that the transfer is waiting on for finalization.
     ///
     /// Returns None if there is no ownership transfer in progress.
-    fn ops_owner_prospective() -> Option<AccountId>;
+    fn ops_owner_prospective(&self) -> Option<AccountId>;
 
     /// Initiates the workflow to transfer contract ownership.
     ///

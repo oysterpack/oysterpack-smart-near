@@ -5,16 +5,16 @@ use oysterpack_smart_near::domain::YoctoNear;
 
 #[near_bindgen]
 impl ContractOwnership for Contract {
-    fn ops_owner() -> AccountId {
-        ContractOwnershipComponent::ops_owner()
+    fn ops_owner(&self) -> AccountId {
+        ContractOwnershipComponent.ops_owner()
     }
 
-    fn ops_owner_balance() -> ContractOwnerNearBalance {
-        ContractOwnershipComponent::ops_owner_balance()
+    fn ops_owner_balance(&self) -> ContractOwnerNearBalance {
+        ContractOwnershipComponent.ops_owner_balance()
     }
 
-    fn ops_owner_prospective() -> Option<AccountId> {
-        ContractOwnershipComponent::ops_owner_prospective()
+    fn ops_owner_prospective(&self) -> Option<AccountId> {
+        ContractOwnershipComponent.ops_owner_prospective()
     }
 
     #[payable]

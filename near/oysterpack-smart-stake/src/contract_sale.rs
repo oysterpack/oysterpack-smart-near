@@ -5,12 +5,12 @@ use oysterpack_smart_near::domain::{ExpirationSetting, YoctoNear};
 
 #[near_bindgen]
 impl ContractSale for Contract {
-    fn ops_contract_sale_price() -> Option<YoctoNear> {
-        ContractSaleComponent::ops_contract_sale_price()
+    fn ops_contract_sale_price(&self) -> Option<YoctoNear> {
+        ContractSaleComponent.ops_contract_sale_price()
     }
 
-    fn ops_contract_bid() -> Option<ContractBuyerBid> {
-        ContractSaleComponent::ops_contract_bid()
+    fn ops_contract_bid(&self) -> Option<ContractBuyerBid> {
+        ContractSaleComponent.ops_contract_bid()
     }
 
     #[payable]

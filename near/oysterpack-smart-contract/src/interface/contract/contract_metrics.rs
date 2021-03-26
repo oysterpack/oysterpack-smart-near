@@ -10,17 +10,17 @@ use oysterpack_smart_near::near_sdk::{
 /// # **Contract Interface**: Contract Metrics API
 /// Provides metrics that track storage usage and NEAR balances
 pub trait ContractMetrics {
-    fn ops_metrics_total_registered_accounts() -> U128;
+    fn ops_metrics_total_registered_accounts(&self) -> U128;
 
-    fn ops_metrics_contract_storage_usage() -> ContractStorageUsage;
+    fn ops_metrics_contract_storage_usage(&self) -> ContractStorageUsage;
 
-    fn ops_metrics_near_balances() -> ContractNearBalances;
+    fn ops_metrics_near_balances(&self) -> ContractNearBalances;
 
-    fn ops_metrics_storage_usage_costs() -> ContractStorageUsageCosts;
+    fn ops_metrics_storage_usage_costs(&self) -> ContractStorageUsageCosts;
 
-    fn ops_metrics() -> ContractMetricsSnapshot;
+    fn ops_metrics(&self) -> ContractMetricsSnapshot;
 
-    fn ops_metrics_accounts() -> AccountMetrics;
+    fn ops_metrics_accounts(&self) -> AccountMetrics;
 }
 
 /// Provides a point in time metrics snapshot
