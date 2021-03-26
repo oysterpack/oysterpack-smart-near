@@ -214,7 +214,7 @@ where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     fn ft_mint(&mut self, account_id: &str, amount: TokenAmount) {
-        ERR_INVALID.assert(|| *amount > 0, || "amount to mint cannot be zero");
+        ERR_INVALID.assert(|| *amount > 0, || "mint amount cannot be zero");
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(account_id));
 
         let mut ft_balance = AccountFTBalance::get(account_id);
@@ -229,7 +229,7 @@ where
     }
 
     fn ft_burn(&mut self, account_id: &str, amount: TokenAmount) {
-        ERR_INVALID.assert(|| *amount > 0, || "amount cannot be zero");
+        ERR_INVALID.assert(|| *amount > 0, || "burn amount cannot be zero");
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(account_id));
 
         let mut ft_balance = AccountFTBalance::load(account_id).unwrap();
@@ -1962,7 +1962,7 @@ mod tests_token_service {
         }
 
         #[test]
-        #[should_panic(expected = "[ERR] [INVALID] amount to mint cannot be zero")]
+        #[should_panic(expected = "[ERR] [INVALID] mint amount cannot be zero")]
         fn zero_amount() {
             run_test(Some(1000.into()), |ctx, mut stake| {
                 testing_env!(ctx);
@@ -2020,6 +2020,22 @@ mod tests_token_service {
                 );
 
                 assert_eq!(stake.ft_balance_of(to_valid_account_id(ACCOUNT)), 0.into());
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED]")]
+        fn account_not_registered() {
+            run_test(None, |_ctx, mut stake| {
+                stake.ft_burn(ACCOUNT, 10000.into());
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [INVALID] burn amount cannot be zero")]
+        fn burn_zero_amount() {
+            run_test(Some(1000.into()), |_ctx, mut stake| {
+                stake.ft_burn(ACCOUNT, 0.into());
             });
         }
     }
