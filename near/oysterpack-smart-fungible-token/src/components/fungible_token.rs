@@ -3,7 +3,9 @@
 //!   - [`AccountManagementComponent`]
 //! - deployment: [`FungibleTokenComponent::deploy`]
 //!   - config: [`Config`]
-//! - [`UnregisterAccount`] -> [`UnregisterFungibleTokenAccount`]
+//! - provides implementation for [`UnregisterAccount`], which must be registered with the
+//!   `AccountManagementComponent` to handle account unregistrations
+//!   - [`FungibleTokenUnregisterAccountHandler`]
 
 use crate::{
     contract::operator::{FungibleTokenOperator, OperatorCommand},
