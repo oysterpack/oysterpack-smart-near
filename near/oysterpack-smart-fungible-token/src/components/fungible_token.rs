@@ -37,6 +37,7 @@ use oysterpack_smart_near::{
     },
     {component::Deploy, data::Object, to_valid_account_id, Hash, TERA},
 };
+use std::ops::DerefMut;
 use std::{fmt::Debug, ops::Deref};
 use teloc::*;
 
@@ -78,10 +79,10 @@ pub struct FungibleTokenUnregisterAccountHandler;
 impl UnregisterAccount for FungibleTokenUnregisterAccountHandler {
     fn unregister_account(&self, force: bool) {
         let account_id = &env::predecessor_account_id();
-        if let Some(ft_balance) = ft_load_account_balance(&account_id) {
+        if let Some(ft_balance) = AccountFTBalance::load(&account_id) {
             ERR_CODE_UNREGISTER_FAILURE.assert(|| force, || "account has non-zero token balance");
             let amount = *ft_balance;
-            ft_set_balance(account_id, 0);
+            AccountFTBalance::ft_set_balance(account_id, 0);
             burn_tokens(amount);
             LOG_EVENT_FT_BURN.log(format!(
                 "account forced unregistered with token balance: account: account: {}, amount: {}",
@@ -131,9 +132,9 @@ where
         ERR_INSUFFICIENT_FUNDS.assert(|| *sender_balance >= *amount);
 
         // transfer the tokens
-        ft_set_balance(sender_id, *sender_balance - *amount);
+        AccountFTBalance::ft_set_balance(sender_id, *sender_balance - *amount);
         let receiver_balance = self.ft_balance_of(receiver_id.clone());
-        ft_set_balance(receiver_id.as_ref(), *receiver_balance + *amount);
+        AccountFTBalance::ft_set_balance(receiver_id.as_ref(), *receiver_balance + *amount);
 
         if let Some(memo) = memo {
             LOG_EVENT_FT_TRANSFER.log(memo);
@@ -162,7 +163,7 @@ where
     }
 
     fn ft_balance_of(&self, account_id: ValidAccountId) -> TokenAmount {
-        ft_balance_of(account_id.as_ref())
+        AccountFTBalance::ft_balance_of(account_id.as_ref())
     }
 }
 
@@ -216,9 +217,9 @@ where
         ERR_INVALID.assert(|| *amount > 0, || "amount cannot be zero");
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(account_id));
 
-        let mut ft_balance = account_ft_balance(account_id);
+        let mut ft_balance = AccountFTBalance::get(account_id);
         *ft_balance += *amount;
-        ft_balance.save();
+        ft_balance.save(account_id);
 
         let mut token_supply = token_supply();
         *token_supply += *amount;
@@ -231,13 +232,11 @@ where
         ERR_INVALID.assert(|| *amount > 0, || "amount cannot be zero");
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(account_id));
 
-        let account_id_hash = Hash::from(account_id);
-        let mut ft_balance = AccountFTBalance::load(&account_id_hash).unwrap();
+        let mut ft_balance = AccountFTBalance::load(account_id).unwrap();
         *ft_balance -= *amount;
-        ft_balance.save();
+        ft_balance.save(account_id);
 
         burn_tokens(*amount);
-
         LOG_EVENT_FT_BURN.log(format!("account: {}, amount: {}", account_id, amount));
     }
 }
@@ -249,9 +248,9 @@ where
     fn account_storage_min() -> StorageUsage {
         let account_id = "19544499980228477895959808916967586760";
         let initial_storage = env::storage_usage();
-        ft_set_balance(account_id, 1);
+        AccountFTBalance::ft_set_balance(account_id, 1);
         let account_storage_usage = env::storage_usage() - initial_storage;
-        ft_set_balance(account_id, 0);
+        AccountFTBalance::ft_set_balance(account_id, 0);
         account_storage_usage.into()
     }
 }
@@ -434,7 +433,7 @@ where
 
         // try to refund the refund amount from the receiver back to the sender
         let refund_amount = if let Some(mut receiver_account_balance) =
-            ft_load_account_balance(receiver_id.as_ref())
+            AccountFTBalance::load(receiver_id.as_ref())
         {
             let receiver_balance = *receiver_account_balance;
             if receiver_balance > 0 {
@@ -445,18 +444,14 @@ where
                     *refund_amount
                 };
                 *receiver_account_balance -= refund_amount;
-                if *receiver_account_balance == 0 {
-                    ft_set_balance(receiver_id.as_ref(), 0);
-                } else {
-                    receiver_account_balance.save();
-                }
+                receiver_account_balance.save(receiver_id.as_ref());
 
                 LOG_EVENT_FT_TRANSFER_CALL_RECEIVER_DEBIT.log(refund_amount);
 
-                match ft_load_account_balance(sender_id.as_ref()) {
+                match AccountFTBalance::load(sender_id.as_ref()) {
                     Some(mut sender_account_balance) => {
                         *sender_account_balance += refund_amount;
-                        sender_account_balance.save();
+                        sender_account_balance.save(sender_id.as_ref());
                         LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT.log(refund_amount);
                     }
                     None => {
@@ -464,7 +459,7 @@ where
                         // - the sender account most likely still exists, but might have been unregistered
                         //   while the transfer call workflow was in flight
                         if self.account_manager.account_exists(sender_id.as_ref()) {
-                            ft_set_balance(sender_id.as_ref(), refund_amount);
+                            AccountFTBalance::ft_set_balance(sender_id.as_ref(), refund_amount);
                             LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT.log(refund_amount);
                         } else {
                             burn_tokens(refund_amount);
@@ -500,59 +495,103 @@ where
 }
 
 const FT_ACCOUNT_KEY: u128 = 1953845438124731969041175284518648060;
-type AccountFTBalance = Object<Hash, u128>;
+type AccountFTBalanceObject = Object<Hash, u128>;
+struct AccountFTBalance(AccountFTBalanceObject);
 
-/// tracks storage
-/// - if balance is set to zero, then the balance record will be deleted from storage
-fn ft_set_balance(account_id: &str, balance: u128) {
-    let account_hash_id = ft_account_id_hash(account_id);
-    match AccountFTBalance::load(&account_hash_id) {
-        None => {
-            if balance == 0 {
-                return;
-            }
+impl AccountFTBalance {
+    fn ft_account_id_hash(account_id: &str) -> Hash {
+        Hash::from((account_id, FT_ACCOUNT_KEY))
+    }
+
+    fn load(account_id: &str) -> Option<AccountFTBalance> {
+        let account_hash_id = AccountFTBalance::ft_account_id_hash(account_id);
+        AccountFTBalanceObject::load(&account_hash_id).map(Self)
+    }
+
+    fn get(account_id: &str) -> AccountFTBalance {
+        Self::load(account_id).unwrap_or_else(|| {
+            Self(AccountFTBalanceObject::new(
+                Self::ft_account_id_hash(account_id),
+                0,
+            ))
+        })
+    }
+
+    fn ft_balance_of(account_id: &str) -> TokenAmount {
+        Self::load(account_id).map_or(0.into(), |balance| (*balance).into())
+    }
+
+    fn save(&self, account_id: &str) {
+        if *self.0 == 0 {
             let initial_storage_usage = env::storage_usage();
-            AccountFTBalance::new(account_hash_id, balance).save();
-            let storage_usage_change = env::storage_usage() - initial_storage_usage;
-            post(&AccountStorageEvent::StorageUsageChanged(
-                account_id.into(),
-                storage_usage_change.into(),
-            ));
-        }
-        Some(mut account_balance) => {
-            if balance == 0 {
-                let initial_storage_usage = env::storage_usage();
-                account_balance.delete();
-                let storage_usage_change = initial_storage_usage - env::storage_usage();
+            AccountFTBalanceObject::delete_by_key(self.0.key());
+            let storage_usage_change = initial_storage_usage - env::storage_usage();
+            if storage_usage_change > 0 {
                 post(&AccountStorageEvent::StorageUsageChanged(
                     account_id.into(),
                     (storage_usage_change as i64 * -1).into(),
                 ));
-            } else {
-                *account_balance = balance;
-                account_balance.save();
+            }
+        } else {
+            let initial_storage_usage = env::storage_usage();
+            self.0.save();
+            let storage_usage_change = env::storage_usage() - initial_storage_usage;
+            if storage_usage_change > 0 {
+                post(&AccountStorageEvent::StorageUsageChanged(
+                    account_id.into(),
+                    storage_usage_change.into(),
+                ));
+            }
+        }
+    }
+
+    /// tracks storage
+    /// - if balance is set to zero, then the balance record will be deleted from storage
+    fn ft_set_balance(account_id: &str, balance: u128) {
+        let account_hash_id = Self::ft_account_id_hash(account_id);
+        match AccountFTBalanceObject::load(&account_hash_id) {
+            None => {
+                if balance == 0 {
+                    return;
+                }
+                let initial_storage_usage = env::storage_usage();
+                AccountFTBalanceObject::new(account_hash_id, balance).save();
+                let storage_usage_change = env::storage_usage() - initial_storage_usage;
+                post(&AccountStorageEvent::StorageUsageChanged(
+                    account_id.into(),
+                    storage_usage_change.into(),
+                ));
+            }
+            Some(mut account_balance) => {
+                if balance == 0 {
+                    let initial_storage_usage = env::storage_usage();
+                    account_balance.delete();
+                    let storage_usage_change = initial_storage_usage - env::storage_usage();
+                    post(&AccountStorageEvent::StorageUsageChanged(
+                        account_id.into(),
+                        (storage_usage_change as i64 * -1).into(),
+                    ));
+                } else {
+                    *account_balance = balance;
+                    account_balance.save();
+                }
             }
         }
     }
 }
 
-fn account_ft_balance(account_id: &str) -> AccountFTBalance {
-    let account_hash_id = ft_account_id_hash(account_id);
-    AccountFTBalance::load(&account_hash_id)
-        .unwrap_or_else(|| AccountFTBalance::new(account_hash_id, 0))
+impl Deref for AccountFTBalance {
+    type Target = u128;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.deref()
+    }
 }
 
-fn ft_balance_of(account_id: &str) -> TokenAmount {
-    ft_load_account_balance(account_id).map_or(0.into(), |balance| (*balance).into())
-}
-
-fn ft_load_account_balance(account_id: &str) -> Option<AccountFTBalance> {
-    let account_hash_id = ft_account_id_hash(account_id);
-    AccountFTBalance::load(&account_hash_id)
-}
-
-fn ft_account_id_hash(account_id: &str) -> Hash {
-    Hash::from((account_id, FT_ACCOUNT_KEY))
+impl DerefMut for AccountFTBalance {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.0.deref_mut()
+    }
 }
 
 #[cfg(test)]
@@ -622,7 +661,7 @@ mod tests {
 
         let mut stake = STAKE::new(account_manager);
         // mint some new stake for the sender
-        ft_set_balance(sender, 100);
+        AccountFTBalance::ft_set_balance(sender, 100);
 
         // Act
         ctx.predecessor_account_id = sender.to_string();
