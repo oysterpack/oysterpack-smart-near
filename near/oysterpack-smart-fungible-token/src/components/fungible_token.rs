@@ -37,7 +37,7 @@ use oysterpack_smart_near::{
     },
     {component::Deploy, data::Object, to_valid_account_id, Hash, TERA},
 };
-use std::{cmp::min, fmt::Debug, ops::Deref};
+use std::{fmt::Debug, ops::Deref};
 use teloc::*;
 
 pub struct FungibleTokenComponent<T>
@@ -397,47 +397,53 @@ where
         receiver_id: ValidAccountId,
         amount: TokenAmount,
     ) -> TokenAmount {
-        // Get the unused amount from the `ft_on_transfer` call result.
-        let unused_amount = match env::promise_result(0) {
+        // Get the refund amount from the `ft_on_transfer` call result.
+        let refund_amount = match env::promise_result(0) {
             PromiseResult::NotReady => unreachable!(),
             PromiseResult::Successful(value) => {
                 match serde_json::from_slice::<TokenAmount>(&value) {
-                    Ok(unused_amount) => {
-                        if unused_amount > amount {
+                    Ok(refund_amount) => {
+                        if refund_amount > amount {
                             ERR_CODE_FT_RESOLVE_TRANSFER
-                            .error("unused amount was greater than the transfer amount - full transfer amount will be refunded")
+                            .error("refund amount was greater than the transfer amount - full transfer amount will be refunded")
                             .log();
                             amount
                         } else {
-                            unused_amount
+                            refund_amount
                         }
                     }
                     Err(_) => {
                         ERR_CODE_FT_RESOLVE_TRANSFER
-                            .error("failed to deserialize unused amount - full amount will be refunded")
+                            .error(
+                                "failed to deserialize refund amount - no refund will be applied",
+                            )
                             .log();
-                        amount
+                        0.into()
                     }
                 }
             }
             PromiseResult::Failed => {
-                LOG_EVENT_FT_TRANSFER_CALL_FAILURE.log("");
+                LOG_EVENT_FT_TRANSFER_CALL_FAILURE.log("full transfer amount will be refunded");
                 amount
             }
         };
 
-        if *unused_amount == 0 {
-            return unused_amount;
+        if *refund_amount == 0 {
+            return refund_amount;
         }
 
-        // try to refund the unused amount from the receiver back to the sender
-        if let Some(mut receiver_account_balance) = ft_load_account_balance(receiver_id.as_ref()) {
+        // try to refund the refund amount from the receiver back to the sender
+        let refund_amount = if let Some(mut receiver_account_balance) =
+            ft_load_account_balance(receiver_id.as_ref())
+        {
             let receiver_balance = *receiver_account_balance;
             if receiver_balance > 0 {
-                let refund_amount = min(receiver_balance, *unused_amount);
-                if refund_amount < *unused_amount {
+                let refund_amount = if receiver_balance < *refund_amount {
                     LOG_EVENT_FT_TRANSFER_CALL_PARTIAL_REFUND.log("partial refund will be applied because receiver account has insufficient fund");
-                }
+                    receiver_balance
+                } else {
+                    *refund_amount
+                };
                 *receiver_account_balance -= refund_amount;
                 receiver_account_balance.save();
                 LOG_EVENT_FT_TRANSFER_CALL_RECEIVER_DEBIT.log(refund_amount);
@@ -449,6 +455,9 @@ where
                         LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT.log(refund_amount);
                     }
                     None => {
+                        // - if balance is zero, then storage was cleaned up
+                        // - the sender account most likely still exists, but might have been unregistered
+                        //   while the transfer call workflow was in flight
                         if self.account_manager.account_exists(sender_id.as_ref()) {
                             ft_set_balance(sender_id.as_ref(), refund_amount);
                             LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT.log(refund_amount);
@@ -461,15 +470,27 @@ where
                         }
                     }
                 }
+                refund_amount.into()
             } else {
+                // this could happen if:
+                // - the receiver account transferred out the tokens while this transfer call workflow
+                //   was in flight
+                // - there is a bug in the receiver contract
+                // - the receiver contract is acting maliciously
                 LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED
                     .log("receiver account has zero balance");
+                0.into()
             }
         } else {
+            // if the receiver account is no longer registered then the refund amount of tokens
+            // will be handled when the account unregistered
+            // - the account will not be allowed to unregister with a non-zero token balance,
+            //   otherwise if forced, the tokens will be burned
             LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED.log("receiver account not registered");
-        }
+            0.into()
+        };
 
-        unused_amount
+        refund_amount
     }
 }
 
@@ -1348,7 +1369,7 @@ mod tests {
         }
 
         #[test]
-        fn full_refund() {
+        fn full_refund_sender_with_zero_balance() {
             run_test(Some(0.into()), Some(1000.into()), |mut ctx, mut stake| {
                 ctx.predecessor_account_id = ctx.current_account_id.clone();
                 let refund_amount = TokenAmount(500.into());
@@ -1357,11 +1378,12 @@ mod tests {
                     ctx,
                     vec![PromiseResult::Successful(refund_amount_bytes)],
                 );
-                stake.ft_resolve_transfer_call(
+                let actual_refund_amount = stake.ft_resolve_transfer_call(
                     to_valid_account_id(SENDER),
                     to_valid_account_id(RECEIVER),
                     refund_amount,
                 );
+                assert_eq!(actual_refund_amount, refund_amount);
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
@@ -1372,6 +1394,138 @@ mod tests {
                     "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(88)"
                 );
                 assert_eq!(&logs[2], "[INFO] [FT_TRANSFER_CALL_SENDER_CREDIT] 500");
+
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(SENDER)), 500.into());
+                assert_eq!(
+                    stake.ft_balance_of(to_valid_account_id(RECEIVER)),
+                    500.into()
+                );
+            });
+        }
+
+        #[test]
+        fn full_refund_sender_with_non_zero_balance() {
+            run_test(Some(100.into()), Some(1000.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = ctx.current_account_id.clone();
+                let refund_amount = TokenAmount(500.into());
+                let refund_amount_bytes = serde_json::to_vec(&refund_amount).unwrap();
+                testing_env_with_promise_results(
+                    ctx,
+                    vec![PromiseResult::Successful(refund_amount_bytes)],
+                );
+                let actual_refund_amount = stake.ft_resolve_transfer_call(
+                    to_valid_account_id(SENDER),
+                    to_valid_account_id(RECEIVER),
+                    refund_amount,
+                );
+                assert_eq!(actual_refund_amount, refund_amount);
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 2);
+                assert_eq!(&logs[0], "[INFO] [FT_TRANSFER_CALL_RECEIVER_DEBIT] 500");
+                assert_eq!(&logs[1], "[INFO] [FT_TRANSFER_CALL_SENDER_CREDIT] 500");
+
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(SENDER)), 600.into());
+                assert_eq!(
+                    stake.ft_balance_of(to_valid_account_id(RECEIVER)),
+                    500.into()
+                );
+            });
+        }
+
+        #[test]
+        fn partial_refund_with_sender_zero_balance() {
+            run_test(Some(0.into()), Some(1000.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = ctx.current_account_id.clone();
+                let transfer_amount = TokenAmount(500.into());
+                let refund_amount = TokenAmount(100.into());
+                let refund_amount_bytes = serde_json::to_vec(&refund_amount).unwrap();
+                testing_env_with_promise_results(
+                    ctx,
+                    vec![PromiseResult::Successful(refund_amount_bytes)],
+                );
+                let actual_refund_amount = stake.ft_resolve_transfer_call(
+                    to_valid_account_id(SENDER),
+                    to_valid_account_id(RECEIVER),
+                    transfer_amount,
+                );
+                assert_eq!(actual_refund_amount, refund_amount);
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 3);
+                assert_eq!(&logs[0], "[INFO] [FT_TRANSFER_CALL_RECEIVER_DEBIT] 100");
+                assert_eq!(
+                    &logs[1],
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(88)"
+                );
+                assert_eq!(&logs[2], "[INFO] [FT_TRANSFER_CALL_SENDER_CREDIT] 100");
+
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(SENDER)), 100.into());
+                assert_eq!(
+                    stake.ft_balance_of(to_valid_account_id(RECEIVER)),
+                    900.into()
+                );
+            });
+        }
+
+        #[test]
+        fn over_refund() {
+            run_test(Some(100.into()), Some(1000.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = ctx.current_account_id.clone();
+                let transfer_amount = TokenAmount(500.into());
+                let refund_amount = TokenAmount(1000.into());
+                let refund_amount_bytes = serde_json::to_vec(&refund_amount).unwrap();
+                testing_env_with_promise_results(
+                    ctx,
+                    vec![PromiseResult::Successful(refund_amount_bytes)],
+                );
+                let actual_refund_amount = stake.ft_resolve_transfer_call(
+                    to_valid_account_id(SENDER),
+                    to_valid_account_id(RECEIVER),
+                    transfer_amount,
+                );
+                assert_eq!(actual_refund_amount, transfer_amount);
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 3);
+                assert_eq!(&logs[0], "[ERR] [FT_RESOLVE_TRANSFER] refund amount was greater than the transfer amount - full transfer amount will be refunded");
+                assert_eq!(&logs[1], "[INFO] [FT_TRANSFER_CALL_RECEIVER_DEBIT] 500");
+                assert_eq!(&logs[2], "[INFO] [FT_TRANSFER_CALL_SENDER_CREDIT] 500");
+
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(SENDER)), 600.into());
+                assert_eq!(
+                    stake.ft_balance_of(to_valid_account_id(RECEIVER)),
+                    500.into()
+                );
+            });
+        }
+
+        #[test]
+        fn deserialization_failure() {
+            run_test(Some(100.into()), Some(1000.into()), |mut ctx, mut stake| {
+                ctx.predecessor_account_id = ctx.current_account_id.clone();
+                let transfer_amount = TokenAmount(500.into());
+                testing_env_with_promise_results(ctx, vec![PromiseResult::Successful(vec![])]);
+                let actual_refund_amount = stake.ft_resolve_transfer_call(
+                    to_valid_account_id(SENDER),
+                    to_valid_account_id(RECEIVER),
+                    transfer_amount,
+                );
+                assert_eq!(actual_refund_amount, 0.into());
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 1);
+                assert_eq!(&logs[0], "[ERR] [FT_RESOLVE_TRANSFER] failed to deserialize refund amount - no refund will be applied");
+
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(SENDER)), 100.into());
+                assert_eq!(
+                    stake.ft_balance_of(to_valid_account_id(RECEIVER)),
+                    1000.into()
+                );
             });
         }
     }

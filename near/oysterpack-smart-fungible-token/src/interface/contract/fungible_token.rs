@@ -136,7 +136,13 @@ pub trait ResolveTransferCall {
     /// - `unused_amount` must be `U128` in range from `0` to `amount`. All other invalid values
     ///   are considered to be equal to be the total transfer amount.
     ///
-    /// Returns amount that was refunded back to the sender.
+    /// Returns amount that was actually refunded, which ultimately derives from the amount that was
+    /// debited from the receiver account.
+    /// - **NOTE**: The actual refund amount may be less then the requested refund amount. If the actual
+    ///   refund amount is less than expected, then it could mean:
+    ///   - the receiver account transferred out the tokens while this transfer call workflow was in flight
+    ///   - there is a bug in the receiver contract
+    ///   - the receiver contract is acting maliciously
     ///
     /// The callback should be designed to never panic.
     /// - if the `sender_id` is not registered, then refunded tokens will be burned
