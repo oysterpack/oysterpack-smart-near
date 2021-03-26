@@ -401,20 +401,23 @@ where
         let unused_amount = match env::promise_result(0) {
             PromiseResult::NotReady => unreachable!(),
             PromiseResult::Successful(value) => {
-                if let Ok(unused_amount) = serde_json::from_slice::<TokenAmount>(&value) {
-                    if unused_amount > amount {
-                        ERR_CODE_FT_RESOLVE_TRANSFER
+                match serde_json::from_slice::<TokenAmount>(&value) {
+                    Ok(unused_amount) => {
+                        if unused_amount > amount {
+                            ERR_CODE_FT_RESOLVE_TRANSFER
                             .error("unused amount was greater than the transfer amount - full transfer amount will be refunded")
                             .log();
-                        amount
-                    } else {
-                        unused_amount
+                            amount
+                        } else {
+                            unused_amount
+                        }
                     }
-                } else {
-                    ERR_CODE_FT_RESOLVE_TRANSFER
-                        .error("failed to deserialize unused amount - full amount will be refunded")
-                        .log();
-                    amount
+                    Err(_) => {
+                        ERR_CODE_FT_RESOLVE_TRANSFER
+                            .error("failed to deserialize unused amount - full amount will be refunded")
+                            .log();
+                        amount
+                    }
                 }
             }
             PromiseResult::Failed => {

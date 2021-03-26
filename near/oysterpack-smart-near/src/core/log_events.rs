@@ -23,14 +23,14 @@ impl LogEvent {
     where
         Msg: Display,
     {
-        env::log(format!("{} {}", self, msg).as_bytes());
+        env::log(self.message(msg).as_bytes());
     }
 
     pub fn message<Msg>(&self, msg: Msg) -> String
     where
         Msg: Display,
     {
-        format!("{} {}", self, msg).to_string()
+        format!("{} {}", self, msg)
     }
 }
 
