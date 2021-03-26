@@ -13,7 +13,7 @@ use oysterpack_smart_near::{
 };
 use std::sync::Mutex;
 
-const ACCOUNT_STATS_KEY: u128 = 1952364736129901845182088441739779955;
+const ACCOUNT_METRICS_KEY: u128 = 1952364736129901845182088441739779955;
 
 type DAO = Object<u128, AccountMetrics>;
 
@@ -34,13 +34,13 @@ lazy_static! {
 
 impl AccountMetrics {
     pub fn load() -> AccountMetrics {
-        let stats = DAO::load(&ACCOUNT_STATS_KEY)
-            .unwrap_or_else(|| DAO::new(ACCOUNT_STATS_KEY, AccountMetrics::default()));
+        let stats = DAO::load(&ACCOUNT_METRICS_KEY)
+            .unwrap_or_else(|| DAO::new(ACCOUNT_METRICS_KEY, AccountMetrics::default()));
         *stats
     }
 
     fn save(&self) {
-        DAO::new(ACCOUNT_STATS_KEY, *self).save();
+        DAO::new(ACCOUNT_METRICS_KEY, *self).save();
     }
 
     #[cfg(test)]
