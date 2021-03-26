@@ -29,9 +29,7 @@ pub struct Contract;
 
 #[near_bindgen]
 impl Contract {
-    /// Default config values:
-    /// - contract owner = predecessor Account ID
-    /// - account storage use bounds -  min storage will be determined by measuring account storage usage
+    /// If owner is not specified, then predecessor Account ID will be set as the contract owner.
     #[init]
     pub fn deploy(owner: Option<ValidAccountId>) -> Self {
         let owner = owner.unwrap_or_else(|| env::predecessor_account_id().try_into().unwrap());
@@ -45,11 +43,4 @@ impl Contract {
 
         Self
     }
-}
-
-#[cfg(test)]
-mod tests {
-
-    #[test]
-    fn test() {}
 }
