@@ -82,7 +82,7 @@ impl UnregisterAccount for FungibleTokenUnregisterAccountHandler {
         if let Some(ft_balance) = AccountFTBalance::load(&account_id) {
             ERR_CODE_UNREGISTER_FAILURE.assert(|| force, || "account has non-zero token balance");
             let amount = *ft_balance;
-            AccountFTBalance::ft_set_balance(account_id, 0);
+            AccountFTBalance::set_balance(account_id, 0);
             burn_tokens(amount);
             LOG_EVENT_FT_BURN.log(format!(
                 "account forced unregistered with token balance: account: account: {}, amount: {}",
@@ -132,9 +132,9 @@ where
         ERR_INSUFFICIENT_FUNDS.assert(|| *sender_balance >= *amount);
 
         // transfer the tokens
-        AccountFTBalance::ft_set_balance(sender_id, *sender_balance - *amount);
+        AccountFTBalance::set_balance(sender_id, *sender_balance - *amount);
         let receiver_balance = self.ft_balance_of(receiver_id.clone());
-        AccountFTBalance::ft_set_balance(receiver_id.as_ref(), *receiver_balance + *amount);
+        AccountFTBalance::set_balance(receiver_id.as_ref(), *receiver_balance + *amount);
 
         if let Some(memo) = memo {
             LOG_EVENT_FT_TRANSFER.log(memo);
@@ -163,7 +163,7 @@ where
     }
 
     fn ft_balance_of(&self, account_id: ValidAccountId) -> TokenAmount {
-        AccountFTBalance::ft_balance_of(account_id.as_ref())
+        AccountFTBalance::balance_of(account_id.as_ref())
     }
 }
 
@@ -248,9 +248,9 @@ where
     fn account_storage_min() -> StorageUsage {
         let account_id = "19544499980228477895959808916967586760";
         let initial_storage = env::storage_usage();
-        AccountFTBalance::ft_set_balance(account_id, 1);
+        AccountFTBalance::set_balance(account_id, 1);
         let account_storage_usage = env::storage_usage() - initial_storage;
-        AccountFTBalance::ft_set_balance(account_id, 0);
+        AccountFTBalance::set_balance(account_id, 0);
         account_storage_usage.into()
     }
 }
@@ -459,7 +459,7 @@ where
                         // - the sender account most likely still exists, but might have been unregistered
                         //   while the transfer call workflow was in flight
                         if self.account_manager.account_exists(sender_id.as_ref()) {
-                            AccountFTBalance::ft_set_balance(sender_id.as_ref(), refund_amount);
+                            AccountFTBalance::set_balance(sender_id.as_ref(), refund_amount);
                             LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT.log(refund_amount);
                         } else {
                             burn_tokens(refund_amount);
@@ -517,7 +517,7 @@ impl AccountFTBalance {
         })
     }
 
-    fn ft_balance_of(account_id: &str) -> TokenAmount {
+    fn balance_of(account_id: &str) -> TokenAmount {
         Self::load(account_id).map_or(0.into(), |balance| (*balance).into())
     }
 
@@ -547,7 +547,7 @@ impl AccountFTBalance {
 
     /// tracks storage
     /// - if balance is set to zero, then the balance record will be deleted from storage
-    fn ft_set_balance(account_id: &str, balance: u128) {
+    fn set_balance(account_id: &str, balance: u128) {
         let account_hash_id = Self::ft_account_id_hash(account_id);
         match AccountFTBalanceObject::load(&account_hash_id) {
             None => {
@@ -661,7 +661,7 @@ mod tests {
 
         let mut stake = STAKE::new(account_manager);
         // mint some new stake for the sender
-        AccountFTBalance::ft_set_balance(sender, 100);
+        AccountFTBalance::set_balance(sender, 100);
 
         // Act
         ctx.predecessor_account_id = sender.to_string();
