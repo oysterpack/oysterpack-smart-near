@@ -7,6 +7,7 @@ edition = "2018"
 [dependencies]
 oysterpack-smart-near = { path = "../oysterpack-smart-near" }
 oysterpack-smart-account-management = { path = "../oysterpack-smart-account-management" }
+oysterpack-smart-contract = { path = "../oysterpack-smart-contract" }
 teloc = "0.1.0"
 
 [dev-dependencies]

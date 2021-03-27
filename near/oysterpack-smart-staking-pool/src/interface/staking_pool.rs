@@ -1,4 +1,4 @@
-use crate::StakeAccountBalance;
+use crate::StakeAccountBalances;
 use oysterpack_smart_near::domain::YoctoNear;
 use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
 use oysterpack_smart_near::near_sdk::{
@@ -21,7 +21,7 @@ pub trait StakingPool {
     /// Looks up the account's stake account balance, which includes storage balance.
     ///
     /// Returns None if the account is not registered with the contract
-    fn ops_stake_balance(&self, account_id: ValidAccountId) -> Option<StakeAccountBalance>;
+    fn ops_stake_balance(&self, account_id: ValidAccountId) -> Option<StakeAccountBalances>;
 
     /// Used to stake NEAR for the predecessor's account.
     ///
@@ -38,7 +38,7 @@ pub trait StakingPool {
     /// - if there is no attached deposit and no amount is specified - at least 1 is required
     ///
     /// `#[payable]`
-    fn ops_stake(&mut self, amount: Option<StakeAmount>) -> StakeAccountBalance;
+    fn ops_stake(&mut self, amount: Option<StakeAmount>) -> StakeAccountBalances;
 
     /// Used to unstake staked NEAR.
     ///
@@ -52,7 +52,7 @@ pub trait StakingPool {
     /// ## Panics
     /// - if account is not registered
     /// - if there are insufficient staked funds to fulfill the request to unstake the specified amount
-    fn ops_unstake(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalance;
+    fn ops_unstake(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances;
 }
 
 #[derive(
