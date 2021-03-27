@@ -15,7 +15,17 @@ use std::{
 pub const ZERO_NEAR: YoctoNear = YoctoNear(0);
 
 #[derive(
-    BorshSerialize, BorshDeserialize, Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Default,
+    BorshSerialize,
+    BorshDeserialize,
+    Debug,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Default,
+    Hash,
 )]
 pub struct YoctoNear(pub u128);
 

@@ -1,7 +1,10 @@
 use crate::StakeAccountBalance;
 use oysterpack_smart_near::domain::YoctoNear;
 use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
-use oysterpack_smart_near::{Err, ErrCode, ErrorConst};
+use oysterpack_smart_near::near_sdk::{
+    borsh::{self, BorshDeserialize, BorshSerialize},
+    serde::{Deserialize, Serialize},
+};
 
 /// # **Contract Interface**: Staking Pool API
 ///
@@ -52,6 +55,10 @@ pub trait StakingPool {
     fn ops_unstake(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalance;
 }
 
+#[derive(
+    BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, Copy, PartialEq,
+)]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub enum StakeAmount {
     /// stakes all available and unstaked NEAR
     All,

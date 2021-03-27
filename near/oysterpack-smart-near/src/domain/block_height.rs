@@ -13,7 +13,17 @@ use std::{
 };
 
 #[derive(
-    BorshSerialize, BorshDeserialize, Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Default,
+    BorshSerialize,
+    BorshDeserialize,
+    Debug,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Default,
+    Hash,
 )]
 pub struct BlockHeight(pub u64);
 

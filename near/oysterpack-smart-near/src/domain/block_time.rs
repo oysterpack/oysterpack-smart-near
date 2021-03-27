@@ -5,7 +5,7 @@ use near_sdk::{
 };
 
 #[derive(
-    BorshSerialize, BorshDeserialize, Deserialize, Serialize, Clone, Copy, Debug, PartialEq,
+    BorshSerialize, BorshDeserialize, Deserialize, Serialize, Clone, Copy, Debug, PartialEq, Hash,
 )]
 #[serde(crate = "near_sdk::serde")]
 pub struct BlockTime {
