@@ -64,7 +64,3 @@ pub enum StakeAmount {
     /// re-stakes the specified unstaked amount - starting from the most recent unstaked balance
     Unstaked(YoctoNear),
 }
-
-pub const ERR_ZERO_STAKED_BALANCE: ErrorConst = ErrorConst(ErrCode("ZERO_STAKED_BALANCE"), "");
-
-pub const ERR_INSUFFICIENT_FUNDS: ErrorConst = ErrorConst(ErrCode("INSUFFICIENT_FUNDS"), "");
