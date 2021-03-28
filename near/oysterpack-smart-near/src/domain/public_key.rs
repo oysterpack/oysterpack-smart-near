@@ -3,7 +3,7 @@ use crate::Error;
 use near_sdk::json_types::Base58PublicKey;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    serde::{Deserialize, Serialize},
+    serde::{Deserialize, Deserializer, Serialize, Serializer},
 };
 use std::fmt::Formatter;
 use std::{
@@ -17,10 +17,56 @@ pub enum PublicKey {
     SECP256K1(([u8; 32], [u8; 32])),
 }
 
-impl TryFrom<Vec<u8>> for PublicKey {
+impl Serialize for PublicKey {
+    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
+    where
+        S: Serializer,
+    {
+        let key = Base58PublicKey::from(*self);
+        Serialize::serialize(&key, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for PublicKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let key: Base58PublicKey = Deserialize::deserialize(deserializer)?;
+        Ok(key.into())
+    }
+}
+
+// struct PublicKeyVisitor;
+//
+// impl<'de> Visitor<'de> for PublicKeyVisitor {
+//     type Value = PublicKey;
+//
+//     fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+//         formatter.write_str("PublicKey serialized as string")
+//     }
+//
+//     fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+//     where
+//         E: de::Error,
+//     {
+//         let key: Base58PublicKey = serde_json::from_str(v)
+//             .map_err(|_| de::Error::custom("JSON parsing failed for PublicKey"))?;
+//         Ok(key.into())
+//     }
+//
+//     fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+//     where
+//         E: de::Error,
+//     {
+//         self.visit_str(&v)
+//     }
+// }
+
+impl TryFrom<&[u8]> for PublicKey {
     type Error = Error<String>;
 
-    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         match value.len() {
             33 if value[0] == 0 => Ok(Self::ED25519((&value[1..]).try_into().unwrap())),
             65 if value[0] == 1 => Ok(Self::SECP256K1((
@@ -58,6 +104,12 @@ impl From<PublicKey> for Vec<u8> {
     }
 }
 
+impl From<Base58PublicKey> for PublicKey {
+    fn from(key: Base58PublicKey) -> Self {
+        key.0.as_slice().try_into().unwrap()
+    }
+}
+
 impl From<PublicKey> for Base58PublicKey {
     fn from(key: PublicKey) -> Self {
         Self(key.into())
@@ -75,28 +127,40 @@ impl Display for PublicKey {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use near_sdk::serde_json;
 
     #[test]
-    fn from_vec_ED25519() {
+    fn from_vec_ed25519() {
         let key = [0_u8; 33];
 
-        let key: PublicKey = key.to_vec().try_into().unwrap();
+        let key: PublicKey = key[..].try_into().unwrap();
         println!("{}", key);
         match key {
-            PublicKey::ED25519(k) => {}
+            PublicKey::ED25519(_) => {}
             PublicKey::SECP256K1(_) => panic!("expected ED25519"),
         }
     }
 
     #[test]
-    fn from_vec_SECP256K1() {
+    fn from_vec_secp256k1() {
         let key = [1_u8; 65];
 
-        let key: PublicKey = key.to_vec().try_into().unwrap();
+        let key: PublicKey = key[..].try_into().unwrap();
         println!("{}", key);
         match key {
-            PublicKey::ED25519(k) => panic!("expected ED25519"),
+            PublicKey::ED25519(_) => panic!("expected ED25519"),
             PublicKey::SECP256K1(_) => {}
         }
+    }
+
+    #[test]
+    fn json_serde() {
+        let key = [1_u8; 65];
+        let key: PublicKey = key[..].try_into().unwrap();
+
+        let json = serde_json::to_string(&key).unwrap();
+        println!("{}", json);
+        let key2: PublicKey = serde_json::from_str(&json).unwrap();
+        assert_eq!(key, key2);
     }
 }

@@ -1,7 +1,7 @@
 use crate::{StakeAccount, StakeAccountBalances, StakeAmount, StakingPool};
 use oysterpack_smart_account_management::components::account_management::AccountManagementComponent;
 use oysterpack_smart_contract::BalanceId;
-use oysterpack_smart_near::domain::YoctoNear;
+use oysterpack_smart_near::domain::{PublicKey, YoctoNear};
 use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
 
 pub struct StakingPoolComponent {
@@ -23,7 +23,7 @@ impl StakingPool for StakingPoolComponent {
 }
 
 struct State {
-    // stake_public_key: PublicKey,
+    stake_public_key: PublicKey,
 }
 
 ///
