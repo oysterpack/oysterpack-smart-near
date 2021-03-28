@@ -1,4 +1,5 @@
 use crate::UnstakedBalance;
+use oysterpack_smart_near::asserts::ERR_INVALID;
 use oysterpack_smart_near::domain::{EpochHeight, YoctoNear};
 use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
@@ -8,6 +9,9 @@ use oysterpack_smart_near::near_sdk::{
         Deserialize, Deserializer, Serialize, Serializer,
     },
 };
+use oysterpack_smart_near::ErrCode;
+use std::collections::HashSet;
+use std::convert::TryFrom;
 use std::{
     collections::HashMap,
     fmt::{self, Formatter},
@@ -132,8 +136,9 @@ impl From<UnstakedBalances> for HashMap<EpochHeight, YoctoNear> {
 }
 
 impl From<UnstakedBalances> for Vec<UnstakedBalance> {
+    /// balances will be sorted by [`EpochHeight`]
     fn from(balances: UnstakedBalances) -> Self {
-        match balances {
+        let mut balances = match balances {
             UnstakedBalances::One(balance) => vec![balance],
             UnstakedBalances::Two((balance1, balance2)) => vec![balance1, balance2],
             UnstakedBalances::Three((balance1, balance2, balance3)) => {
@@ -142,7 +147,50 @@ impl From<UnstakedBalances> for Vec<UnstakedBalance> {
             UnstakedBalances::Four((balance1, balance2, balance3, balance4)) => {
                 vec![balance1, balance2, balance3, balance4]
             }
+        };
+        balances.sort();
+        balances
+    }
+}
+
+/// balances will be sorted by [`EpochHeight`]
+impl TryFrom<&[UnstakedBalance]> for UnstakedBalances {
+    type Error = oysterpack_smart_near::Error<String>;
+
+    fn try_from(value: &[UnstakedBalance]) -> Result<Self, Self::Error> {
+        if value.is_empty() || value.len() > 4 {
+            return Err(ERR_INVALID.error("there must be 1-4 unstaked balances".to_string()));
         }
+
+        if value.len() == 1 {
+            return Ok(UnstakedBalances::One((&value[0]).clone()));
+        }
+
+        let mut balances = value.to_vec();
+        balances.sort();
+        let epochs = balances.iter().fold(
+            HashSet::with_capacity(value.len()),
+            |mut epochs, balance| {
+                epochs.insert(*balance.available_on);
+                epochs
+            },
+        );
+        if epochs.len() != value.len() {
+            return Err(
+                ERR_INVALID.error("UnstakedBalance::available_on must be unique".to_string())
+            );
+        }
+
+        let balances = match value {
+            [b1, b2, ..] => UnstakedBalances::Two((b1.clone(), b2.clone())),
+            [b1, b2, b3, ..] => UnstakedBalances::Three((b1.clone(), b2.clone(), b3.clone())),
+            [b1, b2, b3, b4, ..] => {
+                UnstakedBalances::Four((b1.clone(), b2.clone(), b3.clone(), b4.clone()))
+            }
+            _ => unreachable!(),
+        };
+
+        Ok(balances)
     }
 }
 
@@ -217,6 +265,27 @@ mod tests {
                 UnstakedBalance::new(3000.into(), 10.into()),
                 UnstakedBalance::new(4000.into(), 10.into()),
             )))
+        );
+    }
+
+    #[test]
+    fn to_vec() {
+        let mut balances = UnstakedBalances::Four((
+            UnstakedBalance::new(1000.into(), 10.into()),
+            UnstakedBalance::new(5000.into(), 10.into()),
+            UnstakedBalance::new(2000.into(), 10.into()),
+            UnstakedBalance::new(4000.into(), 10.into()),
+        ));
+
+        let balances: Vec<UnstakedBalance> = balances.into();
+        assert_eq!(
+            balances,
+            vec![
+                UnstakedBalance::new(1000.into(), 10.into()),
+                UnstakedBalance::new(2000.into(), 10.into()),
+                UnstakedBalance::new(4000.into(), 10.into()),
+                UnstakedBalance::new(5000.into(), 10.into()),
+            ]
         );
     }
 }

@@ -6,12 +6,22 @@ use oysterpack_smart_near::near_sdk::{
 
 /// specified the unstaked balance and when it is available for withdrawal
 #[derive(
-    BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, Copy, PartialEq,
+    BorshDeserialize,
+    BorshSerialize,
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Eq,
 )]
 #[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct UnstakedBalance {
-    pub balance: YoctoNear,
     pub available_on: EpochHeight,
+    pub balance: YoctoNear,
 }
 
 impl UnstakedBalance {
