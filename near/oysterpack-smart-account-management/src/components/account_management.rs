@@ -769,11 +769,11 @@ where
         max: MaxStorageBalance,
     ) {
         if account.near_balance() < *max {
-            let max_allowed_deposit = max.value() - account.near_balance().value();
-            let deposit = if deposit.value() > max_allowed_deposit {
+            let max_allowed_deposit = *max - account.near_balance();
+            let deposit = if *deposit > max_allowed_deposit {
                 // refund amount over the upper bound
-                send_refund(deposit.value() - max_allowed_deposit);
-                max_allowed_deposit.into()
+                send_refund(*deposit - max_allowed_deposit);
+                max_allowed_deposit
             } else {
                 *deposit
             };
