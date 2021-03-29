@@ -9,7 +9,7 @@ pub(crate) struct AccountStorageUsageComponent;
 
 impl AccountStorageUsage for AccountStorageUsageComponent {
     fn ops_storage_usage_bounds(&self) -> StorageUsageBounds {
-        *Self::load_state().unwrap()
+        *Self::load_state().expect("requires deployment")
     }
 
     fn ops_storage_usage(&self, account_id: ValidAccountId) -> Option<StorageUsage> {
