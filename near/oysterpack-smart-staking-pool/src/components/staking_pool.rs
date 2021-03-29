@@ -116,7 +116,7 @@ impl StakingPool for StakingPoolComponent {
         unimplemented!()
     }
 
-    fn stake_token_value(&self) -> YoctoNear {
+    fn ops_stake_token_value(&self) -> YoctoNear {
         let total_staked_balance = env::account_locked_balance();
         if total_staked_balance == 0 {
             YOCTO.into()
@@ -125,6 +125,13 @@ impl StakingPool for StakingPoolComponent {
             // since we are rounding down, we need to make sure that the value of 1 STAKE is at least 1 NEAR
             std::cmp::max(value, YOCTO.into())
         }
+    }
+
+    fn ops_stake_available_liquidity(&self) -> YoctoNear {
+        ContractNearBalances::load_near_balances()
+            .get(&StakingPoolComponent::UNSTAKED_LIQUIDITY)
+            .cloned()
+            .unwrap_or(ZERO_NEAR)
     }
 }
 

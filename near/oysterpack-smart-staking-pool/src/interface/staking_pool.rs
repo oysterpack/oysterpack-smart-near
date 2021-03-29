@@ -55,7 +55,13 @@ pub trait StakingPool {
     fn ops_unstake(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances;
 
     /// returns the current NEAR value of 1 STAKE token
-    fn stake_token_value(&self) -> YoctoNear;
+    fn ops_stake_token_value(&self) -> YoctoNear;
+
+    /// Returns the amount of liquidity that is available for withdrawing unstaked NEAR.
+    ///
+    /// Liquidity is automatically added by delegators when they stake their NEAR while there is
+    /// locked unstaked NEAR.
+    fn ops_stake_available_liquidity(&self) -> YoctoNear;
 }
 
 #[derive(
