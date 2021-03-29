@@ -798,16 +798,16 @@ where
         assert_min_near_attached(storage_balance_bounds.min);
         if registration_only {
             // only take the min required and refund the rest
-            let refund_amount = deposit.value() - storage_balance_bounds.min.value();
-            if refund_amount > 0 {
+            let refund_amount = deposit - storage_balance_bounds.min;
+            if *refund_amount > 0 {
                 send_refund(refund_amount);
             }
             storage_balance_bounds.min
         } else {
             // refund deposit that is over the max allowed
             storage_balance_bounds.max.map_or(deposit, |max| {
-                if deposit.value() > max.value() {
-                    let refund_amount = deposit.value() - max.value();
+                if deposit > max {
+                    let refund_amount = deposit - max;
                     send_refund(refund_amount);
                     max
                 } else {
