@@ -214,7 +214,7 @@ pub trait UnregisterAccount {
     /// - delete any account data outside of the [`AccountNearDataObject`] and [`crate::AccountDataObject`] objects
     /// - apply any contract specific business logic
     ///
-    /// ##NOTES
+    /// ## NOTES
     ///- the predecessor account is being unregistered
     /// - implementations should use [`ERR_CODE_UNREGISTER_FAILURE`] for failures
     fn unregister_account(&self, force: bool);
@@ -523,6 +523,7 @@ where
                 }
             }
             None => {
+                // withdraw the total available balance
                 if account_available_balance > ZERO_NEAR {
                     send_refund(account_available_balance + 1);
                     account.dec_near_balance(account_available_balance);
