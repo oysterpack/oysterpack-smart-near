@@ -25,8 +25,7 @@ pub trait StakingPool {
 
     /// Used to stake NEAR for the predecessor's account.
     ///
-    /// Any attached deposit will be fully staked If the account is not registered, then the account
-    /// will be automatically registered using a portion of the deposit to pay for account storage.
+    /// Any attached deposit will be fully staked.
     ///
     /// The specified amount is used to specify how much to stake from the account's available and
     /// unstaked balances.
@@ -34,6 +33,7 @@ pub trait StakingPool {
     /// Returns the account's updated stake account balance
     ///
     /// ## Panics
+    /// - if the account is not registered
     /// - if there is not enough funds attached to pay for account storage when registering the account
     /// - if there is no attached deposit and no amount is specified - at least 1 is required
     ///

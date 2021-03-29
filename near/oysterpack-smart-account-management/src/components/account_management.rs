@@ -374,12 +374,6 @@ impl<T> AccountRepository<T> for AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    /// Creates a new account.
-    ///
-    /// - tracks storage usage - emits [`AccountStorageEvent::StorageUsageChanged`]
-    ///
-    /// # Panics
-    /// if the account already is registered
     fn create_account(
         &mut self,
         account_id: &str,
@@ -401,42 +395,31 @@ where
         }
     }
 
-    /// tries to load the account from storage
     fn load_account(&self, account_id: &str) -> Option<Account<T>> {
         self.load_account_near_data(account_id)
             .map(|near_data| (near_data, self.load_account_data(account_id)))
     }
 
-    /// tries to load the account data from storage
     fn load_account_data(&self, account_id: &str) -> Option<AccountDataObject<T>> {
         AccountDataObject::<T>::load(account_id)
     }
 
-    /// tries to load the account NEAR data from storage
     fn load_account_near_data(&self, account_id: &str) -> Option<AccountNearDataObject> {
         AccountNearDataObject::load(account_id)
     }
 
-    /// ## Panics
-    /// if the account is not registered
     fn registered_account(&self, account_id: &str) -> Account<T> {
         let account = self.load_account(account_id);
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| account.is_some());
         account.unwrap()
     }
 
-    /// ## Panics
-    /// if the account is not registered
     fn registered_account_near_data(&self, account_id: &str) -> AccountNearDataObject {
         let account = self.load_account_near_data(account_id);
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| account.is_some());
         account.unwrap()
     }
 
-    /// Assumes that the account will always have data if registered.
-    ///
-    /// ## Panics
-    /// if the account is not registered
     fn registered_account_data(&self, account_id: &str) -> AccountDataObject<T> {
         let account = self.load_account_data(account_id);
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| account.is_some());
@@ -447,8 +430,6 @@ where
         AccountNearDataObject::exists(account_id)
     }
 
-    /// Deletes [AccountNearDataObject] and [AccountDataObject] for the specified  account ID
-    /// - tracks storage usage - emits [`AccountStorageEvent::StorageUsageChanged`]
     fn delete_account(&mut self, account_id: &str) {
         if let Some((near_data, data)) = self.load_account(account_id) {
             near_data.delete();
