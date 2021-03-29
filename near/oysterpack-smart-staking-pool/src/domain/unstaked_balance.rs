@@ -1,6 +1,7 @@
 use oysterpack_smart_near::domain::{EpochHeight, YoctoNear};
 use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
+    env,
     serde::{Deserialize, Serialize},
 };
 
@@ -30,5 +31,9 @@ impl UnstakedBalance {
             balance,
             available_on,
         }
+    }
+
+    pub fn is_available(&self) -> bool {
+        *self.available_on <= env::epoch_height()
     }
 }

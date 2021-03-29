@@ -21,5 +21,5 @@ pub struct StakeAccountBalances {
     /// - each unstaking is tracked separately at the account's storage expense
     ///   - because the lockup period is 4 epochs, at most the map will contain 4 entries
     /// - the unstake amount can be updated within the same epoch
-    pub unstaked: Option<UnstakedBalances>,
+    pub unstaked: UnstakedBalances,
 }

@@ -1,6 +1,6 @@
 use crate::UnstakedBalance;
 use oysterpack_smart_near::asserts::ERR_INVALID;
-use oysterpack_smart_near::domain::{EpochHeight, YoctoNear};
+use oysterpack_smart_near::domain::{EpochHeight, YoctoNear, ZERO_NEAR};
 use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{
@@ -11,14 +11,16 @@ use oysterpack_smart_near::near_sdk::{
 };
 use oysterpack_smart_near::ErrCode;
 use std::collections::HashSet;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::{
     collections::HashMap,
     fmt::{self, Formatter},
 };
 
+/// unstaked balances will be sorted by withdrawal availability, i.e., by epoch height
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone, Copy, PartialEq)]
 pub enum UnstakedBalances {
+    Zero,
     One(UnstakedBalance),
     Two((UnstakedBalance, UnstakedBalance)),
     Three((UnstakedBalance, UnstakedBalance, UnstakedBalance)),
@@ -30,6 +32,44 @@ pub enum UnstakedBalances {
             UnstakedBalance,
         ),
     ),
+}
+
+impl UnstakedBalances {
+    pub fn total_unstaked_balance(&self) -> YoctoNear {
+        let balances: Vec<UnstakedBalance> = (*self).into();
+        balances.iter().map(|balance| balance.balance).sum()
+    }
+
+    /// returns the unstaked balance amount that is available for withdrawal based on epoch height
+    pub fn unstaked_available_balance(&self) -> YoctoNear {
+        let balances: Vec<UnstakedBalance> = (*self).into();
+        balances
+            .iter()
+            .filter_map(|balance| {
+                if balance.is_available() {
+                    Some(balance.balance)
+                } else {
+                    None
+                }
+            })
+            .sum()
+    }
+
+    pub fn remove_available_balances(self) -> UnstakedBalances {
+        let balances: Vec<UnstakedBalance> = self.into();
+        let balances: Vec<UnstakedBalance> = balances
+            .iter()
+            .cloned()
+            .filter(|balance| !balance.is_available())
+            .collect();
+        balances.as_slice().try_into().unwrap()
+    }
+}
+
+impl Default for UnstakedBalances {
+    fn default() -> Self {
+        UnstakedBalances::Zero
+    }
 }
 
 impl Serialize for UnstakedBalances {
@@ -77,6 +117,7 @@ impl<'de> Visitor<'de> for UnstakedBalancesVisitor {
         }
 
         let balances = match balances.len() {
+            0 => UnstakedBalances::Zero,
             1 => UnstakedBalances::One((&balances[0]).clone()),
             2 => UnstakedBalances::Two(((&balances[0]).clone(), (&balances[0]).clone())),
             3 => UnstakedBalances::Three((
@@ -105,6 +146,7 @@ impl<'de> Visitor<'de> for UnstakedBalancesVisitor {
 impl From<UnstakedBalances> for HashMap<EpochHeight, YoctoNear> {
     fn from(balances: UnstakedBalances) -> Self {
         match balances {
+            UnstakedBalances::Zero => HashMap::with_capacity(0),
             UnstakedBalances::One(balance) => {
                 let mut map = HashMap::with_capacity(1);
                 map.insert(balance.available_on, balance.balance);
@@ -139,6 +181,7 @@ impl From<UnstakedBalances> for Vec<UnstakedBalance> {
     /// balances will be sorted by [`EpochHeight`]
     fn from(balances: UnstakedBalances) -> Self {
         let mut balances = match balances {
+            UnstakedBalances::Zero => vec![],
             UnstakedBalances::One(balance) => vec![balance],
             UnstakedBalances::Two((balance1, balance2)) => vec![balance1, balance2],
             UnstakedBalances::Three((balance1, balance2, balance3)) => {
@@ -207,7 +250,7 @@ mod tests {
             total: YOCTO.into(),
             available: 10_000.into(),
             staked: (YOCTO - (YOCTO / 2)).into(),
-            unstaked: None,
+            unstaked: UnstakedBalances::Zero,
         };
 
         let json = serde_json::to_string_pretty(&balance).unwrap();
@@ -215,43 +258,40 @@ mod tests {
 
         balance = serde_json::from_str(&json).unwrap();
 
-        balance.unstaked = Some(UnstakedBalances::One(UnstakedBalance::new(
-            1000.into(),
-            10.into(),
-        )));
+        balance.unstaked = UnstakedBalances::One(UnstakedBalance::new(1000.into(), 10.into()));
 
         let json = serde_json::to_string_pretty(&balance).unwrap();
         println!("{}", json);
 
         balance = serde_json::from_str(&json).unwrap();
 
-        balance.unstaked = Some(UnstakedBalances::Two((
+        balance.unstaked = UnstakedBalances::Two((
             UnstakedBalance::new(1000.into(), 10.into()),
             UnstakedBalance::new(2000.into(), 10.into()),
-        )));
+        ));
 
         let json = serde_json::to_string_pretty(&balance).unwrap();
         println!("{}", json);
 
         balance = serde_json::from_str(&json).unwrap();
 
-        balance.unstaked = Some(UnstakedBalances::Three((
+        balance.unstaked = UnstakedBalances::Three((
             UnstakedBalance::new(1000.into(), 10.into()),
             UnstakedBalance::new(2000.into(), 10.into()),
             UnstakedBalance::new(3000.into(), 10.into()),
-        )));
+        ));
 
         let json = serde_json::to_string_pretty(&balance).unwrap();
         println!("{}", json);
 
         balance = serde_json::from_str(&json).unwrap();
 
-        balance.unstaked = Some(UnstakedBalances::Four((
+        balance.unstaked = UnstakedBalances::Four((
             UnstakedBalance::new(1000.into(), 10.into()),
             UnstakedBalance::new(2000.into(), 10.into()),
             UnstakedBalance::new(3000.into(), 10.into()),
             UnstakedBalance::new(4000.into(), 10.into()),
-        )));
+        ));
 
         let json = serde_json::to_string_pretty(&balance).unwrap();
         println!("{}", json);
@@ -259,12 +299,12 @@ mod tests {
         balance = serde_json::from_str(&json).unwrap();
         assert_eq!(
             balance.unstaked,
-            Some(UnstakedBalances::Four((
+            UnstakedBalances::Four((
                 UnstakedBalance::new(1000.into(), 10.into()),
                 UnstakedBalance::new(2000.into(), 10.into()),
                 UnstakedBalance::new(3000.into(), 10.into()),
                 UnstakedBalance::new(4000.into(), 10.into()),
-            )))
+            ))
         );
     }
 

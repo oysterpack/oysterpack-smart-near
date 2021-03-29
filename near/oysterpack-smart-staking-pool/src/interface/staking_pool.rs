@@ -53,6 +53,9 @@ pub trait StakingPool {
     /// - if account is not registered
     /// - if there are insufficient staked funds to fulfill the request to unstake the specified amount
     fn ops_unstake(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances;
+
+    /// returns the current NEAR value of 1 STAKE token
+    fn stake_token_value(&self) -> YoctoNear;
 }
 
 #[derive(

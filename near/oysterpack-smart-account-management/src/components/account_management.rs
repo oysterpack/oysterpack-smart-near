@@ -325,15 +325,24 @@ where
         AccountStorageUsageComponent::deploy(storage_usage_bounds);
 
         let storage_balance_bounds: StorageBalanceBounds = storage_usage_bounds.into();
-
         AccountMetrics::register_account_storage_event_handler();
-        let mut account =
-            AccountNearDataObject::new(config.admin_account.as_ref(), storage_balance_bounds.min);
-        account.grant_admin();
-        account.save();
-        eventbus::post(&AccountStorageEvent::Registered(
-            account.storage_balance(storage_balance_bounds.min),
-        ));
+        match AccountNearDataObject::load(config.admin_account.as_ref().as_str()) {
+            None => {
+                let mut account = AccountNearDataObject::new(
+                    config.admin_account.as_ref(),
+                    storage_balance_bounds.min,
+                );
+                account.grant_admin();
+                account.save();
+                eventbus::post(&AccountStorageEvent::Registered(
+                    account.storage_balance(storage_balance_bounds.min),
+                ));
+            }
+            Some(mut account) => {
+                account.grant_admin();
+                account.save();
+            }
+        }
     }
 }
 

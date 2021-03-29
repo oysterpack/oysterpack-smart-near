@@ -6,6 +6,7 @@ use near_sdk::{
     },
     serde_json,
 };
+use std::iter::Sum;
 use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
 use std::{
     fmt::{self, Display, Formatter},
@@ -124,6 +125,12 @@ impl Div<u128> for YoctoNear {
 
     fn div(self, rhs: u128) -> Self::Output {
         (self.0 / rhs).into()
+    }
+}
+
+impl Sum for YoctoNear {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.map(|value| value.0).sum::<u128>().into()
     }
 }
 
