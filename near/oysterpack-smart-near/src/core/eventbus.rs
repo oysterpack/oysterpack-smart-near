@@ -1,11 +1,18 @@
 //! Provides support for an eventbus for stateless [`EventHandler`] functions
 
-/// registers an event handler
-pub fn register<T>(f: EventHandler<T>)
-where
-    T: Event,
-{
-    T::handlers_mut(|x| x.register_handler(f))
+/// Every [`Event`] type manages its own handlers
+pub trait Event {
+    /// enables access to the [`EventHandlers`] for this event type
+    /// - used to get access to registered handlers
+    fn handlers<F>(f: F)
+    where
+        F: FnOnce(&EventHandlers<Self>);
+
+    /// enables mutable access to the [`EventHandlers`] for this event type
+    /// - used to register handlers for this event type
+    fn handlers_mut<F>(f: F)
+    where
+        F: FnOnce(&mut EventHandlers<Self>);
 }
 
 /// post event and run registered event handlers
@@ -15,6 +22,15 @@ where
 {
     T::handlers(|x| x.post(event))
 }
+
+/// registers an event handler
+pub fn register<T>(f: EventHandler<T>)
+where
+    T: Event,
+{
+    T::handlers_mut(|x| x.register_handler(f))
+}
+
 /// stateless event handler function
 pub type EventHandler<T> = fn(&T);
 
@@ -34,20 +50,6 @@ impl<T: Event + ?Sized> EventHandlers<T> {
     fn post(&self, event: &T) {
         self.0.iter().for_each(|f| f(event))
     }
-}
-
-pub trait Event {
-    /// enables access to the [`EventHandlers`] for this event type
-    /// - used to get access to registered handlers
-    fn handlers<F>(f: F)
-    where
-        F: FnOnce(&EventHandlers<Self>);
-
-    /// enables mutable access to the [`EventHandlers`] for this event type
-    /// - used to register handlers for this event type
-    fn handlers_mut<F>(f: F)
-    where
-        F: FnOnce(&mut EventHandlers<Self>);
 }
 
 #[cfg(test)]
