@@ -50,6 +50,14 @@ impl<T: Event + ?Sized> EventHandlers<T> {
     fn post(&self, event: &T) {
         self.0.iter().for_each(|f| f(event))
     }
+
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 #[cfg(test)]

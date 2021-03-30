@@ -40,9 +40,8 @@ impl AccountStorageEvent {
     }
 }
 
-// TODO: create macro to generate boilerplate code for event: #[event]
 lazy_static! {
-    static ref ACCOUNT_STORAGE_EVENTS: Mutex<EventHandlers<AccountStorageEvent>> =
+    static ref EVENT_HANDLERS: Mutex<EventHandlers<AccountStorageEvent>> =
         Mutex::new(EventHandlers::new());
 }
 
@@ -51,13 +50,19 @@ impl Event for AccountStorageEvent {
     where
         F: FnOnce(&EventHandlers<Self>),
     {
-        f(&*ACCOUNT_STORAGE_EVENTS.lock().unwrap())
+        match EVENT_HANDLERS.lock() {
+            Ok(guard) => f(&*guard),
+            Err(poisoned) => f(&*poisoned.into_inner()),
+        };
     }
 
     fn handlers_mut<F>(f: F)
     where
         F: FnOnce(&mut EventHandlers<Self>),
     {
-        f(&mut *ACCOUNT_STORAGE_EVENTS.lock().unwrap())
+        match EVENT_HANDLERS.lock() {
+            Ok(mut guard) => f(&mut *guard),
+            Err(poisoned) => f(&mut *poisoned.into_inner()),
+        };
     }
 }

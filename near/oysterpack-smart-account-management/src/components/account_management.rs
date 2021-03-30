@@ -1,7 +1,6 @@
 //! [`AccountManagementComponent`]
 //! - constructor: [`AccountManagementComponent::new`]
 //!   - [`ContractPermissions`]
-//!   - Box<dyn [`UnregisterAccount`]>
 //! - deployment: [`AccountManagementComponent::deploy`]
 //!   - config: [`AccountManagementComponentConfig`]
 
@@ -48,9 +47,6 @@ pub struct AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    /// must be provided by the contract
-    unregister: Box<dyn UnregisterAccount>,
-
     contract_permissions: ContractPermissions,
 
     _phantom_data: PhantomData<T>,
@@ -198,59 +194,15 @@ impl From<Vec<(u8, &'static str)>> for ContractPermissions {
     }
 }
 
-pub const ERR_CODE_UNREGISTER_FAILURE: ErrCode = ErrCode("UNREGISTER_FAILURE");
-
-/// Contract is required to provide implementation that applies contract specific business logic.
-/// - see [`StorageManagement::storage_unregister`]
-pub trait UnregisterAccount {
-    /// [`AccountManagementComponent`] will be responsible for
-    /// - sending account NEAR balance refund
-    /// - publishing events
-    /// - deleting [`AccountNearDataObject`] and [`crate::AccountDataObject`] objects from contract storage
-    ///
-    /// The [`UnregisterAccount`] delegate is responsible for:
-    /// - if `force=false`, panic if the account cannot be deleted because of contract specific
-    ///   business logic, e.g., for FT, the account cannot unregister if it has a token balance
-    /// - delete any account data outside of the [`AccountNearDataObject`] and [`crate::AccountDataObject`] objects
-    /// - apply any contract specific business logic
-    ///
-    /// ## NOTES
-    ///- the predecessor account is being unregistered
-    /// - implementations should use [`ERR_CODE_UNREGISTER_FAILURE`] for failures
-    fn unregister_account(&self, force: bool);
-}
-
-/// Default implementation that performs no contract specific operation, i.e., no-operation
-///
-/// USE CASE: contract stores all account data within [`crate::AccountDataObject`] object
-#[derive(Dependency)]
-pub struct UnregisterAccountNOOP;
-
-impl UnregisterAccount for UnregisterAccountNOOP {
-    fn unregister_account(&self, _force: bool) {
-        // no action required
-    }
-}
-
-impl From<Box<UnregisterAccountNOOP>> for Box<dyn UnregisterAccount> {
-    fn from(x: Box<UnregisterAccountNOOP>) -> Self {
-        x
-    }
-}
-
 /// constructor
 #[inject]
 impl<T> AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    pub fn new(
-        unregister: Box<dyn UnregisterAccount>,
-        contract_permissions: &ContractPermissions,
-    ) -> Self {
+    pub fn new(contract_permissions: &ContractPermissions) -> Self {
         AccountMetrics::register_account_storage_event_handler();
         Self {
-            unregister,
             contract_permissions: contract_permissions.clone(),
             _phantom_data: Default::default(),
         }
@@ -263,8 +215,7 @@ where
 {
     /// helper method used to measure the amount of storage needed to store the specified data.
     pub fn measure_storage_usage(account_data: T) -> StorageUsage {
-        let mut account_manager: Self =
-            Self::new(Box::new(UnregisterAccountNOOP), &Default::default());
+        let mut account_manager: Self = Self::new(&Default::default());
 
         // seeds the storage required to store metrics
         {
@@ -541,7 +492,10 @@ where
         self.load_account_near_data(&account_id)
             .map_or(false, |account| {
                 let account_near_balance = account.near_balance();
-                self.unregister.unregister_account(force.unwrap_or(false));
+                eventbus::post(&StorageManagementEvent::PreUnregister {
+                    account_id: account_id.clone(),
+                    force: force.unwrap_or(false),
+                });
                 self.delete_account(&account_id);
                 eventbus::post(&AccountStorageEvent::Unregistered(account_near_balance));
                 send_refund(account_near_balance + 1);
@@ -874,8 +828,7 @@ mod tests_service {
             admin_account: to_valid_account_id("owner"),
         });
 
-        let service: AccountManager =
-            AccountManager::new(Box::new(UnregisterAccountNOOP), &Default::default());
+        let service: AccountManager = AccountManager::new(&Default::default());
         let storage_balance_bounds = service.storage_balance_bounds();
         assert_eq!(
             storage_balance_bounds.min,
@@ -919,7 +872,6 @@ mod tests_teloc {
 
         let container = ServiceProvider::new()
             .add_transient::<AccountManager>()
-            .add_transient_c::<Box<dyn UnregisterAccount>, Box<UnregisterAccountNOOP>>()
             .add_instance(ContractPermissions::default());
 
         let service: AccountManager = container.resolve();
@@ -972,7 +924,7 @@ mod tests_storage_management {
         AccountStorageUsageComponent::deploy(storage_usage_bounds);
 
         let mut service: AccountManagementComponent<()> =
-            AccountManagementComponent::new(Box::new(UnregisterAccountNOOP), &Default::default());
+            AccountManagementComponent::new(&Default::default());
         let storage_balance_bounds = service.storage_balance_bounds();
         println!("storage_balance_bounds = {:?}", storage_balance_bounds);
 
@@ -1586,10 +1538,7 @@ mod tests_storage_management {
                     component_account_storage_mins: None,
                 });
 
-                let mut service = AccountManagementComponent::<()>::new(
-                    Box::new(UnregisterAccountNOOP),
-                    &Default::default(),
-                );
+                let mut service = AccountManagementComponent::<()>::new(&Default::default());
 
                 ctx.attached_deposit = YOCTO;
                 testing_env!(ctx.clone());
@@ -2335,10 +2284,8 @@ mod tests_storage_management {
 
             AccountStorageUsageComponent::deploy(storage_usage_bounds);
 
-            let mut service: AccountManagementComponent<()> = AccountManagementComponent::new(
-                Box::new(UnregisterAccountNOOP),
-                &Default::default(),
-            );
+            let mut service: AccountManagementComponent<()> =
+                AccountManagementComponent::new(&Default::default());
 
             if deposit.value() > 0 {
                 ctx.attached_deposit = deposit.value();
@@ -2524,13 +2471,12 @@ mod tests_storage_management {
 
             AccountMetrics::register_account_storage_event_handler();
             AccountMetrics::reset();
+            StorageManagementEvent::clear_event_handlers();
 
             AccountStorageUsageComponent::deploy(storage_usage_bounds);
 
-            let mut service: AccountManagementComponent<()> = AccountManagementComponent::new(
-                Box::new(UnregisterAccountNOOP),
-                &Default::default(),
-            );
+            let mut service: AccountManagementComponent<()> =
+                AccountManagementComponent::new(&Default::default());
 
             if deposit.value() > 0 {
                 ctx.attached_deposit = deposit.value();
@@ -2540,6 +2486,7 @@ mod tests_storage_management {
 
             ctx.attached_deposit = unregister_deposit.value();
             testing_env!(ctx.clone());
+            StorageManagementEvent::clear_event_handlers();
             let result = service.storage_unregister(force);
             test(service, result);
         }
@@ -2665,22 +2612,20 @@ mod tests_storage_management {
         use super::*;
         use oysterpack_smart_near::YOCTO;
 
-        struct UnregisterMock {
-            fail: bool,
-        }
+        pub type AccountManager = AccountManagementComponent<()>;
 
-        impl UnregisterAccount for UnregisterMock {
-            fn unregister_account(&self, force: bool) {
-                if !force && self.fail {
-                    panic!("account cannot be unregistered because ...");
+        fn on_unregister_panic(event: &StorageManagementEvent) {
+            match event {
+                StorageManagementEvent::PreUnregister { force, .. } => {
+                    println!("force = {}", force);
+                    ERR_CODE_UNREGISTER_FAILURE.assert(|| *force, || "BOOM");
                 }
+                _ => {}
             }
         }
 
-        pub type AccountManager = AccountManagementComponent<()>;
-
         #[test]
-        #[should_panic(expected = "account cannot be unregistered because ")]
+        #[should_panic(expected = "[ERR] [UNREGISTER_FAILURE]")]
         fn unregister_panics() {
             // Arrange
             let account = "alfio";
@@ -2696,8 +2641,7 @@ mod tests_storage_management {
                 component_account_storage_mins: None,
             });
 
-            let mut service =
-                AccountManager::new(Box::new(UnregisterMock { fail: true }), &Default::default());
+            let mut service = AccountManager::new(&Default::default());
             ctx.attached_deposit = YOCTO;
             testing_env!(ctx.clone());
             service.storage_deposit(None, None);
@@ -2705,6 +2649,7 @@ mod tests_storage_management {
             // Act
             ctx.attached_deposit = 1;
             testing_env!(ctx.clone());
+            eventbus::register(on_unregister_panic);
             service.storage_unregister(None);
         }
 
@@ -2723,9 +2668,9 @@ mod tests_storage_management {
                 admin_account: to_valid_account_id("admin"),
                 component_account_storage_mins: None,
             });
+            eventbus::register(on_unregister_panic);
 
-            let mut service =
-                AccountManager::new(Box::new(UnregisterMock { fail: true }), &Default::default());
+            let mut service = AccountManager::new(&Default::default());
             ctx.attached_deposit = YOCTO;
             testing_env!(ctx.clone());
             service.storage_deposit(None, None);
@@ -2767,7 +2712,7 @@ mod tests_account_storage_usage {
             component_account_storage_mins: None,
         });
 
-        let mut service = AccountManager::new(Box::new(UnregisterAccountNOOP), &Default::default());
+        let mut service = AccountManager::new(&Default::default());
         assert_eq!(storage_usage_bounds, service.ops_storage_usage_bounds());
 
         assert!(service
@@ -2806,6 +2751,7 @@ mod tests_account_metrics {
 
     #[test]
     fn test() {
+        StorageManagementEvent::clear_event_handlers();
         // Arrange - 0 accounts register
         let account = "alfio";
         let mut ctx = new_context(account);
@@ -2827,7 +2773,7 @@ mod tests_account_metrics {
             component_account_storage_mins: None,
         });
 
-        let mut service = AccountManager::new(Box::new(UnregisterAccountNOOP), &Default::default());
+        let mut service = AccountManager::new(&Default::default());
         let admin_account = service.registered_account_near_data("admin");
         // Act
         let metrics = AccountManager::account_metrics();
@@ -2904,6 +2850,7 @@ mod tests_account_metrics {
         // Arrange - unregister account
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
+        StorageManagementEvent::clear_event_handlers();
         service.storage_unregister(None);
         // Act
         let metrics = AccountManager::account_metrics();
@@ -2946,8 +2893,7 @@ mod tests_account_repository {
             component_account_storage_mins: None,
         });
 
-        let mut account_manager =
-            AccountManager::new(Box::new(UnregisterAccountNOOP), &Default::default());
+        let mut account_manager = AccountManager::new(&Default::default());
         let service: &mut dyn AccountRepository<String> = &mut account_manager;
         assert!(service.load_account(account).is_none());
         assert!(service.load_account_near_data(account).is_none());
@@ -3006,8 +2952,7 @@ mod tests_account_repository {
             component_account_storage_mins: None,
         });
 
-        let mut account_manager =
-            AccountManager::new(Box::new(UnregisterAccountNOOP), &Default::default());
+        let mut account_manager = AccountManager::new(&Default::default());
         let service: &mut dyn AccountRepository<String> = &mut account_manager;
 
         service.create_account(account, YOCTO.into(), None);
@@ -3056,8 +3001,7 @@ mod test_permission_management {
             component_account_storage_mins: None,
         });
 
-        let mut account_manager =
-            AccountManager::new(Box::new(UnregisterAccountNOOP), &permissions);
+        let mut account_manager = AccountManager::new(&permissions);
 
         {
             let mut ctx = ctx.clone();

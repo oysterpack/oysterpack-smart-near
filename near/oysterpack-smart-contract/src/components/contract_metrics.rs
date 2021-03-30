@@ -60,7 +60,6 @@ mod tests {
     use near_sdk::env;
     use oysterpack_smart_account_management::components::account_management::{
         AccountManagementComponent, AccountManagementComponentConfig, ContractPermissions,
-        UnregisterAccount, UnregisterAccountNOOP,
     };
     use oysterpack_smart_account_management::{
         AccountRepository, StorageManagement, StorageUsageBounds,
@@ -101,7 +100,6 @@ mod tests {
         deploy_account_service();
 
         let container = ServiceProvider::new()
-            .add_transient_c::<Box<dyn UnregisterAccount>, Box<UnregisterAccountNOOP>>()
             .add_instance(ContractPermissions::default())
             .add_transient::<AccountManager>();
 

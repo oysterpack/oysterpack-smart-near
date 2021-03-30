@@ -1,6 +1,7 @@
 use crate::{StorageBalance, StorageBalanceBounds};
 use oysterpack_smart_near::domain::YoctoNear;
 use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
+use oysterpack_smart_near::ErrCode;
 
 /// # **Contract Interface**: [Account Storage API][3]
 ///
@@ -73,7 +74,7 @@ pub trait StorageManagement {
     ///
     /// ## Arguments
     /// - `amount` - the amount to withdraw from the account's storage available balance expressed in yoctoNEAR
-    ///
+    ///amount: Option<YoctoNear>
     /// ## Returns
     /// The account's updated storage balance.
     ///
@@ -113,3 +114,5 @@ pub trait StorageManagement {
     /// Returns None if the account is not registered with the contract
     fn storage_balance_of(&self, account_id: ValidAccountId) -> Option<StorageBalance>;
 }
+
+pub const ERR_CODE_UNREGISTER_FAILURE: ErrCode = ErrCode("UNREGISTER_FAILURE");

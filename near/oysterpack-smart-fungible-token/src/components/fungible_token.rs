@@ -3,9 +3,8 @@
 //!   - [`AccountManagementComponent`]
 //! - deployment: [`FungibleTokenComponent::deploy`]
 //!   - config: [`Config`]
-//! - provides implementation for [`UnregisterAccount`], which must be registered with the
-//!   `AccountManagementComponent` to handle account unregistrations
-//!   - [`FungibleTokenUnregisterAccountHandler`]
+//! - use [`FungibleTokenComponent::register_storage_management_event_handler`]  to register event
+//!   handler for [`StorageManagementEvent::PreUnregister`] which integrates with [`AccountManagementComponent`]
 
 use crate::{
     contract::operator::{FungibleTokenOperator, OperatorCommand},
@@ -16,16 +15,11 @@ use crate::{
     LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED, LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT,
 };
 use oysterpack_smart_account_management::{
-    components::account_management::{
-        AccountManagementComponent, UnregisterAccount, ERR_CODE_UNREGISTER_FAILURE,
-    },
-    AccountRepository, AccountStorageEvent, ERR_ACCOUNT_NOT_REGISTERED, ERR_NOT_AUTHORIZED,
+    components::account_management::AccountManagementComponent, AccountRepository,
+    AccountStorageEvent, StorageManagementEvent, ERR_ACCOUNT_NOT_REGISTERED,
+    ERR_CODE_UNREGISTER_FAILURE, ERR_NOT_AUTHORIZED,
 };
-use oysterpack_smart_near::component::ManagesAccountData;
-use oysterpack_smart_near::domain::{
-    ActionType, ByteLen, Gas, SenderIsReceiver, StorageUsage, TGas, TransactionResource,
-};
-use oysterpack_smart_near::eventbus::post;
+use oysterpack_smart_near::eventbus::{self, post};
 use oysterpack_smart_near::near_sdk::{
     borsh::{BorshDeserialize, BorshSerialize},
     env,
@@ -37,10 +31,15 @@ use oysterpack_smart_near::{
     asserts::{
         assert_yocto_near_attached, ERR_CODE_BAD_REQUEST, ERR_INSUFFICIENT_FUNDS, ERR_INVALID,
     },
+    lazy_static::lazy_static,
     {component::Deploy, data::Object, to_valid_account_id, Hash, TERA},
 };
-use std::ops::DerefMut;
-use std::{fmt::Debug, ops::Deref};
+use oysterpack_smart_near::{
+    component::ManagesAccountData,
+    domain::{ActionType, ByteLen, Gas, SenderIsReceiver, StorageUsage, TGas, TransactionResource},
+};
+
+use std::{fmt::Debug, ops::Deref, ops::DerefMut, sync::Mutex};
 use teloc::*;
 
 pub struct FungibleTokenComponent<T>
@@ -69,28 +68,6 @@ where
     fn deploy(config: Self::Config) {
         MetadataObject::new(METADATA_KEY, config.metadata.clone()).save();
         TokenSupply::new(TOKEN_SUPPLY, config.token_supply).save();
-    }
-}
-
-/// Must be registered with [`AccountManagementComponent`]
-///
-/// When an account is forced unregistered, any tokens it owned will be burned, which reduces the total
-/// token supply.
-pub struct FungibleTokenUnregisterAccountHandler;
-
-impl UnregisterAccount for FungibleTokenUnregisterAccountHandler {
-    fn unregister_account(&self, force: bool) {
-        let account_id = &env::predecessor_account_id();
-        if let Some(ft_balance) = AccountFTBalance::load(&account_id) {
-            ERR_CODE_UNREGISTER_FAILURE.assert(|| force, || "account has non-zero token balance");
-            let amount = *ft_balance;
-            AccountFTBalance::set_balance(account_id, 0);
-            burn_tokens(amount);
-            LOG_EVENT_FT_BURN.log(format!(
-                "account forced unregistered with token balance: account: account: {}, amount: {}",
-                account_id, amount
-            ));
-        }
     }
 }
 
@@ -361,6 +338,42 @@ where
             ft_transfer_call.then(ft_resolve_transfer_call)
         }
     }
+
+    /// Used to register an event handler hook to handle account unregistrations
+    ///
+    /// can be safely called multiple times and will only register the event handler once
+    pub fn register_storage_management_event_handler() {
+        let mut registered = STORAGE_MANAGEMENT_EVENT_HANDLER_REGISTERED.lock().unwrap();
+        if !*registered {
+            eventbus::register(Self::on_unregister_account);
+            *registered = true;
+        }
+    }
+
+    /// EventHandler must be registered to handle [`StorageManagementEvent::PreUnregister`] events
+    ///
+    /// When an account is forced unregistered, any tokens it owned will be burned, which reduces the total
+    /// token supply.
+    fn on_unregister_account(event: &StorageManagementEvent) {
+        if let StorageManagementEvent::PreUnregister { force, .. } = event {
+            let account_id = &env::predecessor_account_id();
+            if let Some(ft_balance) = AccountFTBalance::load(&account_id) {
+                ERR_CODE_UNREGISTER_FAILURE
+                    .assert(|| *force, || "account has non-zero token balance");
+                let amount = *ft_balance;
+                AccountFTBalance::set_balance(account_id, 0);
+                burn_tokens(amount);
+                LOG_EVENT_FT_BURN.log(format!(
+                    "account forced unregistered with token balance: account: account: {}, amount: {}",
+                    account_id, amount
+                ));
+            }
+        }
+    }
+}
+
+lazy_static! {
+    static ref STORAGE_MANAGEMENT_EVENT_HANDLER_REGISTERED: Mutex<bool> = Mutex::new(false);
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -619,7 +632,7 @@ mod tests_fungible_token {
     use crate::*;
     use near_sdk::{test_utils, VMContext};
     use oysterpack_smart_account_management::components::account_management::{
-        AccountManagementComponentConfig, ContractPermissions, UnregisterAccountNOOP,
+        AccountManagementComponentConfig, ContractPermissions,
     };
     use oysterpack_smart_account_management::StorageManagement;
     use oysterpack_smart_near::YOCTO;
@@ -660,10 +673,7 @@ mod tests_fungible_token {
 
         deploy_comps();
 
-        let mut account_manager = AccountManager::new(
-            Box::new(UnregisterAccountNOOP),
-            &ContractPermissions::default(),
-        );
+        let mut account_manager = AccountManager::new(&ContractPermissions::default());
 
         // register accounts
         {
@@ -742,19 +752,13 @@ mod tests_fungible_token {
 
         deploy_comps();
 
-        let account_manager = AccountManager::new(
-            Box::new(UnregisterAccountNOOP),
-            &ContractPermissions::default(),
-        );
+        let account_manager = AccountManager::new(&ContractPermissions::default());
 
         let mut stake = STAKE::new(account_manager);
 
         // register accounts
         {
-            let mut account_manager = AccountManager::new(
-                Box::new(UnregisterAccountNOOP),
-                &ContractPermissions::default(),
-            );
+            let mut account_manager = AccountManager::new(&ContractPermissions::default());
 
             if let Some(balance) = sender_balance {
                 let mut ctx = ctx.clone();
@@ -1678,7 +1682,7 @@ mod tests_operator {
     use crate::*;
     use near_sdk::VMContext;
     use oysterpack_smart_account_management::components::account_management::{
-        AccountManagementComponentConfig, ContractPermissions, UnregisterAccountNOOP,
+        AccountManagementComponentConfig, ContractPermissions,
     };
     use oysterpack_smart_account_management::{PermissionsManagement, StorageManagement};
     use oysterpack_smart_near::YOCTO;
@@ -1718,10 +1722,7 @@ mod tests_operator {
 
         deploy_comps();
 
-        let mut account_manager = AccountManager::new(
-            Box::new(UnregisterAccountNOOP),
-            &ContractPermissions::default(),
-        );
+        let mut account_manager = AccountManager::new(&ContractPermissions::default());
 
         // register operator account
         {
@@ -1798,10 +1799,7 @@ mod tests_operator {
 
         deploy_comps();
 
-        let mut account_manager = AccountManager::new(
-            Box::new(UnregisterAccountNOOP),
-            &ContractPermissions::default(),
-        );
+        let mut account_manager = AccountManager::new(&ContractPermissions::default());
 
         // register normal account with no permissions
         {
@@ -1824,10 +1822,7 @@ mod tests_operator {
 
         deploy_comps();
 
-        let account_manager = AccountManager::new(
-            Box::new(UnregisterAccountNOOP),
-            &ContractPermissions::default(),
-        );
+        let account_manager = AccountManager::new(&ContractPermissions::default());
 
         let mut stake = STAKE::new(account_manager);
         stake.ft_operator_command(OperatorCommand::ClearReference);
@@ -1841,7 +1836,7 @@ mod tests_token_service {
     use crate::*;
     use near_sdk::{test_utils, VMContext};
     use oysterpack_smart_account_management::components::account_management::{
-        AccountManagementComponentConfig, ContractPermissions, UnregisterAccountNOOP,
+        AccountManagementComponentConfig, ContractPermissions,
     };
     use oysterpack_smart_account_management::StorageManagement;
     use oysterpack_smart_near::YOCTO;
@@ -1885,19 +1880,13 @@ mod tests_token_service {
 
         deploy_comps();
 
-        let account_manager = AccountManager::new(
-            Box::new(UnregisterAccountNOOP),
-            &ContractPermissions::default(),
-        );
+        let account_manager = AccountManager::new(&ContractPermissions::default());
 
         let mut stake = STAKE::new(account_manager);
 
         // register accounts
         {
-            let mut account_manager = AccountManager::new(
-                Box::new(UnregisterAccountNOOP),
-                &ContractPermissions::default(),
-            );
+            let mut account_manager = AccountManager::new(&ContractPermissions::default());
 
             if let Some(balance) = account_balance {
                 let mut ctx = ctx.clone();
