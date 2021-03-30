@@ -1,6 +1,6 @@
 use crate::UnstakedBalance;
 use oysterpack_smart_near::asserts::ERR_INVALID;
-use oysterpack_smart_near::domain::{EpochHeight, YoctoNear};
+use oysterpack_smart_near::domain::{EpochHeight, YoctoNear, ZERO_NEAR};
 use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{
@@ -62,6 +62,37 @@ impl UnstakedBalances {
             .filter(|balance| !balance.is_available())
             .collect();
         balances.as_slice().try_into().unwrap()
+    }
+
+    pub fn restake(self, max_amount: YoctoNear) -> (UnstakedBalances, YoctoNear) {
+        if max_amount == ZERO_NEAR {
+            return (self, max_amount);
+        }
+
+        let mut balances: Vec<UnstakedBalance> = self.into();
+        let total_amount = balances.iter().map(|balance| balance.balance).sum();
+        if max_amount >= total_amount {
+            return (UnstakedBalances::Zero, total_amount);
+        }
+        let mut amount = ZERO_NEAR;
+        while let Some(mut balance) = balances.pop() {
+            let taken_amount = std::cmp::min(max_amount - amount, balance.balance);
+            amount += taken_amount;
+            if taken_amount < balance.balance {
+                balance.balance -= taken_amount;
+                balances.push(balance);
+                break;
+            }
+        }
+
+        (balances.as_slice().try_into().unwrap(), amount)
+    }
+
+    pub fn is_zero(&self) -> bool {
+        match self {
+            UnstakedBalances::Zero => true,
+            _ => false,
+        }
     }
 }
 

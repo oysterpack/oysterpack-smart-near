@@ -9,7 +9,6 @@ oysterpack-smart-near = { path = "../oysterpack-smart-near" }
 oysterpack-smart-account-management = { path = "../oysterpack-smart-account-management" }
 oysterpack-smart-contract = { path = "../oysterpack-smart-contract" }
 oysterpack-smart-fungible-token = { path = "../oysterpack-smart-fungible-token" }
-teloc = "0.1.0"
 
 [dev-dependencies]
 oysterpack-smart-near-test = { path = "../oysterpack-smart-near-test" }

@@ -34,7 +34,6 @@ pub trait StakingPool {
     ///
     /// ## Panics
     /// - if the account is not registered
-    /// - if there is not enough funds attached to pay for account storage when registering the account
     /// - if there is no attached deposit and no amount is specified - at least 1 is required
     ///
     /// `#[payable]`
