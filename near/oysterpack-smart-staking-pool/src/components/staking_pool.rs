@@ -115,12 +115,13 @@ impl StakingPool for StakingPoolComponent {
             .available;
         account.dec_near_balance(account_storage_available_balance);
 
-        let near = account_storage_available_balance + env::attached_deposit();
-        let near_stake_value = self.near_stake_value(near);
-        // because of rounding down we need to convert the deposit STAKE value back to NEAR
-        // this ensures that the account will not be short changed
+        let stakable_near = account_storage_available_balance + env::attached_deposit();
+        let near_stake_value = self.near_stake_value(stakable_near);
+        // because of rounding down we need to convert the STAKE value back to NEAR, which ensures
+        // that the account will not be short changed
         let stake_near_value = self.stake_near_value(near_stake_value);
-        account.incr_near_balance(near - stake_near_value);
+        // the unstaked remainder is credited back to the account storage balance
+        account.incr_near_balance(stakable_near - stake_near_value);
         account.save();
 
         self.stake
