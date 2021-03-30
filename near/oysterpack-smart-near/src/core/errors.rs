@@ -30,6 +30,10 @@ impl ErrCode {
             self.error(msg()).panic();
         }
     }
+
+    pub fn log<Msg: Display>(&self, msg: Msg) {
+        self.error(msg).log()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -103,6 +107,10 @@ impl ErrorConst {
         Msg: Display,
     {
         self.0.assert(check, msg)
+    }
+
+    pub fn log(&self) {
+        env::log(self.to_string().as_bytes());
     }
 }
 

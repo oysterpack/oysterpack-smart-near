@@ -156,7 +156,10 @@ impl AccountNearData {
     /// ## Panics
     /// if overflow occurs
     pub fn incr_near_balance(&mut self, amount: YoctoNear) {
-        *self.near_balance = self.near_balance.checked_add(amount.value()).unwrap();
+        if *amount == 0 {
+            return;
+        }
+        *self.near_balance = self.near_balance.checked_add(*amount).unwrap();
         eventbus::post(&AccountStorageEvent::Deposit(amount));
     }
 

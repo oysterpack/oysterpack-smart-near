@@ -5,6 +5,7 @@ use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Serialize},
 };
+use oysterpack_smart_near::{Level, LogEvent};
 
 /// # **Contract Interface**: Staking Pool API
 ///
@@ -25,9 +26,19 @@ pub trait StakingPool {
 
     /// Used to stake NEAR for the predecessor's account.
     ///
-    /// Any attached deposit will be fully staked.
+    /// Any attached deposit will be fully staked in addition to any available account storage balance.
     ///
     /// Returns the account's updated stake account balance
+    ///
+    /// ## NOTES
+    /// When NEAR is staked, STAKE tokens are minted. Because values are rounded down, only the actual
+    /// STAKE NEAR value is minted. The remainder is credited to the account's storage balance. The
+    /// algorithm is:
+    /// 1. NEAR stake amount = attached deposit + account storage available balance
+    /// 2. compute the  NEAR stake amount in STAKE
+    /// 3. convert the STAKE back to NEAR
+    /// 4. STAKE NEAR value is staked
+    /// 5. remainder is credited to the account's storage balance
     ///
     /// ## Panics
     /// - if the account is not registered
@@ -72,3 +83,6 @@ pub trait StakingPool {
     /// locked unstaked NEAR.
     fn ops_stake_available_liquidity(&self) -> YoctoNear;
 }
+
+pub const LOG_EVENT_STAKE: LogEvent = LogEvent(Level::INFO, "STAKE");
+pub const LOG_EVENT_UNSTAKE: LogEvent = LogEvent(Level::INFO, "UNSTAKE");
