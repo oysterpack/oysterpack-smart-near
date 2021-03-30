@@ -59,7 +59,7 @@ mod tests {
     use super::*;
     use near_sdk::env;
     use oysterpack_smart_account_management::components::account_management::{
-        AccountManagementComponent, AccountManagementComponentConfig, ContractPermissions,
+        AccountManagementComponent, AccountManagementComponentConfig,
     };
     use oysterpack_smart_account_management::{
         AccountRepository, StorageManagement, StorageUsageBounds,
@@ -69,7 +69,6 @@ mod tests {
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::near_vm_logic::VMContext;
     use oysterpack_smart_near_test::*;
-    use teloc::*;
 
     pub type AccountManager = AccountManagementComponent<()>;
 
@@ -99,12 +98,7 @@ mod tests {
         // Act
         deploy_account_service();
 
-        let container = ServiceProvider::new()
-            .add_instance(ContractPermissions::default())
-            .add_transient::<AccountManager>();
-
-        let service: AccountManager = container.resolve();
-        test(ctx, service);
+        test(ctx, AccountManager::default());
     }
 
     #[test]

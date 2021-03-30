@@ -17,7 +17,6 @@ use oysterpack_smart_near::{
     eventbus, ErrCode, Error, ErrorConst,
 };
 use std::{fmt::Debug, ops::Deref};
-use teloc::*;
 
 use crate::components::account_storage_usage::AccountStorageUsageComponent;
 use oysterpack_smart_near::asserts::{assert_account_not_predecessor, ERR_INVALID};
@@ -43,6 +42,7 @@ pub const ERR_INSUFFICIENT_STORAGE_BALANCE: ErrorConst = ErrorConst(
 ///
 /// ## Constructor
 /// - [AccountManagementComponent::new]
+#[derive(Default)]
 pub struct AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
@@ -194,8 +194,6 @@ impl From<Vec<(u8, &'static str)>> for ContractPermissions {
     }
 }
 
-/// constructor
-#[inject]
 impl<T> AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
@@ -833,52 +831,6 @@ mod tests_service {
         assert_eq!(
             storage_balance_bounds.min,
             (env::storage_byte_cost() * 2000).into()
-        );
-        assert!(storage_balance_bounds.max.is_none());
-
-        let _storage_usage_bounds = service.storage_balance_of(to_valid_account_id(account_id));
-    }
-}
-
-#[cfg(test)]
-mod tests_teloc {
-    use super::*;
-    use crate::StorageUsageBounds;
-    use oysterpack_smart_near::near_sdk;
-    use oysterpack_smart_near_test::*;
-
-    pub type AccountManager = AccountManagementComponent<()>;
-
-    fn deploy_account_service() {
-        AccountManager::deploy(AccountManagementComponentConfig {
-            admin_account: to_valid_account_id("admin"),
-            storage_usage_bounds: Some(StorageUsageBounds {
-                min: 1000.into(),
-                max: None,
-            }),
-            component_account_storage_mins: None,
-        });
-    }
-
-    #[test]
-    fn deploy_and_use_module() {
-        // Arrange
-        let account_id = "bob";
-        let ctx = new_context(account_id);
-        testing_env!(ctx);
-
-        // Act
-        deploy_account_service();
-
-        let container = ServiceProvider::new()
-            .add_transient::<AccountManager>()
-            .add_instance(ContractPermissions::default());
-
-        let service: AccountManager = container.resolve();
-        let storage_balance_bounds = service.storage_balance_bounds();
-        assert_eq!(
-            storage_balance_bounds.min,
-            (env::storage_byte_cost() * 1000).into()
         );
         assert!(storage_balance_bounds.max.is_none());
 

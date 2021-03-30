@@ -40,7 +40,6 @@ use oysterpack_smart_near::{
 };
 
 use std::{fmt::Debug, ops::Deref, ops::DerefMut, sync::Mutex};
-use teloc::*;
 
 pub struct FungibleTokenComponent<T>
 where
@@ -49,7 +48,6 @@ where
     account_manager: AccountManagementComponent<T>,
 }
 
-#[inject]
 impl<T> FungibleTokenComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
