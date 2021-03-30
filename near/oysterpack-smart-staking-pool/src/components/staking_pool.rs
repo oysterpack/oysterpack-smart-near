@@ -1,4 +1,4 @@
-use crate::{StakeAccountBalances, StakeAmount, StakingPool, UnstakedBalances};
+use crate::{StakeAccountBalances, StakingPool, UnstakedBalances};
 use oysterpack_smart_account_management::{
     components::account_management::AccountManagementComponent, AccountDataObject,
     AccountNearDataObject, AccountRepository, StorageManagement, ERR_ACCOUNT_NOT_REGISTERED,
@@ -97,20 +97,11 @@ impl StakingPool for StakingPoolComponent {
             })
     }
 
-    fn ops_stake(&mut self, amount: Option<StakeAmount>) -> StakeAccountBalances {
-        assert_near_attached("at least 1 yoctoNEAR is required");
+    fn ops_stake(&mut self) -> StakeAccountBalances {
+        assert_near_attached("deposit is required to stake");
         let account_id = env::predecessor_account_id();
 
-        let stake_amount = match amount {
-            None => {
-                ERR_ACCOUNT_NOT_REGISTERED
-                    .assert(|| self.account_manager.account_exists(&account_id));
-                env::attached_deposit().into()
-            }
-            Some(amount) => {
-                self.update_account_balances_for_restaking(amount) + env::attached_deposit()
-            }
-        };
+        ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(&account_id));
 
         unimplemented!()
     }
@@ -147,103 +138,6 @@ impl StakingPoolComponent {
     /// - this enables accounts to withdraw against the unstaked liquidity on a first come first serve basis
     pub const UNSTAKED_LIQUIDITY: BalanceId = BalanceId(0);
     pub const TOTAL_UNSTAKED_BALANCE: BalanceId = BalanceId(1);
-
-    /// tries to restake the specified amount from current unstaked and account storage available balances
-    /// - if there are sufficient funds then the balances will be updated
-    /// - restaked funds will be taken from the balances using the following precedence:
-    ///   1. from unstaked balances starting with the most recently staked
-    ///   2. account storage available balance
-    /// - [`StakingPoolComponent::TOTAL_UNSTAKED_BALANCE`] near balance will be updated as well
-    ///
-    /// ## Panics
-    /// - if there are insufficient funds
-    fn update_account_balances_for_restaking(&mut self, amount: StakeAmount) -> YoctoNear {
-        fn restake_all_unstaked(
-            mut stake_account: Option<AccountDataObject<StakeAccountData>>,
-        ) -> YoctoNear {
-            let total_unstaked_balance = stake_account.map_or(ZERO_NEAR, |mut account| {
-                let total_unstaked_balance = account.total_unstaked_balance();
-                account.delete();
-                total_unstaked_balance
-            });
-            if *total_unstaked_balance > 0 {
-                ContractNearBalances::decr_balance(
-                    StakingPoolComponent::TOTAL_UNSTAKED_BALANCE,
-                    total_unstaked_balance,
-                );
-            }
-            total_unstaked_balance
-        }
-
-        let (mut near_account, mut stake_account) = self
-            .account_manager
-            .registered_account(&env::predecessor_account_id());
-
-        match amount {
-            StakeAmount::All => {
-                let account_storage_available_balance = {
-                    let storage_balance_min = self.account_manager.storage_balance_bounds().min;
-                    let account_storage_available_balance =
-                        near_account.storage_balance(storage_balance_min).available;
-                    near_account.dec_near_balance(account_storage_available_balance);
-                    near_account.save();
-                    account_storage_available_balance
-                };
-
-                let total_unstaked_balance = restake_all_unstaked(stake_account);
-                account_storage_available_balance + total_unstaked_balance
-            }
-            StakeAmount::AllUnstaked => restake_all_unstaked(stake_account),
-            StakeAmount::Total(amount) => {
-                let unstaked_balance = {
-                    let unstaked_balance = stake_account.map_or(ZERO_NEAR, |mut balance| {
-                        let (mut updated_balance, amount) = balance.restake(amount);
-                        if updated_balance.is_zero() {
-                            balance.delete();
-                        } else {
-                            balance.save();
-                        }
-                        amount
-                    });
-                    if *unstaked_balance > 0 {
-                        ContractNearBalances::decr_balance(
-                            StakingPoolComponent::TOTAL_UNSTAKED_BALANCE,
-                            unstaked_balance,
-                        );
-                    }
-                    unstaked_balance
-                };
-
-                let gap = amount - unstaked_balance;
-                if gap > ZERO_NEAR {
-                    let storage_balance_min = self.account_manager.storage_balance_bounds().min;
-                    let account_storage_available_balance =
-                        near_account.storage_balance(storage_balance_min).available;
-                    ERR_INSUFFICIENT_FUNDS.assert(|| account_storage_available_balance >= gap);
-                    near_account.dec_near_balance(account_storage_available_balance - gap);
-                    near_account.save();
-                }
-                amount
-            }
-            StakeAmount::Unstaked(amount) => {
-                ERR_INSUFFICIENT_FUNDS.assert(|| stake_account.is_some());
-                let mut stake_account = stake_account.unwrap();
-                let (updated_balance, restake_amount) = stake_account.restake(amount);
-                ERR_INSUFFICIENT_FUNDS.assert(|| restake_amount == amount);
-                if updated_balance.is_zero() {
-                    stake_account.delete();
-                } else {
-                    **stake_account = updated_balance;
-                    stake_account.save();
-                }
-                ContractNearBalances::decr_balance(
-                    StakingPoolComponent::TOTAL_UNSTAKED_BALANCE,
-                    amount,
-                );
-                amount
-            }
-        }
-    }
 
     fn state() -> ComponentState<State> {
         Self::load_state().expect("component has not been deployed")

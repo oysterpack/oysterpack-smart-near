@@ -27,17 +27,14 @@ pub trait StakingPool {
     ///
     /// Any attached deposit will be fully staked.
     ///
-    /// The specified amount is used to specify how much to stake from the account's available and
-    /// unstaked balances.
-    ///
     /// Returns the account's updated stake account balance
     ///
     /// ## Panics
     /// - if the account is not registered
-    /// - if there is no attached deposit and no amount is specified - at least 1 is required
+    /// - if there is no attached deposit
     ///
     /// `#[payable]`
-    fn ops_stake(&mut self, amount: Option<StakeAmount>) -> StakeAccountBalances;
+    fn ops_stake(&mut self) -> StakeAccountBalances;
 
     /// Used to unstake staked NEAR.
     ///
@@ -74,21 +71,4 @@ pub trait StakingPool {
     /// Liquidity is automatically added by delegators when they stake their NEAR while there is
     /// locked unstaked NEAR.
     fn ops_stake_available_liquidity(&self) -> YoctoNear;
-}
-
-#[derive(
-    BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, Copy, PartialEq,
-)]
-#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
-pub enum StakeAmount {
-    /// stakes all unstaked NEAR and all available balance from account storage
-    All,
-    /// re-stakes all of the unstaked balance
-    AllUnstaked,
-
-    /// stakes from the account's available and unstaked balances - starting from the most recent
-    /// unstaked balance
-    Total(YoctoNear),
-    /// re-stakes the specified unstaked amount - starting from the most recent unstaked balance
-    Unstaked(YoctoNear),
 }
