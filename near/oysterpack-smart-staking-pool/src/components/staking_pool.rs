@@ -126,6 +126,8 @@ impl StakingPool for StakingPoolComponent {
         self.stake
             .ft_mint(&env::predecessor_account_id(), near_stake_value);
 
+        self.stake(stake_near_value);
+
         unimplemented!()
     }
 
@@ -209,7 +211,7 @@ impl StakingPoolComponent {
         Self::load_state().expect("component has not been deployed")
     }
 
-    fn stake(&mut self, amount: YoctoNear) {
+    fn stake(&self, amount: YoctoNear) {
         let stake_public_key = Self::state();
         Promise::new(env::current_account_id())
             .stake(
