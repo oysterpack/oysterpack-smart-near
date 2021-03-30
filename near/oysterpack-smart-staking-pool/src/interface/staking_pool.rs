@@ -18,7 +18,7 @@ use oysterpack_smart_near::near_sdk::{
 ///
 ///
 pub trait StakingPool {
-    /// Looks up the account's stake account balance, which includes storage balance.
+    /// Looks up the account's stake account balance
     ///
     /// Returns None if the account is not registered with the contract
     fn ops_stake_balance(&self, account_id: ValidAccountId) -> Option<StakeAccountBalances>;
@@ -53,6 +53,19 @@ pub trait StakingPool {
     /// - if account is not registered
     /// - if there are insufficient staked funds to fulfill the request to unstake the specified amount
     fn ops_unstake(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances;
+
+    /// Used to withdraw unstaked NEAR funds
+    /// - if the unstaked NEAR is still locked, then the liquidity pool will be checked
+    ///
+    /// If amount is not specified, then all available unstaked NEAR will be withdrawn.
+    ///
+    /// ## Panics
+    /// - if account is not registered
+    /// - if exactly 1 yoctoNEAR is not attached
+    /// - If the specified withdrawal amount is greater than the account's available unstaked balance
+    ///
+    /// `#[payable]`
+    fn ops_stake_withdraw(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances;
 
     /// returns the current NEAR value of 1 STAKE token
     fn ops_stake_token_value(&self) -> YoctoNear;

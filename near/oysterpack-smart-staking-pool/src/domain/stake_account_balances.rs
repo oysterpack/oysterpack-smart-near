@@ -10,9 +10,11 @@ use oysterpack_smart_near::near_sdk::{
 )]
 #[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct StakeAccountBalances {
-    /// total includes all staked and unstaked NEAR, including the amount required to pay for account storage
+    /// account's total NEAR balance, which includes:
+    /// - staked NEAR balance
+    /// - unstaked NEAR balance
     pub total: YoctoNear,
-    /// amount that is available to withdraw
+    /// unstaked amount that is available to withdraw
     pub available: YoctoNear,
     /// amount that is currently staked
     pub staked: YoctoNear,
