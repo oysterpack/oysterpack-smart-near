@@ -1,6 +1,6 @@
 use crate::UnstakedBalance;
 use oysterpack_smart_near::asserts::ERR_INVALID;
-use oysterpack_smart_near::domain::{EpochHeight, YoctoNear, ZERO_NEAR};
+use oysterpack_smart_near::domain::{EpochHeight, YoctoNear};
 use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{
@@ -9,7 +9,6 @@ use oysterpack_smart_near::near_sdk::{
         Deserialize, Deserializer, Serialize, Serializer,
     },
 };
-use oysterpack_smart_near::ErrCode;
 use std::collections::HashSet;
 use std::convert::{TryFrom, TryInto};
 use std::{
@@ -225,9 +224,9 @@ impl TryFrom<&[UnstakedBalance]> for UnstakedBalances {
         }
 
         let balances = match value {
-            [b1, b2, ..] => UnstakedBalances::Two((b1.clone(), b2.clone())),
-            [b1, b2, b3, ..] => UnstakedBalances::Three((b1.clone(), b2.clone(), b3.clone())),
-            [b1, b2, b3, b4, ..] => {
+            [b1, b2] => UnstakedBalances::Two((b1.clone(), b2.clone())),
+            [b1, b2, b3] => UnstakedBalances::Three((b1.clone(), b2.clone(), b3.clone())),
+            [b1, b2, b3, b4] => {
                 UnstakedBalances::Four((b1.clone(), b2.clone(), b3.clone(), b4.clone()))
             }
             _ => unreachable!(),

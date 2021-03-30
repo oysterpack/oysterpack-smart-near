@@ -1,12 +1,11 @@
-use crate::{StakeAccount, StakeAccountBalances, StakeAmount, StakingPool, UnstakedBalances};
+use crate::{StakeAccountBalances, StakeAmount, StakingPool, UnstakedBalances};
 use oysterpack_smart_account_management::{
-    components::account_management::AccountManagementComponent, AccountRepository,
-    StorageManagement,
+    components::account_management::AccountManagementComponent, AccountRepository, StorageBalance,
+    StorageBalanceBounds, StorageManagement,
 };
 use oysterpack_smart_contract::components::contract_metrics::ContractMetricsComponent;
 use oysterpack_smart_contract::{
-    components::contract_ownership::ContractOwnershipComponent, BalanceId, ContractMetrics,
-    ContractNearBalances, ContractOwnership, ContractStorageUsageCosts,
+    components::contract_ownership::ContractOwnershipComponent, BalanceId, ContractNearBalances,
 };
 use oysterpack_smart_fungible_token::{
     components::fungible_token::FungibleTokenComponent, FungibleToken, TokenAmount,
@@ -20,7 +19,7 @@ use oysterpack_smart_near::near_sdk::{
 };
 use oysterpack_smart_near::{
     component::{Component, ComponentState, Deploy},
-    domain::{EpochHeight, PublicKey, YoctoNear},
+    domain::{PublicKey, YoctoNear},
     YOCTO,
 };
 use teloc::*;
@@ -83,6 +82,10 @@ impl StakingPool for StakingPoolComponent {
         self.account_manager
             .load_account(account_id.as_ref().as_str())
             .map(|(near_data, data)| {
+                let staked_near_balance = {
+                    let stake_token_balance = self.stake.ft_balance_of(account_id);
+                    self.stake_near_value(stake_token_balance)
+                };
                 let (unstaked_balance, unstaked_available_balance) =
                     data.as_ref().map_or((ZERO_NEAR, ZERO_NEAR), |data| {
                         (
@@ -90,16 +93,15 @@ impl StakingPool for StakingPoolComponent {
                             data.unstaked_available_balance(),
                         )
                     });
-                let stake_token_balance = self.stake.ft_balance_of(account_id);
-                let staked_near_balance = self.stake_near_value(stake_token_balance);
-                let storage_balance_bounds = self.account_manager.storage_balance_bounds();
+                let storage_balance = {
+                    let storage_balance_bounds = self.account_manager.storage_balance_bounds();
+                    near_data.storage_balance(storage_balance_bounds.min)
+                };
 
                 StakeAccountBalances {
-                    total: unstaked_balance + staked_near_balance,
-                    available: near_data
-                        .storage_balance(storage_balance_bounds.min)
-                        .available
-                        + unstaked_available_balance,
+                    total: storage_balance.total + staked_near_balance + unstaked_balance
+                        - unstaked_available_balance,
+                    available: storage_balance.available + unstaked_available_balance,
                     staked: staked_near_balance,
                     unstaked: data.map_or(UnstakedBalances::Zero, |data| {
                         data.remove_available_balances()
@@ -135,11 +137,55 @@ impl StakingPool for StakingPoolComponent {
     }
 }
 
+/// StorageManagement needs to be customized because of unstaked balances - we need to take into
+/// account when unstaked balances become unlocked and available for withdrawal
+impl StorageManagement for StakingPoolComponent {
+    fn storage_deposit(
+        &mut self,
+        account_id: Option<ValidAccountId>,
+        registration_only: Option<bool>,
+    ) -> StorageBalance {
+        self.check_unstaked_balances();
+        self.account_manager
+            .storage_deposit(account_id, registration_only)
+    }
+
+    fn storage_withdraw(&mut self, amount: Option<YoctoNear>) -> StorageBalance {
+        self.check_unstaked_balances();
+        self.account_manager.storage_withdraw(amount)
+    }
+
+    fn storage_unregister(&mut self, force: Option<bool>) -> bool {
+        self.check_unstaked_balances();
+        self.account_manager.storage_unregister(force)
+    }
+
+    fn storage_balance_bounds(&self) -> StorageBalanceBounds {
+        self.account_manager.storage_balance_bounds()
+    }
+
+    fn storage_balance_of(&self, account_id: ValidAccountId) -> Option<StorageBalance> {
+        self.ops_stake_balance(account_id)
+            .map(|balance| StorageBalance {
+                total: balance.total,
+                available: balance.available,
+            })
+    }
+}
+
 impl StakingPoolComponent {
     /// when there is an unstaked balance, delegators add liquidity when they deposit funds to stake
     /// - this enables accounts to withdraw against the unstaked liquidity on a first come first serve basis
     pub const UNSTAKED_LIQUIDITY: BalanceId = BalanceId(0);
     pub const TOTAL_UNSTAKED_BALANCE: BalanceId = BalanceId(1);
+
+    /// checks if there are unstaked funds that have become available for withdrawal, i.e., unlocked
+    /// - if unstaked NEAR has become unlocked, then transfer the funds from the unstaked balance
+    ///   to the storage balance to make them available for withdrawal
+    fn check_unstaked_balances(&mut self) {
+        // TODO
+        unimplemented!()
+    }
 
     fn state() -> ComponentState<State> {
         Self::load_state().expect("component has not been deployed")
