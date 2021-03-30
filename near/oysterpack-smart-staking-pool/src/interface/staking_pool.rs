@@ -81,7 +81,7 @@ pub trait StakingPool {
 )]
 #[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub enum StakeAmount {
-    /// stakes all available and unstaked NEAR
+    /// stakes all unstaked NEAR and all available balance from account storage
     All,
     /// re-stakes all of the unstaked balance
     AllUnstaked,

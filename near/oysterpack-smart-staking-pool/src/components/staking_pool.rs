@@ -158,9 +158,6 @@ impl StakingPoolComponent {
     /// ## Panics
     /// - if there are insufficient funds
     fn update_account_balances_for_restaking(&mut self, amount: StakeAmount) -> YoctoNear {
-        let (mut near_account, mut stake_account) = self
-            .account_manager
-            .registered_account(&env::predecessor_account_id());
         fn restake_all_unstaked(
             mut stake_account: Option<AccountDataObject<StakeAccountData>>,
         ) -> YoctoNear {
@@ -178,6 +175,10 @@ impl StakingPoolComponent {
             total_unstaked_balance
         }
 
+        let (mut near_account, mut stake_account) = self
+            .account_manager
+            .registered_account(&env::predecessor_account_id());
+
         match amount {
             StakeAmount::All => {
                 let account_storage_available_balance = {
@@ -194,19 +195,24 @@ impl StakingPoolComponent {
             }
             StakeAmount::AllUnstaked => restake_all_unstaked(stake_account),
             StakeAmount::Total(amount) => {
-                let unstaked_balance = stake_account.map_or(ZERO_NEAR, |mut balance| {
-                    let (mut updated_balance, amount) = balance.restake(amount);
-                    if updated_balance.is_zero() {
-                        balance.delete();
-                    } else {
-                        balance.save();
+                let unstaked_balance = {
+                    let unstaked_balance = stake_account.map_or(ZERO_NEAR, |mut balance| {
+                        let (mut updated_balance, amount) = balance.restake(amount);
+                        if updated_balance.is_zero() {
+                            balance.delete();
+                        } else {
+                            balance.save();
+                        }
+                        amount
+                    });
+                    if *unstaked_balance > 0 {
+                        ContractNearBalances::decr_balance(
+                            StakingPoolComponent::TOTAL_UNSTAKED_BALANCE,
+                            unstaked_balance,
+                        );
                     }
-                    amount
-                });
-                ContractNearBalances::decr_balance(
-                    StakingPoolComponent::TOTAL_UNSTAKED_BALANCE,
-                    unstaked_balance,
-                );
+                    unstaked_balance
+                };
 
                 let gap = amount - unstaked_balance;
                 if gap > ZERO_NEAR {
@@ -216,11 +222,8 @@ impl StakingPoolComponent {
                     ERR_INSUFFICIENT_FUNDS.assert(|| account_storage_available_balance >= gap);
                     near_account.dec_near_balance(account_storage_available_balance - gap);
                     near_account.save();
-
-                    amount
-                } else {
-                    unstaked_balance
                 }
+                amount
             }
             StakeAmount::Unstaked(amount) => {
                 ERR_INSUFFICIENT_FUNDS.assert(|| stake_account.is_some());
