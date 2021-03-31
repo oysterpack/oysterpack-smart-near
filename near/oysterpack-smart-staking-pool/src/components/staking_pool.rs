@@ -208,6 +208,14 @@ impl StakingPoolComponent {
     /// - this enables accounts to withdraw against the unstaked liquidity on a first come first serve basis
     pub const UNSTAKED_LIQUIDITY: BalanceId = BalanceId(0);
     pub const TOTAL_UNSTAKED_BALANCE: BalanceId = BalanceId(1);
+    /// used to temporarily store the staked NEAR balance under the following circumstances:
+    /// - when the stake action fails, the contract will unstake all and move the locked balance to
+    ///   this balance
+    /// - when the staking pool is paused by the operator
+    ///
+    /// This is needed to compute the STAKE token NEAR value. It basically locks in the STAKE NEAR value
+    /// while the staking pool is offline. Once the staking pool goes back on line, then the balance is
+    /// staked and this balance is cleared.
     pub const TOTAL_STAKED_BALANCE: BalanceId = BalanceId(2);
 
     fn state() -> ComponentState<State> {

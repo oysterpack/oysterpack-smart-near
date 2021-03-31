@@ -50,6 +50,7 @@ impl ContractNearBalances {
         let locked = env::account_locked_balance().into();
         let total = locked + env::account_balance();
         let owner = total
+            - locked
             - accounts
             - balances.as_ref().map_or(ZERO_NEAR, |balances| {
                 balances
