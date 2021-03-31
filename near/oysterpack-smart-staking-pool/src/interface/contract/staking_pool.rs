@@ -28,14 +28,18 @@ pub trait StakingPool {
     /// Returns the account's updated stake account balance
     ///
     /// ## NOTES
-    /// When NEAR is staked, STAKE tokens are minted. Because values are rounded down, only the actual
-    /// STAKE NEAR value is minted. The remainder is credited to the account's storage balance. The
-    /// algorithm is:
-    /// 1. NEAR stake amount = attached deposit + account storage available balance
-    /// 2. compute the  NEAR stake amount in STAKE
-    /// 3. convert the STAKE back to NEAR
-    /// 4. STAKE NEAR value is staked
-    /// 5. remainder is credited to the account's storage balance
+    /// - When NEAR is staked, STAKE tokens are minted. Because values are rounded down, only the actual
+    ///   STAKE NEAR value is minted. The remainder is credited to the account's storage balance. The
+    ///   algorithm is:
+    ///    1. NEAR stake amount = attached deposit + account storage available balance
+    ///    2. compute the  NEAR stake amount in STAKE
+    ///    3. convert the STAKE back to NEAR
+    ///    4. STAKE NEAR value is staked
+    ///    5. remainder is credited to the account's storage balance
+    /// - When NEAR is staked, it is first converted to STAKE and rounded down. Thus, based on the current
+    ///   exchange ratio, a minimum amount of NEAR is required to stake. If there is not enough to stake
+    ///   then the funds will be transferred over to the account's storage balance.
+    ///   - [`LOG_EVENT_STAKE_AMOUNT_TOO_LOW`] event will be logged
     ///
     /// ## Panics
     /// - if the account is not registered
@@ -85,3 +89,5 @@ pub trait StakingPool {
 
 pub const LOG_EVENT_STATUS_ONLINE: LogEvent = LogEvent(Level::INFO, "STATUS_ONLINE");
 pub const LOG_EVENT_STATUS_OFFLINE: LogEvent = LogEvent(Level::WARN, "STATUS_OFFLINE");
+
+pub const LOG_EVENT_STAKE_AMOUNT_TOO_LOW: LogEvent = LogEvent(Level::INFO, "STAKE_AMOUNT_TOO_LOW");

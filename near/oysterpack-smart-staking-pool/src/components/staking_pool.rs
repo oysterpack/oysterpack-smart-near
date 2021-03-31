@@ -1,6 +1,7 @@
 use crate::{
     OperatorCommand, StakeAccountBalances, StakeActionCallback, StakingPool, StakingPoolOperator,
-    UnstakedBalances, ERR_STAKE_ACTION_FAILED, LOG_EVENT_STATUS_OFFLINE,
+    UnstakedBalances, ERR_STAKE_ACTION_FAILED, LOG_EVENT_STAKE_AMOUNT_TOO_LOW,
+    LOG_EVENT_STATUS_OFFLINE,
 };
 use oysterpack_smart_account_management::{
     components::account_management::AccountManagementComponent, AccountRepository,
@@ -135,6 +136,7 @@ impl StakingPool for StakingPoolComponent {
 
         let near = account_storage_available_balance + env::attached_deposit();
         let stake = self.near_stake_value(near);
+
         // because of rounding down we need to convert the STAKE value back to NEAR, which ensures
         // that the account will not be short changed when they unstake
         let stake_near_value = self.stake_near_value(stake);
@@ -142,9 +144,12 @@ impl StakingPool for StakingPoolComponent {
         account.incr_near_balance(near - stake_near_value);
         account.save();
 
-        self.stake_token.ft_mint(&account_id, stake);
-
-        self.stake(stake_near_value);
+        if *stake > 0 {
+            self.stake_token.ft_mint(&account_id, stake);
+            self.stake(stake_near_value);
+        } else {
+            LOG_EVENT_STAKE_AMOUNT_TOO_LOW.log("");
+        }
 
         self.ops_stake_balance(to_valid_account_id(&account_id))
             .unwrap()
