@@ -1,3 +1,4 @@
+use crate::components::staking_pool::Status;
 use crate::StakeAccountBalances;
 use oysterpack_smart_near::domain::YoctoNear;
 use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
@@ -78,6 +79,8 @@ pub trait StakingPool {
     /// Liquidity is automatically added by delegators when they stake their NEAR while there is
     /// locked unstaked NEAR.
     fn ops_stake_available_liquidity(&self) -> YoctoNear;
+
+    fn ops_stake_status(&self) -> Status;
 }
 
 pub const LOG_EVENT_STAKE: LogEvent = LogEvent(Level::INFO, "STAKE");
