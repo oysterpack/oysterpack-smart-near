@@ -1,6 +1,9 @@
-use crate::AccountDataObject;
 use crate::AccountNearDataObject;
-use oysterpack_smart_near::near_sdk::borsh::{BorshDeserialize, BorshSerialize};
+use crate::{AccountDataObject, ERR_NOT_AUTHORIZED};
+use oysterpack_smart_near::near_sdk::{
+    borsh::{BorshDeserialize, BorshSerialize},
+    env,
+};
 use oysterpack_smart_near::{domain::YoctoNear, ErrCode, ErrorConst};
 use std::fmt::Debug;
 
@@ -51,6 +54,20 @@ where
     /// Deletes [AccountNearDataObject] and [AccountDataObject] for the specified  account ID
     /// - tracks storage usage - emits [`crate::AccountStorageEvent::StorageUsageChanged`]
     fn delete_account(&mut self, account_id: &str);
+
+    /// asserts that the predecessor account ID is registered and has operator permission
+    fn assert_operator(&self) -> AccountNearDataObject {
+        let account = self.registered_account_near_data(env::predecessor_account_id().as_str());
+        ERR_NOT_AUTHORIZED.assert(|| account.is_operator());
+        account
+    }
+
+    /// asserts that the predecessor account ID is registered and has admin permission
+    fn assert_admin(&self) -> AccountNearDataObject {
+        let account = self.registered_account_near_data(env::predecessor_account_id().as_str());
+        ERR_NOT_AUTHORIZED.assert(|| account.is_admin());
+        account
+    }
 }
 
 pub const ERR_ACCOUNT_NOT_REGISTERED: ErrorConst = ErrorConst(

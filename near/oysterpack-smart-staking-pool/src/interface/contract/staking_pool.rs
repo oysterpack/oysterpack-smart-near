@@ -83,5 +83,5 @@ pub trait StakingPool {
     fn ops_stake_status(&self) -> Status;
 }
 
-pub const LOG_EVENT_STAKE: LogEvent = LogEvent(Level::INFO, "STAKE");
-pub const LOG_EVENT_UNSTAKE: LogEvent = LogEvent(Level::INFO, "UNSTAKE");
+pub const LOG_EVENT_STATUS_ONLINE: LogEvent = LogEvent(Level::INFO, "STATUS_ONLINE");
+pub const LOG_EVENT_STATUS_OFFLINE: LogEvent = LogEvent(Level::WARN, "STATUS_OFFLINE");

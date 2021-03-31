@@ -17,7 +17,7 @@ use crate::{
 use oysterpack_smart_account_management::{
     components::account_management::AccountManagementComponent, AccountRepository,
     AccountStorageEvent, StorageManagementEvent, ERR_ACCOUNT_NOT_REGISTERED,
-    ERR_CODE_UNREGISTER_FAILURE, ERR_NOT_AUTHORIZED,
+    ERR_CODE_UNREGISTER_FAILURE,
 };
 use oysterpack_smart_near::eventbus::{self, post};
 use oysterpack_smart_near::near_sdk::{
@@ -149,7 +149,7 @@ where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
     fn ft_operator_command(&mut self, command: OperatorCommand) {
-        self.assert_operator();
+        self.account_manager.assert_operator();
         let mut metadata = MetadataObject::load(&METADATA_KEY).unwrap();
         match command {
             OperatorCommand::SetIcon(icon) => metadata.icon = Some(icon),
@@ -251,14 +251,6 @@ impl<T> FungibleTokenComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    /// asserts that the predecessor account ID is registered and has operator permission
-    fn assert_operator(&self) {
-        let account = self
-            .account_manager
-            .registered_account_near_data(env::predecessor_account_id().as_str());
-        ERR_NOT_AUTHORIZED.assert(|| account.is_operator());
-    }
-
     fn create_promise_transfer_receiver_ft_on_transfer(
         &self,
         sender_id: &str,
