@@ -1,5 +1,6 @@
 use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
+    env,
     serde::{Deserialize, Serialize},
 };
 use oysterpack_smart_near::{
@@ -41,10 +42,13 @@ pub struct ContractNearBalances {
     accounts: YoctoNear,
     balances: Option<NearBalances>,
     owner: YoctoNear,
+    locked: YoctoNear,
 }
 
 impl ContractNearBalances {
-    pub fn new(total: YoctoNear, accounts: YoctoNear, balances: Option<NearBalances>) -> Self {
+    pub fn new(accounts: YoctoNear, balances: Option<NearBalances>) -> Self {
+        let locked = env::account_locked_balance().into();
+        let total = locked + env::account_balance();
         let owner = total
             - accounts
             - balances.as_ref().map_or(ZERO_NEAR, |balances| {
@@ -59,6 +63,7 @@ impl ContractNearBalances {
             accounts,
             balances,
             owner,
+            locked,
         }
     }
 
@@ -82,6 +87,10 @@ impl ContractNearBalances {
     /// computed as: `total - accounts - balances`
     pub fn owner(&self) -> YoctoNear {
         self.owner
+    }
+
+    pub fn locked(&self) -> YoctoNear {
+        self.locked
     }
 }
 

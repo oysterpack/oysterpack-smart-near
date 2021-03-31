@@ -35,7 +35,7 @@ type StakeAccountData = UnstakedBalances;
 
 pub struct StakingPoolComponent {
     account_manager: AccountManagementComponent<StakeAccountData>,
-    stake: FungibleTokenComponent<StakeAccountData>,
+    stake_token: FungibleTokenComponent<StakeAccountData>,
     contract_ownership: ContractOwnershipComponent,
     contract_metrics: ContractMetricsComponent,
 }
@@ -47,7 +47,7 @@ impl StakingPoolComponent {
     ) -> Self {
         Self {
             account_manager,
-            stake,
+            stake_token: stake,
             contract_ownership: ContractOwnershipComponent,
             contract_metrics: ContractMetricsComponent,
         }
@@ -89,7 +89,7 @@ impl StakingPool for StakingPoolComponent {
             .load_account_data(account_id.as_ref().as_str())
             .map(|data| {
                 let staked_near_balance = {
-                    let stake_token_balance = self.stake.ft_balance_of(account_id);
+                    let stake_token_balance = self.stake_token.ft_balance_of(account_id);
                     self.stake_near_value(stake_token_balance)
                 };
                 let unstaked_balance = data.total_unstaked_balance();
@@ -110,6 +110,7 @@ impl StakingPool for StakingPoolComponent {
             .account_manager
             .registered_account_near_data(&env::predecessor_account_id());
 
+        // all of the account's storage available balance will be staked
         let account_storage_available_balance = account
             .storage_balance(self.account_manager.storage_balance_bounds().min)
             .available;
@@ -124,7 +125,7 @@ impl StakingPool for StakingPoolComponent {
         account.incr_near_balance(stakable_near - stake_near_value);
         account.save();
 
-        self.stake
+        self.stake_token
             .ft_mint(&env::predecessor_account_id(), near_stake_value);
 
         self.stake(stake_near_value);
@@ -145,7 +146,7 @@ impl StakingPool for StakingPoolComponent {
         if total_staked_balance == 0 {
             YOCTO.into()
         } else {
-            let value = (total_staked_balance / *self.stake.ft_total_supply()).into();
+            let value = (total_staked_balance / *self.stake_token.ft_total_supply()).into();
             // since we are rounding down, we need to make sure that the value of 1 STAKE is at least 1 NEAR
             std::cmp::max(value, YOCTO.into())
         }
@@ -207,6 +208,7 @@ impl StakingPoolComponent {
     /// - this enables accounts to withdraw against the unstaked liquidity on a first come first serve basis
     pub const UNSTAKED_LIQUIDITY: BalanceId = BalanceId(0);
     pub const TOTAL_UNSTAKED_BALANCE: BalanceId = BalanceId(1);
+    pub const TOTAL_STAKED_BALANCE: BalanceId = BalanceId(2);
 
     fn state() -> ComponentState<State> {
         Self::load_state().expect("component has not been deployed")
@@ -238,7 +240,7 @@ impl StakingPoolComponent {
         }
 
         (U256::from(total_staked_near_balance) * U256::from(*stake)
-            / U256::from(*self.stake.ft_total_supply()))
+            / U256::from(*self.stake_token.ft_total_supply()))
         .as_u128()
         .into()
     }
@@ -253,7 +255,7 @@ impl StakingPoolComponent {
             return amount.value().into();
         }
 
-        (U256::from(*self.stake.ft_total_supply()) * U256::from(*amount)
+        (U256::from(*self.stake_token.ft_total_supply()) * U256::from(*amount)
             / U256::from(total_staked_near_balance))
         .as_u128()
         .into()

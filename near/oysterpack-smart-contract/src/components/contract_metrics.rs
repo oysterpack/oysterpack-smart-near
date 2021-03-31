@@ -5,7 +5,6 @@ use crate::{ContractNearBalances, ContractStorageUsage, ContractStorageUsageCost
 use oysterpack_smart_account_management::AccountMetrics;
 use oysterpack_smart_near::data::numbers::U128;
 use oysterpack_smart_near::domain::BlockTime;
-use oysterpack_smart_near::near_sdk::env;
 
 pub struct ContractMetricsComponent;
 
@@ -27,11 +26,7 @@ impl ContractMetrics for ContractMetricsComponent {
         } else {
             Some(near_balances)
         };
-        ContractNearBalances::new(
-            env::account_balance().into(),
-            account_metrics.total_near_balance,
-            near_balances,
-        )
+        ContractNearBalances::new(account_metrics.total_near_balance, near_balances)
     }
 
     fn ops_metrics_storage_usage_costs(&self) -> ContractStorageUsageCosts {

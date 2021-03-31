@@ -34,6 +34,7 @@ pub enum UnstakedBalances {
 }
 
 impl UnstakedBalances {
+    /// sums up the total unstaked balance, which includes both locked and unlocked unstaked NEAR
     pub fn total_unstaked_balance(&self) -> YoctoNear {
         let balances: Vec<UnstakedBalance> = (*self).into();
         balances.iter().map(|balance| balance.balance).sum()
@@ -54,6 +55,8 @@ impl UnstakedBalances {
             .sum()
     }
 
+    /// filters out balances that have become unlocked and returns a new [`UnstakedBalances`] instance
+    /// that retains only locked balances
     pub fn remove_available_balances(self) -> UnstakedBalances {
         let balances: Vec<UnstakedBalance> = self.into();
         let balances: Vec<UnstakedBalance> = balances
@@ -64,7 +67,12 @@ impl UnstakedBalances {
         balances.as_slice().try_into().unwrap()
     }
 
-    pub fn restake(self, max_amount: YoctoNear) -> (UnstakedBalances, YoctoNear) {
+    /// removes the specified amount of NEAR up to the specified max amount from unstaked balances
+    /// for the purposes of restaking the NEAR.
+    ///
+    /// Returns the updated unstaked balances along with the unstaked amount that was removed
+    /// - unstaked NEAR will be removed from the most recent epoch
+    pub fn remove_for_restaking(self, max_amount: YoctoNear) -> (UnstakedBalances, YoctoNear) {
         if max_amount == ZERO_NEAR {
             return (self, max_amount);
         }

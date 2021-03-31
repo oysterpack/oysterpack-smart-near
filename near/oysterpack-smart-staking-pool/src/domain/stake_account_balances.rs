@@ -16,7 +16,7 @@ pub struct StakeAccountBalances {
     pub total: YoctoNear,
     /// unstaked amount that is available to withdraw
     pub available: YoctoNear,
-    /// amount that is currently staked
+    /// amount that is currently staked, i.e., the current value of the staked NEAR
     pub staked: YoctoNear,
     /// amount that is unstaked and currently locked
     /// - key represents the epoch height when the unstaked NEAR will become available for withdrawal
