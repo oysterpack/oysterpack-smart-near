@@ -1,25 +1,31 @@
 use crate::components::staking_pool::Status;
-use crate::StakeAccountBalances;
+use crate::StakeAccountBalance;
 use oysterpack_smart_near::domain::YoctoNear;
 use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
 use oysterpack_smart_near::{Level, LogEvent};
 
 /// # **Contract Interface**: Staking Pool API
 ///
-/// Staking pools enable accounts to delegate NEAR to stake with a validator.
+/// Staking pools enable accounts to delegate NEAR to stake with a validator. The main benefits of using
+/// this staking pool are:
+/// 1. The staking pool does not support lockup contracts. THe benefit is this lifts the restriction
+///    to lock unstaked NEAR for withdrawal. Unstaked NEAR can be immediately withdrawn. The tradeoff
+///    is that this lockup contracts will not be allowed to delegate their NEAR to stake with this
+///    staking pool because they are only permitted to go through a NEAR managed whitelisted staking pool
+///    that guarantees that unstaked NEAR will be locked for 4 epochs.
+/// 2. STAKE fungible token is provided for staked NEAR. This enables staked NEAR value to be transferred
+///    while still being staked.
 ///
 /// The staking pool works with the storage management API:
-/// - when funds are deposited, accounts will automatically be registered, i.e., a portion of the
-///   deposit will be used to pay for the account's contract storage
+/// - accounts must be registered with the contract in order to stake
 /// - the storage management APIs provide the withdrawal functionality, i.e., when unstaked near becomes
 ///   available to withdraw, then it will appear as available balance on the storage management API
 ///
-///
 pub trait StakingPool {
-    /// Looks up the account's stake account balance
+    /// Consolidates the account's storage balance with the STAKE token balance
     ///
     /// Returns None if the account is not registered with the contract
-    fn ops_stake_balance(&self, account_id: ValidAccountId) -> Option<StakeAccountBalances>;
+    fn ops_stake_balance(&self, account_id: ValidAccountId) -> Option<StakeAccountBalance>;
 
     /// Used to stake NEAR for the predecessor's account.
     ///
@@ -46,7 +52,7 @@ pub trait StakingPool {
     /// - if there is no attached deposit
     ///
     /// `#[payable]`
-    fn ops_stake(&mut self) -> StakeAccountBalances;
+    fn ops_stake(&mut self) -> StakeAccountBalance;
 
     /// Used to unstake staked NEAR.
     ///
@@ -60,29 +66,10 @@ pub trait StakingPool {
     /// ## Panics
     /// - if account is not registered
     /// - if there are insufficient staked funds to fulfill the request to unstake the specified amount
-    fn ops_unstake(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances;
-
-    /// Used to withdraw unstaked NEAR funds
-    /// - if the unstaked NEAR is still locked, then the liquidity pool will be checked
-    ///
-    /// If amount is not specified, then all available unstaked NEAR will be withdrawn.
-    ///
-    /// ## Panics
-    /// - if account is not registered
-    /// - if exactly 1 yoctoNEAR is not attached
-    /// - If the specified withdrawal amount is greater than the account's available unstaked balance
-    ///
-    /// `#[payable]`
-    fn ops_stake_withdraw(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances;
+    fn ops_unstake(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalance;
 
     /// returns the current NEAR value of 1 STAKE token
     fn ops_stake_token_value(&self) -> YoctoNear;
-
-    /// Returns the amount of liquidity that is available for withdrawing unstaked NEAR.
-    ///
-    /// Liquidity is automatically added by delegators when they stake their NEAR while there is
-    /// locked unstaked NEAR.
-    fn ops_stake_available_liquidity(&self) -> YoctoNear;
 
     fn ops_stake_status(&self) -> Status;
 }

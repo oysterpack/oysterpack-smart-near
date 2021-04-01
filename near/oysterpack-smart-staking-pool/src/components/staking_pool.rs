@@ -1,6 +1,6 @@
 use crate::{
-    OperatorCommand, StakeAccountBalances, StakeActionCallback, StakingPool, StakingPoolOperator,
-    UnstakedBalances, ERR_STAKE_ACTION_FAILED, LOG_EVENT_NOT_ENOUGH_TO_STAKE,
+    OperatorCommand, StakeAccountBalance, StakeActionCallback, StakeBalance, StakingPool,
+    StakingPoolOperator, ERR_STAKE_ACTION_FAILED, LOG_EVENT_NOT_ENOUGH_TO_STAKE,
     LOG_EVENT_STATUS_OFFLINE,
 };
 use oysterpack_smart_account_management::{
@@ -32,7 +32,7 @@ use oysterpack_smart_near::{
     json_function_callback, to_valid_account_id, TERA, YOCTO,
 };
 
-type StakeAccountData = UnstakedBalances;
+type StakeAccountData = ();
 
 pub struct StakingPoolComponent {
     account_manager: AccountManagementComponent<StakeAccountData>,
@@ -101,27 +101,30 @@ pub struct StakingPoolComponentConfig {
 }
 
 impl StakingPool for StakingPoolComponent {
-    fn ops_stake_balance(&self, account_id: ValidAccountId) -> Option<StakeAccountBalances> {
+    fn ops_stake_balance(&self, account_id: ValidAccountId) -> Option<StakeAccountBalance> {
         self.account_manager
-            .load_account_data(account_id.as_ref().as_str())
-            .map(|data| {
-                let staked_near_balance = {
-                    let stake_token_balance = self.stake_token.ft_balance_of(account_id);
-                    self.stake_near_value(stake_token_balance)
+            .storage_balance_of(account_id.clone())
+            .map(|storage_balance| {
+                let stake_token_balance = {
+                    let token_balance = self.stake_token.ft_balance_of(account_id);
+                    if *token_balance == 0 {
+                        None
+                    } else {
+                        Some(StakeBalance {
+                            stake: token_balance,
+                            near_value: self.stake_near_value(token_balance),
+                        })
+                    }
                 };
-                let unstaked_balance = data.total_unstaked_balance();
-                let unstaked_available_balance = data.unstaked_available_balance();
 
-                StakeAccountBalances {
-                    total: staked_near_balance + unstaked_balance - unstaked_available_balance,
-                    available: unstaked_available_balance,
-                    staked: staked_near_balance,
-                    unstaked: data.remove_available_balances(),
+                StakeAccountBalance {
+                    storage_balance,
+                    stake_token_balance,
                 }
             })
     }
 
-    fn ops_stake(&mut self) -> StakeAccountBalances {
+    fn ops_stake(&mut self) -> StakeAccountBalance {
         assert_near_attached("deposit is required to stake");
         let account_id = env::predecessor_account_id();
         let mut account = self
@@ -155,11 +158,7 @@ impl StakingPool for StakingPoolComponent {
             .unwrap()
     }
 
-    fn ops_unstake(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances {
-        unimplemented!()
-    }
-
-    fn ops_stake_withdraw(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances {
+    fn ops_unstake(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalance {
         unimplemented!()
     }
 
@@ -172,13 +171,6 @@ impl StakingPool for StakingPoolComponent {
             // since we are rounding down, we need to make sure that the value of 1 STAKE is at least 1 NEAR
             std::cmp::max(value, YOCTO.into())
         }
-    }
-
-    fn ops_stake_available_liquidity(&self) -> YoctoNear {
-        ContractNearBalances::load_near_balances()
-            .get(&StakingPoolComponent::UNSTAKED_LIQUIDITY)
-            .cloned()
-            .unwrap_or(ZERO_NEAR)
     }
 
     fn ops_stake_status(&self) -> Status {
@@ -245,10 +237,6 @@ impl StakeActionCallback for StakingPoolComponent {
 }
 
 impl StakingPoolComponent {
-    /// when there is an unstaked balance, delegators add liquidity when they deposit funds to stake
-    /// - this enables accounts to withdraw against the unstaked liquidity on a first come first serve basis
-    pub const UNSTAKED_LIQUIDITY: BalanceId = BalanceId(0);
-    pub const TOTAL_UNSTAKED_BALANCE: BalanceId = BalanceId(1);
     /// used to temporarily store the staked NEAR balance under the following circumstances:
     /// - when the stake action fails, the contract will unstake all and move the locked balance to
     ///   this balance
@@ -257,7 +245,7 @@ impl StakingPoolComponent {
     /// This is needed to compute the STAKE token NEAR value. It basically locks in the STAKE NEAR value
     /// while the staking pool is offline. Once the staking pool goes back on line, then the balance is
     /// staked and this balance is cleared.
-    pub const TOTAL_STAKED_BALANCE: BalanceId = BalanceId(2);
+    pub const TOTAL_STAKED_BALANCE: BalanceId = BalanceId(0);
 
     fn state() -> ComponentState<State> {
         Self::load_state().expect("component has not been deployed")
@@ -339,4 +327,12 @@ impl StakingPoolComponent {
         .as_u128()
         .into()
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test() {}
 }

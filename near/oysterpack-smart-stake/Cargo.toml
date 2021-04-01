@@ -12,6 +12,7 @@ oysterpack-smart-near = {path = "../oysterpack-smart-near"}
 oysterpack-smart-contract = {path = "../oysterpack-smart-contract"}
 oysterpack-smart-account-management = {path = "../oysterpack-smart-account-management"}
 oysterpack-smart-fungible-token = {path = "../oysterpack-smart-fungible-token"}
+oysterpack-smart-staking-pool = {path = "../oysterpack-smart-staking-pool"}
 
 near-sdk = "=3.0.1-pre.1"
 
