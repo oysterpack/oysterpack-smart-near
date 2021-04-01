@@ -5,7 +5,7 @@ use oysterpack_smart_near::near_sdk::serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 #[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
-pub struct StakeAccountBalance {
+pub struct StakeAccountBalances {
     pub storage_balance: StorageBalance,
     pub stake_token_balance: Option<StakeBalance>,
 }

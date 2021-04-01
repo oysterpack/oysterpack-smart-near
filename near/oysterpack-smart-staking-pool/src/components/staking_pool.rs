@@ -1,5 +1,5 @@
 use crate::{
-    OperatorCommand, StakeAccountBalance, StakeActionCallback, StakeBalance, StakingPool,
+    OperatorCommand, StakeAccountBalances, StakeActionCallback, StakeBalance, StakingPool,
     StakingPoolOperator, ERR_STAKE_ACTION_FAILED, LOG_EVENT_NOT_ENOUGH_TO_STAKE,
     LOG_EVENT_STATUS_OFFLINE,
 };
@@ -101,7 +101,7 @@ pub struct StakingPoolComponentConfig {
 }
 
 impl StakingPool for StakingPoolComponent {
-    fn ops_stake_balance(&self, account_id: ValidAccountId) -> Option<StakeAccountBalance> {
+    fn ops_stake_balance(&self, account_id: ValidAccountId) -> Option<StakeAccountBalances> {
         self.account_manager
             .storage_balance_of(account_id.clone())
             .map(|storage_balance| {
@@ -117,14 +117,14 @@ impl StakingPool for StakingPoolComponent {
                     }
                 };
 
-                StakeAccountBalance {
+                StakeAccountBalances {
                     storage_balance,
                     stake_token_balance,
                 }
             })
     }
 
-    fn ops_stake(&mut self) -> StakeAccountBalance {
+    fn ops_stake(&mut self) -> StakeAccountBalances {
         assert_near_attached("deposit is required to stake");
         let account_id = env::predecessor_account_id();
         let mut account = self
@@ -158,7 +158,7 @@ impl StakingPool for StakingPoolComponent {
             .unwrap()
     }
 
-    fn ops_unstake(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalance {
+    fn ops_unstake(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances {
         unimplemented!()
     }
 
