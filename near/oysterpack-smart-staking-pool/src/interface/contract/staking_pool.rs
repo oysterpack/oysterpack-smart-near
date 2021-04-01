@@ -90,4 +90,6 @@ pub trait StakingPool {
 pub const LOG_EVENT_STATUS_ONLINE: LogEvent = LogEvent(Level::INFO, "STATUS_ONLINE");
 pub const LOG_EVENT_STATUS_OFFLINE: LogEvent = LogEvent(Level::WARN, "STATUS_OFFLINE");
 
-pub const LOG_EVENT_STAKE_AMOUNT_TOO_LOW: LogEvent = LogEvent(Level::INFO, "STAKE_AMOUNT_TOO_LOW");
+pub const LOG_EVENT_NOT_ENOUGH_TO_STAKE: LogEvent = LogEvent(Level::INFO, "NOT_ENOUGH_TO_STAKE");
+pub const LOG_EVENT_NOT_ENOUGH_TO_UNSTAKE: LogEvent =
+    LogEvent(Level::INFO, "NOT_ENOUGH_TO_UNSTAKE");

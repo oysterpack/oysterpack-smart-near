@@ -1,6 +1,6 @@
 use crate::{
     OperatorCommand, StakeAccountBalances, StakeActionCallback, StakingPool, StakingPoolOperator,
-    UnstakedBalances, ERR_STAKE_ACTION_FAILED, LOG_EVENT_STAKE_AMOUNT_TOO_LOW,
+    UnstakedBalances, ERR_STAKE_ACTION_FAILED, LOG_EVENT_NOT_ENOUGH_TO_STAKE,
     LOG_EVENT_STATUS_OFFLINE,
 };
 use oysterpack_smart_account_management::{
@@ -148,7 +148,7 @@ impl StakingPool for StakingPoolComponent {
             self.stake_token.ft_mint(&account_id, stake);
             self.stake(stake_near_value);
         } else {
-            LOG_EVENT_STAKE_AMOUNT_TOO_LOW.log("");
+            LOG_EVENT_NOT_ENOUGH_TO_STAKE.log("");
         }
 
         self.ops_stake_balance(to_valid_account_id(&account_id))
