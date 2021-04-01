@@ -1,7 +1,7 @@
 use crate::{
     OperatorCommand, StakeAccountBalances, StakeActionCallback, StakeBalance, StakingPool,
-    StakingPoolOperator, ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE, ERR_STAKE_ACTION_FAILED,
-    LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STATUS_OFFLINE,
+    StakingPoolOperator, StakingPoolOwner, ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE,
+    ERR_STAKE_ACTION_FAILED, LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STATUS_OFFLINE,
 };
 use oysterpack_smart_account_management::{
     components::account_management::AccountManagementComponent, AccountRepository,
@@ -269,6 +269,12 @@ impl StakingPoolOperator for StakingPoolComponent {
             ]) + TERA.into()
         };
         CallbackGas::load(&TRANSFER_CALLBACK_GAS_KEY).map_or_else(default_gas, |gas| *gas)
+    }
+}
+
+impl StakingPoolOwner for StakingPoolComponent {
+    fn ops_stake_owner_balance(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances {
+        unimplemented!()
     }
 }
 
