@@ -2,7 +2,7 @@ use crate::components::staking_pool::Status;
 use crate::StakeAccountBalances;
 use oysterpack_smart_near::domain::YoctoNear;
 use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
-use oysterpack_smart_near::{Level, LogEvent};
+use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 
 /// # **Contract Interface**: Staking Pool API
 ///
@@ -78,5 +78,6 @@ pub const LOG_EVENT_STATUS_ONLINE: LogEvent = LogEvent(Level::INFO, "STATUS_ONLI
 pub const LOG_EVENT_STATUS_OFFLINE: LogEvent = LogEvent(Level::WARN, "STATUS_OFFLINE");
 
 pub const LOG_EVENT_NOT_ENOUGH_TO_STAKE: LogEvent = LogEvent(Level::INFO, "NOT_ENOUGH_TO_STAKE");
-pub const LOG_EVENT_NOT_ENOUGH_TO_UNSTAKE: LogEvent =
-    LogEvent(Level::INFO, "NOT_ENOUGH_TO_UNSTAKE");
+
+pub const ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE: ErrorConst =
+    ErrorConst(ErrCode("STAKED_BALANCE_TOO_LOW_TO_UNSTAKE"), "");

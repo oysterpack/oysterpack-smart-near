@@ -1,7 +1,7 @@
 use crate::{
     OperatorCommand, StakeAccountBalances, StakeActionCallback, StakeBalance, StakingPool,
-    StakingPoolOperator, ERR_STAKE_ACTION_FAILED, LOG_EVENT_NOT_ENOUGH_TO_STAKE,
-    LOG_EVENT_STATUS_OFFLINE,
+    StakingPoolOperator, ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE, ERR_STAKE_ACTION_FAILED,
+    LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STATUS_OFFLINE,
 };
 use oysterpack_smart_account_management::{
     components::account_management::AccountManagementComponent, AccountRepository,
@@ -14,7 +14,7 @@ use oysterpack_smart_contract::{
 use oysterpack_smart_fungible_token::{
     components::fungible_token::FungibleTokenComponent, FungibleToken, TokenAmount, TokenService,
 };
-use oysterpack_smart_near::asserts::assert_near_attached;
+use oysterpack_smart_near::asserts::{assert_near_attached, ERR_INSUFFICIENT_FUNDS};
 use oysterpack_smart_near::data::numbers::U256;
 use oysterpack_smart_near::data::Object;
 use oysterpack_smart_near::domain::{
@@ -24,6 +24,7 @@ use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env, is_promise_success,
     json_types::ValidAccountId,
+    serde::{Deserialize, Serialize},
     Promise,
 };
 use oysterpack_smart_near::{
@@ -112,7 +113,7 @@ impl StakingPool for StakingPoolComponent {
                     } else {
                         Some(StakeBalance {
                             stake: token_balance,
-                            near_value: self.stake_near_value(token_balance),
+                            near_value: self.stake_near_value_rounded_down(token_balance),
                         })
                     }
                 };
@@ -138,18 +139,18 @@ impl StakingPool for StakingPoolComponent {
         account.dec_near_balance(account_storage_available_balance);
 
         let near = account_storage_available_balance + env::attached_deposit();
-        let stake = self.near_stake_value(near);
+        let stake = self.near_stake_value_rounded_down(near);
 
         // because of rounding down we need to convert the STAKE value back to NEAR, which ensures
         // that the account will not be short changed when they unstake
-        let stake_near_value = self.stake_near_value(stake);
+        let stake_near_value = self.stake_near_value_rounded_down(stake);
         // the unstaked remainder is credited back to the account storage balance
         account.incr_near_balance(near - stake_near_value);
         account.save();
 
         if *stake > 0 {
             self.stake_token.ft_mint(&account_id, stake);
-            self.stake(stake_near_value);
+            self.stake(StakeAmount::Stake(stake_near_value));
         } else {
             LOG_EVENT_NOT_ENOUGH_TO_STAKE.log("");
         }
@@ -159,7 +160,36 @@ impl StakingPool for StakingPoolComponent {
     }
 
     fn ops_unstake(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances {
-        unimplemented!()
+        let account_id = env::predecessor_account_id();
+        let mut account = self
+            .account_manager
+            .registered_account_near_data(&account_id);
+
+        let stake_balance = self
+            .stake_token
+            .ft_balance_of(to_valid_account_id(&account_id));
+        let stake_near_value = self.stake_near_value_rounded_down(stake_balance);
+        // burn STAKE tokens
+        match amount {
+            None => {
+                self.stake_token.ft_burn(&account_id, stake_balance);
+            }
+            Some(amount) => {
+                ERR_INSUFFICIENT_FUNDS.assert(|| stake_near_value >= amount);
+                let stake_burn_amount = self.near_stake_value_rounded_up(amount);
+                ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE.assert(|| stake_balance >= stake_burn_amount);
+                self.stake_token.ft_burn(&account_id, stake_burn_amount);
+            }
+        }
+
+        // credit the account storage balance
+        account.incr_near_balance(stake_near_value);
+        account.save();
+
+        self.stake(StakeAmount::Unstake(stake_near_value));
+
+        self.ops_stake_balance(to_valid_account_id(&account_id))
+            .unwrap()
     }
 
     fn ops_stake_token_value(&self) -> YoctoNear {
@@ -189,7 +219,19 @@ impl StakingPoolOperator for StakingPoolComponent {
             OperatorCommand::Pause => {
                 let mut state = Self::state();
                 if let Status::Online = state.status {
-                    self.unstake_all(state.stake_public_key);
+                    // unstake all
+                    {
+                        let staked_balance = env::account_locked_balance();
+                        if staked_balance > 0 {
+                            ContractNearBalances::set_balance(
+                                Self::TOTAL_STAKED_BALANCE,
+                                staked_balance.into(),
+                            );
+                            Promise::new(env::current_account_id())
+                                .stake(0, state.stake_public_key.into());
+                        }
+                    }
+                    // update status
                     {
                         state.status = Status::Offline(OfflineReason::Paused);
                         state.save();
@@ -197,9 +239,15 @@ impl StakingPoolOperator for StakingPoolComponent {
                     LOG_EVENT_STATUS_OFFLINE.log("")
                 }
             }
-            OperatorCommand::Resume => {}
-            OperatorCommand::SetStakeCallbackGas(_) => {}
-            OperatorCommand::ClearStakeCallbackGas => {}
+            OperatorCommand::Resume => {
+                unimplemented!()
+            }
+            OperatorCommand::SetStakeCallbackGas(_) => {
+                unimplemented!()
+            }
+            OperatorCommand::ClearStakeCallbackGas => {
+                unimplemented!()
+            }
         }
     }
 
@@ -225,15 +273,23 @@ impl StakingPoolOperator for StakingPoolComponent {
 }
 
 impl StakeActionCallback for StakingPoolComponent {
-    fn ops_stake_callback(&mut self) {
+    fn ops_stake_callback(&mut self, staked_balance: YoctoNear) {
         if !is_promise_success() {
             ERR_STAKE_ACTION_FAILED.log("");
+            ContractNearBalances::set_balance(Self::TOTAL_STAKED_BALANCE, staked_balance);
             if env::account_locked_balance() > 0 {
-                self.unstake_all(Self::state().stake_public_key);
+                Promise::new(env::current_account_id())
+                    .stake(0, Self::state().stake_public_key.into());
                 Self::set_status(Status::Offline(OfflineReason::StakeActionFailed));
             }
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
+struct StakeActionCallbackArgs {
+    pub staked_balance: YoctoNear,
 }
 
 impl StakingPoolComponent {
@@ -264,30 +320,32 @@ impl StakingPoolComponent {
             .unwrap_or_else(|| env::account_locked_balance().into())
     }
 
-    fn unstake_all(&self, pk: PublicKey) {
-        let staked_balance = env::account_locked_balance();
-        if staked_balance > 0 {
-            ContractNearBalances::set_balance(Self::TOTAL_STAKED_BALANCE, staked_balance.into());
-            Promise::new(env::current_account_id()).stake(0, pk.into());
-        }
-    }
-
-    fn stake(&self, amount: YoctoNear) {
+    fn stake(&self, amount: StakeAmount) {
         let state = Self::state();
         match state.status {
             Status::Offline(_) => {
                 LOG_EVENT_STATUS_OFFLINE.log("");
-                ContractNearBalances::incr_balance(Self::TOTAL_STAKED_BALANCE, amount);
+                match amount {
+                    StakeAmount::Stake(amount) => {
+                        ContractNearBalances::incr_balance(Self::TOTAL_STAKED_BALANCE, amount);
+                    }
+                    StakeAmount::Unstake(amount) => {
+                        ContractNearBalances::decr_balance(Self::TOTAL_STAKED_BALANCE, amount);
+                    }
+                }
             }
             Status::Online => {
+                let stake_amount = match amount {
+                    StakeAmount::Stake(amount) => *(Self::total_staked_balance() + amount),
+                    StakeAmount::Unstake(amount) => *(Self::total_staked_balance() - amount),
+                };
                 Promise::new(env::current_account_id())
-                    .stake(
-                        *(Self::total_staked_balance() + amount),
-                        state.stake_public_key.into(),
-                    )
-                    .then(json_function_callback::<()>(
+                    .stake(stake_amount, state.stake_public_key.into())
+                    .then(json_function_callback(
                         "ops_stake_callback",
-                        None,
+                        Some(StakeActionCallbackArgs {
+                            staked_balance: YoctoNear::from(stake_amount),
+                        }),
                         ZERO_NEAR,
                         self.ops_stake_callback_gas(),
                     ));
@@ -296,7 +354,7 @@ impl StakingPoolComponent {
         }
     }
 
-    fn stake_near_value(&self, stake: TokenAmount) -> YoctoNear {
+    fn stake_near_value_rounded_down(&self, stake: TokenAmount) -> YoctoNear {
         if *stake == 0 {
             return ZERO_NEAR;
         }
@@ -312,7 +370,7 @@ impl StakingPoolComponent {
         .into()
     }
 
-    fn near_stake_value(&self, amount: YoctoNear) -> TokenAmount {
+    fn near_stake_value_rounded_down(&self, amount: YoctoNear) -> TokenAmount {
         if *amount == 0 {
             return 0.into();
         }
@@ -327,6 +385,28 @@ impl StakingPoolComponent {
         .as_u128()
         .into()
     }
+
+    fn near_stake_value_rounded_up(&self, amount: YoctoNear) -> TokenAmount {
+        if *amount == 0 {
+            return 0.into();
+        }
+
+        let total_staked_near_balance = *Self::total_staked_balance();
+        if total_staked_near_balance == 0 {
+            return amount.value().into();
+        }
+
+        ((U256::from(*self.stake_token.ft_total_supply()) * U256::from(*amount)
+            + U256::from(total_staked_near_balance - 1))
+            / U256::from(total_staked_near_balance))
+        .as_u128()
+        .into()
+    }
+}
+
+enum StakeAmount {
+    Stake(YoctoNear),
+    Unstake(YoctoNear),
 }
 
 #[cfg(test)]
