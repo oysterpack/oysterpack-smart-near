@@ -307,7 +307,7 @@ impl StakingPoolComponent {
     /// This is needed to compute the STAKE token NEAR value. It basically locks in the STAKE NEAR value
     /// while the staking pool is offline. Once the staking pool goes back on line, then the balance is
     /// staked and this balance is cleared.
-    pub const TOTAL_STAKED_BALANCE: BalanceId = BalanceId(0);
+    pub const TOTAL_STAKED_BALANCE: BalanceId = BalanceId(1955270816453372906764299513102112489);
 
     fn state() -> ComponentState<State> {
         Self::load_state().expect("component has not been deployed")

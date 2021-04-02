@@ -10,6 +10,7 @@ use oysterpack_smart_near::{
 use std::{collections::HashMap, ops::Deref};
 
 /// Balance ID is used to track separate NEAR balances
+/// - use ULID to generate unique IDs to avoid collisions between components
 #[derive(
     BorshSerialize,
     BorshDeserialize,
@@ -25,7 +26,7 @@ use std::{collections::HashMap, ops::Deref};
     Default,
 )]
 #[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
-pub struct BalanceId(pub u8);
+pub struct BalanceId(pub u128);
 
 /// used to track NEAR balances that are outside registered accounts - examples
 /// - liquidity
