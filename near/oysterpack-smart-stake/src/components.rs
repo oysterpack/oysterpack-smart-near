@@ -1,11 +1,14 @@
 use crate::*;
 use oysterpack_smart_account_management::components::account_management::AccountManagementComponent;
+use oysterpack_smart_contract::components::contract_operator::ContractOperatorComponent;
 
 pub type AccountData = ();
 
 pub type AccountManager = AccountManagementComponent<AccountData>;
 
 pub type StakeFungibleToken = FungibleTokenComponent<AccountData>;
+
+pub type ContractOperator = ContractOperatorComponent<AccountData>;
 
 impl Contract {
     pub fn account_manager() -> AccountManager {
@@ -15,5 +18,9 @@ impl Contract {
 
     pub fn ft_stake() -> StakeFungibleToken {
         StakeFungibleToken::new(Self::account_manager())
+    }
+
+    pub fn contract_operator() -> ContractOperator {
+        ContractOperator::new(Self::account_manager())
     }
 }

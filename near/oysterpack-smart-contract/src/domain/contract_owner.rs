@@ -64,6 +64,12 @@ impl ContractOwnerObject {
         owner
     }
 
+    /// returns true if the predecessor account is the owner
+    pub fn is_owner() -> bool {
+        let owner = Self::load();
+        owner.account_id_hash() == AccountIdHash::from(env::predecessor_account_id().as_str())
+    }
+
     /// asserts that a contract transfer is in progress and the predecessor account ID is the
     /// prospective owner
     pub fn assert_prospective_owner_access() -> Self {
@@ -187,4 +193,30 @@ pub(crate) struct ContractOwnershipAccountIds {
     pub owner: AccountId,
     pub prospective_owner: Option<AccountId>,
     pub buyer: Option<AccountId>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oysterpack_smart_near_test::*;
+
+    #[test]
+    fn is_not_owner() {
+        let account = "bob";
+        let mut ctx = new_context(account);
+
+        testing_env!(ctx.clone());
+        ContractOwnerObject::initialize_contract(to_valid_account_id("alice"));
+        assert!(!ContractOwnerObject::is_owner());
+    }
+
+    #[test]
+    fn is_owner() {
+        let account = "bob";
+        let mut ctx = new_context(account);
+
+        testing_env!(ctx.clone());
+        ContractOwnerObject::initialize_contract(to_valid_account_id(account));
+        assert!(ContractOwnerObject::is_owner());
+    }
 }

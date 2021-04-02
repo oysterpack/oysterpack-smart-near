@@ -1,4 +1,5 @@
 pub use contract::contract_metrics::*;
+pub use contract::contract_operator::*;
 pub use contract::contract_ownership::*;
 pub use contract::contract_sale::*;
 
