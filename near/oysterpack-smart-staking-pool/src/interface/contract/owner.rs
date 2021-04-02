@@ -5,6 +5,9 @@ pub trait StakingPoolOwner {
     /// stakes the owner's available balance
     /// - if amount is None, then the owner's entire balance is staked
     ///
+    /// ## Notes
+    /// If the owner foes not have a registered account then an account will automatically be registered
+    ///
     /// ## Panics
     /// - if predecessor account is not the owner
     /// - if specified amount is more than the owner's available balance

@@ -255,44 +255,50 @@ where
     type Config = AccountManagementComponentConfig;
 
     fn deploy(config: Self::Config) {
-        let mut storage_usage_bounds =
-            config
-                .storage_usage_bounds
-                .unwrap_or_else(|| StorageUsageBounds {
-                    min: Self::measure_storage_usage(Default::default()),
-                    max: None,
-                });
+        let storage_usage_bounds = {
+            let mut storage_usage_bounds =
+                config
+                    .storage_usage_bounds
+                    .unwrap_or_else(|| StorageUsageBounds {
+                        min: Self::measure_storage_usage(Default::default()),
+                        max: None,
+                    });
 
-        let storage_usage_bounds =
-            config
-                .component_account_storage_mins
-                .map_or(storage_usage_bounds, |funcs| {
-                    let account_storage_min: StorageUsage = funcs
-                        .iter()
-                        .fold(storage_usage_bounds.min, |sum, f| (sum + f()));
-                    storage_usage_bounds.min = account_storage_min;
-                    storage_usage_bounds
-                });
+            let storage_usage_bounds =
+                config
+                    .component_account_storage_mins
+                    .map_or(storage_usage_bounds, |funcs| {
+                        let account_storage_min: StorageUsage = funcs
+                            .iter()
+                            .fold(storage_usage_bounds.min, |sum, f| (sum + f()));
+                        storage_usage_bounds.min = account_storage_min;
+                        storage_usage_bounds
+                    });
 
-        AccountStorageUsageComponent::deploy(storage_usage_bounds);
+            AccountStorageUsageComponent::deploy(storage_usage_bounds);
+            storage_usage_bounds
+        };
 
-        let storage_balance_bounds: StorageBalanceBounds = storage_usage_bounds.into();
-        AccountMetrics::register_account_storage_event_handler();
-        match AccountNearDataObject::load(config.admin_account.as_ref().as_str()) {
-            None => {
-                let mut account = AccountNearDataObject::new(
-                    config.admin_account.as_ref(),
-                    storage_balance_bounds.min,
-                );
-                account.grant_admin();
-                account.save();
-                eventbus::post(&AccountStorageEvent::Registered(
-                    account.storage_balance(storage_balance_bounds.min),
-                ));
-            }
-            Some(mut account) => {
-                account.grant_admin();
-                account.save();
+        // create admin account
+        {
+            let storage_balance_bounds: StorageBalanceBounds = storage_usage_bounds.into();
+            AccountMetrics::register_account_storage_event_handler();
+            match AccountNearDataObject::load(config.admin_account.as_ref().as_str()) {
+                None => {
+                    let mut account = AccountNearDataObject::new(
+                        config.admin_account.as_ref(),
+                        storage_balance_bounds.min,
+                    );
+                    account.grant_admin();
+                    account.save();
+                    eventbus::post(&AccountStorageEvent::Registered(
+                        account.storage_balance(storage_balance_bounds.min),
+                    ));
+                }
+                Some(mut account) => {
+                    account.grant_admin();
+                    account.save();
+                }
             }
         }
     }
