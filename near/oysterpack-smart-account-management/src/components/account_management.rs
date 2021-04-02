@@ -430,12 +430,7 @@ where
                 }
                 account
             }
-            None => self.register_account(
-                &account_id,
-                deposit,
-                registration_only,
-                storage_balance_bounds,
-            ),
+            None => self.register_account(&account_id, deposit, registration_only),
         };
 
         account.storage_balance(storage_balance_bounds.min)
@@ -507,7 +502,7 @@ where
 
 impl<T> PermissionsManagement for AccountManagementComponent<T>
 where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + 'static,
 {
     fn ops_permissions_is_admin(&self, account_id: ValidAccountId) -> bool {
         self.load_account_near_data(account_id.as_ref())
@@ -661,10 +656,30 @@ where
     }
 }
 
+impl<T> AccountManagementComponent<T>
+where
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + 'static,
+{
+    pub fn register_account(
+        &mut self,
+        account_id: &str,
+        deposit: YoctoNear,
+        registration_only: bool,
+    ) -> AccountNearDataObject {
+        let storage_balance_bounds = self.storage_balance_bounds();
+        let deposit = Self::initial_deposit(deposit, registration_only, storage_balance_bounds);
+        let (account, _data) = self.create_account(account_id, deposit, None);
+        eventbus::post(&AccountStorageEvent::Registered(
+            account.storage_balance(storage_balance_bounds.min),
+        ));
+        account
+    }
+}
+
 /// helper functions
 impl<T> AccountManagementComponent<T>
 where
-    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default + 'static,
 {
     fn clear_permissions_if_has_no_permissions(account: &mut AccountNearData) {
         if let Some(permissions) = account.permissions() {
@@ -684,21 +699,6 @@ where
     fn assert_predecessor_is_admin(&self) {
         let admin = self.registered_account_near_data(env::predecessor_account_id().as_str());
         ERR_NOT_AUTHORIZED.assert(|| admin.is_admin());
-    }
-
-    fn register_account(
-        &mut self,
-        account_id: &str,
-        deposit: YoctoNear,
-        registration_only: bool,
-        storage_balance_bounds: StorageBalanceBounds,
-    ) -> AccountNearDataObject {
-        let deposit = Self::initial_deposit(deposit, registration_only, storage_balance_bounds);
-        let (account, _data) = self.create_account(account_id, deposit, None);
-        eventbus::post(&AccountStorageEvent::Registered(
-            account.storage_balance(storage_balance_bounds.min),
-        ));
-        account
     }
 
     /// refunds deposit amount that is above the max allowed storage balance

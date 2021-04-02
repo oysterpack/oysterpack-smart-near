@@ -2,35 +2,36 @@ use crate::{
     OperatorCommand, StakeAccountBalances, StakeActionCallback, StakeBalance, StakingPool,
     StakingPoolOperator, StakingPoolOwner, ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE,
     ERR_STAKE_ACTION_FAILED, LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STATUS_OFFLINE,
+    LOG_EVENT_STATUS_ONLINE,
 };
 use oysterpack_smart_account_management::{
     components::account_management::AccountManagementComponent, AccountRepository,
     StorageManagement,
 };
-use oysterpack_smart_contract::components::contract_metrics::ContractMetricsComponent;
 use oysterpack_smart_contract::{
     components::contract_ownership::ContractOwnershipComponent, BalanceId, ContractNearBalances,
+    ContractOwnerObject, ContractOwnership,
 };
 use oysterpack_smart_fungible_token::{
     components::fungible_token::FungibleTokenComponent, FungibleToken, TokenAmount, TokenService,
 };
-use oysterpack_smart_near::asserts::{assert_near_attached, ERR_INSUFFICIENT_FUNDS};
-use oysterpack_smart_near::data::numbers::U256;
-use oysterpack_smart_near::data::Object;
-use oysterpack_smart_near::domain::{
-    ActionType, ByteLen, Gas, SenderIsReceiver, TransactionResource, ZERO_NEAR,
-};
-use oysterpack_smart_near::near_sdk::{
-    borsh::{self, BorshDeserialize, BorshSerialize},
-    env, is_promise_success,
-    json_types::ValidAccountId,
-    serde::{Deserialize, Serialize},
-    Promise,
-};
 use oysterpack_smart_near::{
+    asserts::{assert_near_attached, ERR_INSUFFICIENT_FUNDS, ERR_INVALID},
     component::{Component, ComponentState, Deploy},
-    domain::{PublicKey, YoctoNear},
-    json_function_callback, to_valid_account_id, TERA, YOCTO,
+    data::numbers::U256,
+    domain::{
+        ActionType, ByteLen, Gas, PublicKey, SenderIsReceiver, TransactionResource, YoctoNear,
+        ZERO_NEAR,
+    },
+    json_function_callback,
+    near_sdk::{
+        borsh::{self, BorshDeserialize, BorshSerialize},
+        env, is_promise_success,
+        json_types::ValidAccountId,
+        serde::{Deserialize, Serialize},
+        Promise,
+    },
+    to_valid_account_id, TERA, YOCTO,
 };
 
 type StakeAccountData = ();
@@ -39,7 +40,6 @@ pub struct StakingPoolComponent {
     account_manager: AccountManagementComponent<StakeAccountData>,
     stake_token: FungibleTokenComponent<StakeAccountData>,
     contract_ownership: ContractOwnershipComponent,
-    contract_metrics: ContractMetricsComponent,
 }
 
 impl StakingPoolComponent {
@@ -51,7 +51,6 @@ impl StakingPoolComponent {
             account_manager,
             stake_token: stake,
             contract_ownership: ContractOwnershipComponent,
-            contract_metrics: ContractMetricsComponent,
         }
     }
 }
@@ -66,6 +65,33 @@ pub struct State {
     /// validator public key used for staking
     stake_public_key: PublicKey,
     status: Status,
+    // used to override the built in computed gas amount
+    callback_gas: Option<Gas>,
+}
+
+impl State {
+    pub fn callback_gas(&self) -> Gas {
+        self.callback_gas.unwrap_or_else(Self::min_callback_gas)
+    }
+
+    fn min_callback_gas() -> Gas {
+        {
+            Gas::compute(vec![
+                (
+                    TransactionResource::ActionReceipt(SenderIsReceiver(false)),
+                    1,
+                ),
+                (
+                    TransactionResource::Action(ActionType::Stake(SenderIsReceiver(false))),
+                    1,
+                ),
+                (
+                    TransactionResource::DataReceipt(SenderIsReceiver(false), ByteLen(200)),
+                    1,
+                ),
+            ]) + TERA.into()
+        }
+    }
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
@@ -91,6 +117,7 @@ impl Deploy for StakingPoolComponent {
         let state = State {
             stake_public_key: config.stake_public_key,
             status: Status::Offline(OfflineReason::Paused),
+            callback_gas: None,
         };
         let state = Self::new_state(state);
         state.save();
@@ -208,9 +235,6 @@ impl StakingPool for StakingPoolComponent {
     }
 }
 
-const TRANSFER_CALLBACK_GAS_KEY: u128 = 1954996031748648118640176768985870873;
-type CallbackGas = Object<u128, Gas>;
-
 impl StakingPoolOperator for StakingPoolComponent {
     fn ops_stake_operator_command(&mut self, command: OperatorCommand) {
         self.account_manager.assert_operator();
@@ -236,45 +260,77 @@ impl StakingPoolOperator for StakingPoolComponent {
                         state.status = Status::Offline(OfflineReason::Paused);
                         state.save();
                     }
-                    LOG_EVENT_STATUS_OFFLINE.log("")
+                    LOG_EVENT_STATUS_OFFLINE.log("");
                 }
             }
             OperatorCommand::Resume => {
-                unimplemented!()
+                let mut state = Self::state();
+                if let Status::Offline(_) = state.status {
+                    // update status
+                    {
+                        state.status = Status::Online;
+                        state.save();
+                    }
+                    LOG_EVENT_STATUS_ONLINE.log("");
+
+                    // stake
+                    {
+                        let staked_balance =
+                            ContractNearBalances::near_balance(Self::TOTAL_STAKED_BALANCE);
+                        if staked_balance > ZERO_NEAR {
+                            ContractNearBalances::clear_balance(Self::TOTAL_STAKED_BALANCE);
+                            self.stake(StakeAmount::Stake(staked_balance));
+                        }
+                    }
+                }
             }
-            OperatorCommand::SetStakeCallbackGas(_) => {
-                unimplemented!()
+            OperatorCommand::SetStakeCallbackGas(gas) => {
+                let min_callback_gas = State::min_callback_gas();
+                ERR_INVALID.assert(
+                    || gas >= min_callback_gas,
+                    || format!("minimum callback gas required is: {}", min_callback_gas),
+                );
+                let mut state = Self::state();
+                state.callback_gas = Some(gas);
+                state.save();
             }
             OperatorCommand::ClearStakeCallbackGas => {
-                unimplemented!()
+                let mut state = Self::state();
+                state.callback_gas = None;
+                state.save();
             }
         }
     }
 
     fn ops_stake_callback_gas(&self) -> Gas {
-        let default_gas = || {
-            Gas::compute(vec![
-                (
-                    TransactionResource::ActionReceipt(SenderIsReceiver(false)),
-                    1,
-                ),
-                (
-                    TransactionResource::Action(ActionType::Stake(SenderIsReceiver(false))),
-                    1,
-                ),
-                (
-                    TransactionResource::DataReceipt(SenderIsReceiver(false), ByteLen(200)),
-                    1,
-                ),
-            ]) + TERA.into()
-        };
-        CallbackGas::load(&TRANSFER_CALLBACK_GAS_KEY).map_or_else(default_gas, |gas| *gas)
+        Self::state().callback_gas()
     }
 }
 
 impl StakingPoolOwner for StakingPoolComponent {
     fn ops_stake_owner_balance(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances {
-        unimplemented!()
+        ContractOwnerObject::assert_owner_access();
+        let balance = self.contract_ownership.ops_owner_balance();
+        let amount = amount.unwrap_or_else(|| balance.available);
+        ERR_INSUFFICIENT_FUNDS.assert(|| balance.available >= amount);
+        let owner_account_id = env::predecessor_account_id();
+
+        match self
+            .account_manager
+            .load_account_near_data(&owner_account_id)
+        {
+            None => {
+                self.account_manager
+                    .register_account(&owner_account_id, amount, false);
+            }
+            Some(mut account) => {
+                account.incr_near_balance(amount);
+                account.save();
+            }
+        }
+
+        self.ops_stake_balance(to_valid_account_id(&owner_account_id))
+            .unwrap()
     }
 }
 
@@ -327,6 +383,9 @@ impl StakingPoolComponent {
     }
 
     fn stake(&self, amount: StakeAmount) {
+        if amount.is_zero() {
+            return;
+        }
         let state = Self::state();
         match state.status {
             Status::Offline(_) => {
@@ -353,7 +412,7 @@ impl StakingPoolComponent {
                             staked_balance: YoctoNear::from(stake_amount),
                         }),
                         ZERO_NEAR,
-                        self.ops_stake_callback_gas(),
+                        state.callback_gas(),
                     ));
                 ContractNearBalances::clear_balance(Self::TOTAL_STAKED_BALANCE);
             }
@@ -413,6 +472,19 @@ impl StakingPoolComponent {
 enum StakeAmount {
     Stake(YoctoNear),
     Unstake(YoctoNear),
+}
+
+impl StakeAmount {
+    pub fn amount(&self) -> YoctoNear {
+        match *self {
+            StakeAmount::Stake(value) => value,
+            StakeAmount::Unstake(value) => value,
+        }
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.amount() == ZERO_NEAR
+    }
 }
 
 #[cfg(test)]
