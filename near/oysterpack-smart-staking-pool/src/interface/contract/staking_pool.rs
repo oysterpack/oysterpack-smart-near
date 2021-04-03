@@ -18,6 +18,7 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 ///
 /// The staking pool works with the storage management API:
 /// - accounts must be registered with the contract in order to stake
+/// - when staking, the account's available storage balance will be staked in addition to the attached deposit
 /// - the storage management APIs provide the withdrawal functionality, i.e., when unstaked near becomes
 ///   available to withdraw, then it will appear as available balance on the storage management API
 ///
