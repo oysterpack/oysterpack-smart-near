@@ -490,6 +490,41 @@ impl StakeAmount {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use oysterpack_smart_account_management::components::account_management::AccountManagementComponentConfig;
+    use oysterpack_smart_near::component::*;
+    use oysterpack_smart_near_test::*;
+    use std::convert::*;
+
+    type AccountManager = AccountManagementComponent<()>;
+    type StakeFungibleToken = FungibleTokenComponent<()>;
+
+    fn account_manager() -> AccountManager {
+        StakeFungibleToken::register_storage_management_event_handler();
+        AccountManager::default()
+    }
+
+    fn ft_stake() -> StakeFungibleToken {
+        StakeFungibleToken::new(account_manager())
+    }
+
+    fn deploy(owner: &str, admin: &str) {
+        let owner = owner.unwrap_or_else(|| env::predecessor_account_id().try_into().unwrap());
+        ContractOwnershipComponent::deploy(to_valid_account_id(owner));
+
+        AccountManager::deploy(AccountManagementComponentConfig {
+            storage_usage_bounds: None,
+            admin_account: to_valid_account_id(admin),
+            component_account_storage_mins: Some(vec![StakeFungibleToken::account_storage_min]),
+        });
+
+        StakingPoolComponent::deploy(StakingPoolComponentConfig {
+            stake_public_key: {
+                let key = [1_u8; 33];
+                let key: PublicKey = key[..].try_into().unwrap();
+                key
+            },
+        });
+    }
 
     #[test]
     fn test() {}

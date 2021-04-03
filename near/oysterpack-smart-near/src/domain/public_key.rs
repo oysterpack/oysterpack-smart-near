@@ -37,32 +37,6 @@ impl<'de> Deserialize<'de> for PublicKey {
     }
 }
 
-// struct PublicKeyVisitor;
-//
-// impl<'de> Visitor<'de> for PublicKeyVisitor {
-//     type Value = PublicKey;
-//
-//     fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
-//         formatter.write_str("PublicKey serialized as string")
-//     }
-//
-//     fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-//     where
-//         E: de::Error,
-//     {
-//         let key: Base58PublicKey = serde_json::from_str(v)
-//             .map_err(|_| de::Error::custom("JSON parsing failed for PublicKey"))?;
-//         Ok(key.into())
-//     }
-//
-//     fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
-//     where
-//         E: de::Error,
-//     {
-//         self.visit_str(&v)
-//     }
-// }
-
 impl TryFrom<&[u8]> for PublicKey {
     type Error = Error<String>;
 
