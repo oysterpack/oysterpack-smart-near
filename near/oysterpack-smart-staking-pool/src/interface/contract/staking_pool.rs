@@ -8,10 +8,10 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 ///
 /// Staking pools enable accounts to delegate NEAR to stake with a validator. The main benefits of using
 /// this staking pool are:
-/// 1. The staking pool does not support lockup contracts. THe benefit is this lifts the restriction
+/// 1. The staking pool does not support lockup contracts. The benefit is this lifts the restriction
 ///    to lock unstaked NEAR for withdrawal. Unstaked NEAR can be immediately withdrawn. The tradeoff
-///    is that this lockup contracts will not be allowed to delegate their NEAR to stake with this
-///    staking pool because they are only permitted to go through a NEAR managed whitelisted staking pool
+///    is that lockup contracts will not be allowed to delegate their NEAR to stake with this staking
+///    pool because they are only permitted to go through a NEAR managed whitelisted staking pool
 ///    that guarantees that unstaked NEAR will be locked for 4 epochs.
 /// 2. STAKE fungible token is provided for staked NEAR. This enables staked NEAR value to be transferred
 ///    while still being staked.
@@ -45,7 +45,7 @@ pub trait StakingPool {
     /// - When NEAR is staked, it is first converted to STAKE and rounded down. Thus, based on the current
     ///   exchange ratio, a minimum amount of NEAR is required to stake. If there is not enough to stake
     ///   then the funds will be transferred over to the account's storage balance.
-    ///   - [`LOG_EVENT_STAKE_AMOUNT_TOO_LOW`] event will be logged
+    ///   - [`LOG_EVENT_NOT_ENOUGH_TO_STAKE`] event will be logged
     ///
     /// ## Panics
     /// - if the account is not registered
