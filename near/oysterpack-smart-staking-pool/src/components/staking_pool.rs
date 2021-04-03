@@ -490,8 +490,14 @@ impl StakeAmount {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use oysterpack_smart_account_management::components::account_management::AccountManagementComponentConfig;
-    use oysterpack_smart_near::component::*;
+    use crate::*;
+    use oysterpack_smart_account_management::{
+        components::account_management::AccountManagementComponentConfig, *,
+    };
+    use oysterpack_smart_fungible_token::components::fungible_token::FungibleTokenConfig;
+    use oysterpack_smart_fungible_token::*;
+    use oysterpack_smart_near::near_sdk::VMContext;
+    use oysterpack_smart_near::{component::*, *};
     use oysterpack_smart_near_test::*;
     use std::convert::*;
 
@@ -507,8 +513,15 @@ mod tests {
         StakeFungibleToken::new(account_manager())
     }
 
-    fn deploy(owner: &str, admin: &str) {
-        let owner = owner.unwrap_or_else(|| env::predecessor_account_id().try_into().unwrap());
+    fn deploy(
+        owner: &str,
+        admin: &str,
+        account: &str,
+        register_account: bool,
+    ) -> (VMContext, StakingPoolComponent) {
+        let ctx = new_context(account);
+        testing_env!(ctx.clone());
+
         ContractOwnershipComponent::deploy(to_valid_account_id(owner));
 
         AccountManager::deploy(AccountManagementComponentConfig {
@@ -517,15 +530,89 @@ mod tests {
             component_account_storage_mins: Some(vec![StakeFungibleToken::account_storage_min]),
         });
 
+        StakeFungibleToken::deploy(FungibleTokenConfig {
+            metadata: Metadata {
+                spec: Spec(FT_METADATA_SPEC.to_string()),
+                name: Name("STAKE".to_string()),
+                symbol: Symbol("STAKE".to_string()),
+                decimals: 24,
+                icon: None,
+                reference: None,
+                reference_hash: None,
+            },
+            token_supply: 0,
+        });
+
         StakingPoolComponent::deploy(StakingPoolComponentConfig {
             stake_public_key: {
-                let key = [1_u8; 33];
+                let key = [1_u8; 65];
                 let key: PublicKey = key[..].try_into().unwrap();
                 key
             },
         });
+
+        if register_account {
+            let mut ctx = ctx.clone();
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx);
+            account_manager().storage_deposit(None, Some(true));
+        }
+
+        (
+            ctx,
+            StakingPoolComponent::new(account_manager(), ft_stake()),
+        )
     }
 
+    const OWNER: &str = "owner";
+    const ADMIN: &str = "admin";
+    const ACCOUNT: &str = "bob";
+
     #[test]
-    fn test() {}
+    fn basic_workflow() {
+        let (mut ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
+
+        // Assert - account has zero STAKE balance to start with
+        let account_manager = account_manager();
+        assert_eq!(
+            staking_pool.ops_stake_balance(to_valid_account_id(ACCOUNT)),
+            Some(StakeAccountBalances {
+                storage_balance: StorageBalance {
+                    total: account_manager.storage_balance_bounds().min,
+                    available: ZERO_NEAR
+                },
+                stake_token_balance: None
+            })
+        );
+
+        // Act - stake
+        {
+            let mut ctx = ctx.clone();
+            ctx.attached_deposit = YOCTO;
+        }
+    }
+
+    #[cfg(test)]
+    mod tests_stake {
+        use super::*;
+
+        #[test]
+        fn has_zero_storage_available_balance() {
+            let (mut ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
+
+            // Act - stake
+            {
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = YOCTO;
+                let balance = staking_pool.ops_stake();
+                assert_eq!(
+                    balance.stake_token_balance,
+                    Some(StakeBalance {
+                        stake: YOCTO.into(),
+                        near_value: YOCTO.into()
+                    })
+                )
+            }
+        }
+    }
 }

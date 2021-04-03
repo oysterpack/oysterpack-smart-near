@@ -18,7 +18,10 @@ use near_sdk::{
 use oysterpack_smart_account_management::components::account_management::AccountManagementComponentConfig;
 use oysterpack_smart_account_management::StorageUsageBounds;
 use oysterpack_smart_contract::components::contract_ownership::ContractOwnershipComponent;
-use oysterpack_smart_fungible_token::components::fungible_token::FungibleTokenComponent;
+use oysterpack_smart_fungible_token::components::fungible_token::{
+    FungibleTokenComponent, FungibleTokenConfig,
+};
+use oysterpack_smart_fungible_token::*;
 use oysterpack_smart_near::component::{Deploy, ManagesAccountData};
 use std::convert::TryInto;
 
@@ -40,6 +43,19 @@ impl Contract {
             storage_usage_bounds: None,
             admin_account: owner,
             component_account_storage_mins: Some(vec![StakeFungibleToken::account_storage_min]),
+        });
+
+        StakeFungibleToken::deploy(FungibleTokenConfig {
+            metadata: Metadata {
+                spec: Spec(FT_METADATA_SPEC.to_string()),
+                name: Name("STAKE".to_string()),
+                symbol: Symbol("STAKE".to_string()),
+                decimals: 24,
+                icon: None,
+                reference: None,
+                reference_hash: None,
+            },
+            token_supply: 0,
         });
 
         Self

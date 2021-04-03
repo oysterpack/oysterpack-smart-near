@@ -61,7 +61,7 @@ impl<T> Deploy for FungibleTokenComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    type Config = Config;
+    type Config = FungibleTokenConfig;
 
     fn deploy(config: Self::Config) {
         MetadataObject::new(METADATA_KEY, config.metadata.clone()).save();
@@ -71,7 +71,7 @@ where
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
-pub struct Config {
+pub struct FungibleTokenConfig {
     pub metadata: Metadata,
     /// initial token supply
     pub token_supply: u128,
@@ -639,7 +639,7 @@ mod tests_fungible_token {
             ADMIN,
         )));
 
-        STAKE::deploy(Config {
+        STAKE::deploy(FungibleTokenConfig {
             metadata: Metadata {
                 spec: FT_METADATA_SPEC.into(),
                 name: "STAKE".into(),
@@ -1689,7 +1689,7 @@ mod tests_operator {
             ADMIN,
         )));
 
-        STAKE::deploy(Config {
+        STAKE::deploy(FungibleTokenConfig {
             metadata: Metadata {
                 spec: FT_METADATA_SPEC.into(),
                 name: "STAKE".into(),
@@ -1843,7 +1843,7 @@ mod tests_token_service {
             ADMIN,
         )));
 
-        STAKE::deploy(Config {
+        STAKE::deploy(FungibleTokenConfig {
             metadata: Metadata {
                 spec: FT_METADATA_SPEC.into(),
                 name: "STAKE".into(),
