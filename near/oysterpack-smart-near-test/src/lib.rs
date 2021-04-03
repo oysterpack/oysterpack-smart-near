@@ -3,7 +3,7 @@ use near_sdk::{
     serde::{Deserialize, Serialize},
     serde_json,
     test_utils::{get_created_receipts, VMContextBuilder},
-    AccountId, Balance, Gas, PromiseResult, PublicKey, VMContext,
+    AccountId, Balance, Gas, PromiseResult, VMContext,
 };
 use oysterpack_smart_near::YOCTO;
 
@@ -108,20 +108,20 @@ pub struct TransferAction {
 #[serde(crate = "near_sdk::serde")]
 pub struct StakeAction {
     pub stake: Balance,
-    public_key: PublicKey,
+    pub public_key: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
 pub struct AddKeyWithFullAccessAction {
-    pub public_key: PublicKey,
+    pub public_key: String,
     pub nonce: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
 pub struct AddKeyWithFunctionCallAction {
-    pub public_key: PublicKey,
+    pub public_key: String,
     pub nonce: u64,
     pub allowance: Option<Balance>,
     pub receiver_id: AccountId,
@@ -131,7 +131,7 @@ pub struct AddKeyWithFunctionCallAction {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
 pub struct DeleteKeyAction {
-    pub public_key: PublicKey,
+    pub public_key: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

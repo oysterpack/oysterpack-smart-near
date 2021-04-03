@@ -1,6 +1,6 @@
 use crate::{
-    OperatorCommand, StakeAccountBalances, StakeActionCallback, StakeBalance, StakingPool,
-    StakingPoolOperator, StakingPoolOwner, ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE,
+    StakeAccountBalances, StakeActionCallback, StakeBalance, StakingPool, StakingPoolOperator,
+    StakingPoolOperatorCommand, StakingPoolOwner, ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE,
     ERR_STAKE_ACTION_FAILED, LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STATUS_OFFLINE,
     LOG_EVENT_STATUS_ONLINE,
 };
@@ -102,6 +102,15 @@ pub enum Status {
     Offline(OfflineReason),
     /// the pool is actively staking
     Online,
+}
+
+impl Status {
+    pub fn is_online(&self) -> bool {
+        match self {
+            Status::Offline(_) => false,
+            Status::Online => true,
+        }
+    }
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
@@ -236,11 +245,11 @@ impl StakingPool for StakingPoolComponent {
 }
 
 impl StakingPoolOperator for StakingPoolComponent {
-    fn ops_stake_operator_command(&mut self, command: OperatorCommand) {
+    fn ops_stake_operator_command(&mut self, command: StakingPoolOperatorCommand) {
         self.account_manager.assert_operator();
 
         match command {
-            OperatorCommand::Pause => {
+            StakingPoolOperatorCommand::Pause => {
                 let mut state = Self::state();
                 if let Status::Online = state.status {
                     // unstake all
@@ -263,7 +272,7 @@ impl StakingPoolOperator for StakingPoolComponent {
                     LOG_EVENT_STATUS_OFFLINE.log("");
                 }
             }
-            OperatorCommand::Resume => {
+            StakingPoolOperatorCommand::Resume => {
                 let mut state = Self::state();
                 if let Status::Offline(_) = state.status {
                     // update status
@@ -284,7 +293,7 @@ impl StakingPoolOperator for StakingPoolComponent {
                     }
                 }
             }
-            OperatorCommand::SetStakeCallbackGas(gas) => {
+            StakingPoolOperatorCommand::SetStakeCallbackGas(gas) => {
                 let min_callback_gas = State::min_callback_gas();
                 ERR_INVALID.assert(
                     || gas >= min_callback_gas,
@@ -294,7 +303,7 @@ impl StakingPoolOperator for StakingPoolComponent {
                 state.callback_gas = Some(gas);
                 state.save();
             }
-            OperatorCommand::ClearStakeCallbackGas => {
+            StakingPoolOperatorCommand::ClearStakeCallbackGas => {
                 let mut state = Self::state();
                 state.callback_gas = None;
                 state.save();
@@ -496,7 +505,7 @@ mod tests {
     };
     use oysterpack_smart_fungible_token::components::fungible_token::FungibleTokenConfig;
     use oysterpack_smart_fungible_token::*;
-    use oysterpack_smart_near::near_sdk::VMContext;
+    use oysterpack_smart_near::near_sdk::{env, VMContext};
     use oysterpack_smart_near::{component::*, *};
     use oysterpack_smart_near_test::*;
     use std::convert::*;
@@ -511,6 +520,17 @@ mod tests {
 
     fn ft_stake() -> StakeFungibleToken {
         StakeFungibleToken::new(account_manager())
+    }
+
+    fn staking_public_key() -> PublicKey {
+        let key = [0_u8; 33];
+        let key: PublicKey = key[..].try_into().unwrap();
+        key
+    }
+
+    fn staking_public_key_as_string() -> String {
+        let pk_bytes: Vec<u8> = staking_public_key().into();
+        bs58::encode(pk_bytes).into_string()
     }
 
     fn deploy(
@@ -544,11 +564,7 @@ mod tests {
         });
 
         StakingPoolComponent::deploy(StakingPoolComponentConfig {
-            stake_public_key: {
-                let key = [1_u8; 65];
-                let key: PublicKey = key[..].try_into().unwrap();
-                key
-            },
+            stake_public_key: staking_public_key(),
         });
 
         if register_account {
@@ -570,7 +586,10 @@ mod tests {
 
     #[test]
     fn basic_workflow() {
-        let (mut ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
+        let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
+
+        // the staking pool is initially offline after deployment
+        assert!(!staking_pool.ops_stake_status().is_online());
 
         // Assert - account has zero STAKE balance to start with
         let account_manager = account_manager();
@@ -585,10 +604,51 @@ mod tests {
             })
         );
 
-        // Act - stake
+        // Act - accounts can stake while the pool is offline
         {
             let mut ctx = ctx.clone();
             ctx.attached_deposit = YOCTO;
+            assert_eq!(env::account_locked_balance(), 0);
+            let balance = staking_pool.ops_stake();
+
+            assert_eq!(
+                balance.stake_token_balance,
+                Some(StakeBalance {
+                    stake: YOCTO.into(),
+                    near_value: YOCTO.into()
+                })
+            );
+            assert_eq!(env::account_locked_balance(), 0);
+            assert_eq!(
+                ContractNearBalances::near_balance(StakingPoolComponent::TOTAL_STAKED_BALANCE),
+                YOCTO.into()
+            );
+        }
+
+        // Act - bring the pool online
+        {
+            let mut ctx = ctx.clone();
+            ctx.predecessor_account_id = ADMIN.to_string();
+            testing_env!(ctx);
+            staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::Resume);
+            assert!(staking_pool.ops_stake_status().is_online());
+            let receipts = deserialize_receipts();
+            assert_eq!(receipts.len(), 2);
+            {
+                let receipt = &receipts[0];
+                assert_eq!(receipt.receiver_id, env::current_account_id());
+                assert_eq!(receipt.actions.len(), 1);
+                let action = &receipt.actions[0];
+
+                match action {
+                    Action::Stake(action) => {
+                        assert_eq!(action.stake, YOCTO);
+
+                        assert_eq!(staking_public_key_as_string(), action.public_key);
+                    }
+                    _ => panic!("expected StakeAction"),
+                }
+            }
         }
     }
 
@@ -598,7 +658,7 @@ mod tests {
 
         #[test]
         fn has_zero_storage_available_balance() {
-            let (mut ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
+            let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
 
             // Act - stake
             {
@@ -611,7 +671,7 @@ mod tests {
                         stake: YOCTO.into(),
                         near_value: YOCTO.into()
                     })
-                )
+                );
             }
         }
     }

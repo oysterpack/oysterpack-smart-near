@@ -64,7 +64,7 @@ impl From<PublicKey> for Vec<u8> {
                 key
             }
             PublicKey::SECP256K1((k1, k2)) => {
-                let mut key = Vec::with_capacity(64);
+                let mut key = Vec::with_capacity(65);
                 key.push(1);
                 for b in k1.iter() {
                     key.push(*b);
@@ -133,8 +133,22 @@ mod tests {
         let key: PublicKey = key[..].try_into().unwrap();
 
         let json = serde_json::to_string(&key).unwrap();
-        println!("{}", json);
+        println!("json: {}", json);
         let key2: PublicKey = serde_json::from_str(&json).unwrap();
         assert_eq!(key, key2);
+    }
+
+    #[test]
+    fn into_base58() {
+        let key = [1_u8; 65];
+        let key: PublicKey = key[..].try_into().unwrap();
+
+        let base58_key: Base58PublicKey = key.into();
+        println!("{}", serde_json::to_string(&base58_key).unwrap());
+
+        let base58_key2: Base58PublicKey =
+            serde_json::from_str(serde_json::to_string(&base58_key).unwrap().as_str()).unwrap();
+
+        assert_eq!(base58_key, base58_key2);
     }
 }
