@@ -866,6 +866,43 @@ mod tests {
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
+                assert_eq!(
+                    logs,
+                    vec!["[INFO] [STAKE] near_amount=1000, stake_token_amount=1000",]
+                );
+
+                let receipts = deserialize_receipts();
+                assert_eq!(receipts.len(), 2);
+                {
+                    let receipt = &receipts[0];
+                    assert_eq!(receipt.receiver_id, env::current_account_id());
+                    assert_eq!(receipt.actions.len(), 1);
+                    let action = &receipt.actions[0];
+                    match action {
+                        Action::Stake(action) => {
+                            assert_eq!(action.stake, 1000);
+                        }
+                        _ => panic!("expected StakeAction"),
+                    }
+                }
+                {
+                    let receipt = &receipts[1];
+                    assert_eq!(receipt.receiver_id, env::current_account_id());
+                    assert_eq!(receipt.actions.len(), 1);
+                    let action = &receipt.actions[0];
+                    match action {
+                        Action::FunctionCall(f) => {
+                            assert_eq!(f.method_name, "ops_stake_finalize");
+                            let args: StakeActionCallbackArgs =
+                                serde_json::from_str(&f.args).unwrap();
+                            assert_eq!(args.account_id, ACCOUNT);
+                            assert_eq!(args.amount, 1000.into());
+                            assert_eq!(args.stake_token_amount, 1000.into());
+                            assert_eq!(args.total_staked_balance, 1000.into());
+                        }
+                        _ => panic!("expected FunctionCall"),
+                    }
+                }
             }
             {
                 let mut ctx = ctx.clone();
@@ -883,6 +920,46 @@ mod tests {
                 assert_eq!(state.staked, 2000.into());
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(
+                    logs,
+                    vec!["[INFO] [STAKE] near_amount=1000, stake_token_amount=1000",]
+                );
+
+                let receipts = deserialize_receipts();
+                assert_eq!(receipts.len(), 2);
+                {
+                    let receipt = &receipts[0];
+                    assert_eq!(receipt.receiver_id, env::current_account_id());
+                    assert_eq!(receipt.actions.len(), 1);
+                    let action = &receipt.actions[0];
+                    match action {
+                        Action::Stake(action) => {
+                            assert_eq!(action.stake, 2000);
+                        }
+                        _ => panic!("expected StakeAction"),
+                    }
+                }
+                {
+                    let receipt = &receipts[1];
+                    assert_eq!(receipt.receiver_id, env::current_account_id());
+                    assert_eq!(receipt.actions.len(), 1);
+                    let action = &receipt.actions[0];
+                    match action {
+                        Action::FunctionCall(f) => {
+                            assert_eq!(f.method_name, "ops_stake_finalize");
+                            let args: StakeActionCallbackArgs =
+                                serde_json::from_str(&f.args).unwrap();
+                            assert_eq!(args.account_id, ACCOUNT);
+                            assert_eq!(args.amount, 1000.into());
+                            assert_eq!(args.stake_token_amount, 1000.into());
+                            assert_eq!(args.total_staked_balance, 2000.into());
+                        }
+                        _ => panic!("expected FunctionCall"),
+                    }
+                }
             }
         }
     }
