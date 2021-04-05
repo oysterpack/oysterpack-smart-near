@@ -2205,29 +2205,16 @@ mod tests_token_service {
 
         #[test]
         fn with_balance() {
-            run_test(Some(0.into()), |ctx, mut stake| {
+            run_test(Some(1000.into()), |ctx, mut stake| {
                 // Arrange
                 testing_env!(ctx.clone());
                 let initial_token_supply = stake.ft_total_supply();
-                stake.ft_mint(ACCOUNT, 1000.into());
-                assert_eq!(
-                    stake.ft_total_supply(),
-                    (*initial_token_supply + 1000).into()
-                );
-
-                assert_eq!(
-                    stake.ft_balance_of(to_valid_account_id(ACCOUNT)),
-                    1000.into()
-                );
 
                 // Act
                 testing_env!(ctx.clone());
                 stake.ft_lock(ACCOUNT, 400.into());
                 // Assert
-                assert_eq!(
-                    stake.ft_total_supply(),
-                    (*initial_token_supply + 1000).into()
-                );
+                assert_eq!(stake.ft_total_supply(), (*initial_token_supply).into());
                 assert_eq!(
                     stake.ft_balance_of(to_valid_account_id(ACCOUNT)),
                     600.into()
@@ -2244,10 +2231,7 @@ mod tests_token_service {
                 testing_env!(ctx.clone());
                 stake.ft_lock(ACCOUNT, 600.into());
                 // Assert
-                assert_eq!(
-                    stake.ft_total_supply(),
-                    (*initial_token_supply + 1000).into()
-                );
+                assert_eq!(stake.ft_total_supply(), (*initial_token_supply).into());
                 assert_eq!(stake.ft_balance_of(to_valid_account_id(ACCOUNT)), 0.into());
 
                 let logs = test_utils::get_logs();
@@ -2261,10 +2245,7 @@ mod tests_token_service {
                 testing_env!(ctx.clone());
                 stake.ft_unlock(ACCOUNT, 600.into());
                 // Assert
-                assert_eq!(
-                    stake.ft_total_supply(),
-                    (*initial_token_supply + 1000).into()
-                );
+                assert_eq!(stake.ft_total_supply(), (*initial_token_supply).into());
                 assert_eq!(
                     stake.ft_balance_of(to_valid_account_id(ACCOUNT)),
                     600.into()
@@ -2275,6 +2256,18 @@ mod tests_token_service {
                 assert_eq!(&logs[0], "[INFO] [FT_UNLOCK] account: bob, amount: 600");
 
                 assert_eq!(stake.ft_locked_balance(ACCOUNT).unwrap(), 400.into());
+
+                // Act
+                testing_env!(ctx.clone());
+                stake.ft_lock_all(ACCOUNT);
+
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(ACCOUNT)), 0.into());
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 1);
+                assert_eq!(&logs[0], "[INFO] [FT_LOCK] account: bob, amount: 600");
+
+                assert_eq!(stake.ft_locked_balance(ACCOUNT).unwrap(), 1000.into());
             });
         }
 
