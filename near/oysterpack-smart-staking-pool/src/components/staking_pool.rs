@@ -368,7 +368,7 @@ impl StakingPoolOperator for StakingPoolComponent {
                                 .stake(*total_staked_balance, state.stake_public_key.into())
                                 .then(json_function_callback(
                                     "ops_stake_resume_finalize",
-                                    Some(RestakeActionCallbackArgs {
+                                    Some(ResumeFinalizeCallbackArgs {
                                         total_staked_balance,
                                     }),
                                     ZERO_NEAR,
@@ -496,7 +496,7 @@ struct StakeActionCallbackArgs {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
-struct RestakeActionCallbackArgs {
+struct ResumeFinalizeCallbackArgs {
     pub total_staked_balance: YoctoNear,
 }
 
@@ -634,7 +634,7 @@ mod tests {
     };
     use oysterpack_smart_fungible_token::components::fungible_token::FungibleTokenConfig;
     use oysterpack_smart_fungible_token::*;
-    use oysterpack_smart_near::near_sdk::{env, serde_json, VMContext};
+    use oysterpack_smart_near::near_sdk::{env, serde_json, test_utils, VMContext};
     use oysterpack_smart_near::{component::*, *};
     use oysterpack_smart_near_test::*;
     use std::convert::*;
@@ -767,6 +767,17 @@ mod tests {
             testing_env!(ctx);
             staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::Resume);
             assert!(staking_pool.ops_stake_status().is_online());
+            let state = staking_pool.ops_stake_state();
+            println!(
+                "after pool is online {}",
+                serde_json::to_string_pretty(&state).unwrap()
+            );
+            assert!(state.status.is_online());
+
+            let logs = test_utils::get_logs();
+            println!("{:#?}", logs);
+            assert_eq!(logs, vec!["[INFO] [STATUS_ONLINE] ",]);
+
             let receipts = deserialize_receipts();
             assert_eq!(receipts.len(), 2);
             {
@@ -782,6 +793,24 @@ mod tests {
                         assert_eq!(staking_public_key_as_string(), action.public_key);
                     }
                     _ => panic!("expected StakeAction"),
+                }
+            }
+            {
+                let receipt = &receipts[1];
+                assert_eq!(receipt.receiver_id, env::current_account_id());
+                assert_eq!(receipt.actions.len(), 1);
+                let action = &receipt.actions[0];
+
+                match action {
+                    Action::FunctionCall(action) => {
+                        assert_eq!(action.method_name, "ops_stake_resume_finalize");
+                        let args: ResumeFinalizeCallbackArgs =
+                            serde_json::from_str(&action.args).unwrap();
+                        assert_eq!(args.total_staked_balance, YOCTO.into());
+                        assert_eq!(action.deposit, 0);
+                        assert_eq!(action.gas, *staking_pool.ops_stake_callback_gas());
+                    }
+                    _ => panic!("expected FunctionCall"),
                 }
             }
         }

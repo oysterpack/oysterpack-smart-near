@@ -58,5 +58,5 @@ pub fn json_function_callback<Args>(
 where
     Args: Serialize,
 {
-    json_function_call(&env::predecessor_account_id(), method, args, deposit, gas)
+    json_function_call(&env::current_account_id(), method, args, deposit, gas)
 }

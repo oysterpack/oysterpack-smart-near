@@ -2,7 +2,7 @@
 //! - constructor: [`FungibleTokenComponent::new`]
 //!   - [`AccountManagementComponent`]
 //! - deployment: [`FungibleTokenComponent::deploy`]
-//!   - config: [`Config`]
+//!   - config: [`FungibleTokenConfig`]
 //! - use [`FungibleTokenComponent::register_storage_management_event_handler`]  to register event
 //!   handler for [`StorageManagementEvent::PreUnregister`] which integrates with [`AccountManagementComponent`]
 
