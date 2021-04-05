@@ -1137,5 +1137,67 @@ mod tests {
                 }
             }
         }
+
+        #[test]
+        fn not_enough_to_stake() {
+            let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
+
+            // Arrange
+            {
+                let mut ctx = ctx.clone();
+                ctx.predecessor_account_id = ADMIN.to_string();
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::Resume);
+                assert!(staking_pool.ops_stake_status().is_online());
+            }
+
+            let total_supply: TokenAmount = 1000.into();
+            let total_staked_balance: YoctoNear = 1005.into();
+            {
+                testing_env!(ctx.clone());
+                let mut ft_stake = ft_stake();
+                ft_stake.ft_mint(ACCOUNT, total_supply);
+                assert_eq!(ft_stake.ft_total_supply(), total_supply);
+
+                let mut state = StakingPoolComponent::state();
+                state.staked = total_staked_balance;
+                state.save();
+            }
+            let mut ctx = ctx.clone();
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.attached_deposit = 1;
+            testing_env!(ctx);
+            let account = account_manager().registered_account_near_data(ACCOUNT);
+            // Act
+            match staking_pool.ops_stake() {
+                PromiseOrValue::Value(balance) => {
+                    assert_eq!(balance.stake_token_balance.unwrap().stake, total_supply);
+                    assert_eq!(balance.storage_balance.available, 1.into());
+                }
+                _ => panic!("expected Value"),
+            }
+            let state = staking_pool.ops_stake_state();
+            let logs = test_utils::get_logs();
+            println!(
+                "{}\n{:#?}",
+                serde_json::to_string_pretty(&state).unwrap(),
+                logs
+            );
+            assert_eq!(
+                logs,
+                vec![
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Deposit(YoctoNear(1))",
+                    "[INFO] [NOT_ENOUGH_TO_STAKE] ",
+                ]
+            );
+            let account_after_staking = account_manager().registered_account_near_data(ACCOUNT);
+            assert_eq!(
+                account_after_staking.near_balance(),
+                account.near_balance() + 1
+            );
+
+            let receipts = deserialize_receipts();
+            assert!(receipts.is_empty());
+        }
     }
 }
