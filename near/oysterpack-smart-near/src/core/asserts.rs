@@ -8,6 +8,8 @@ pub const ERR_CODE_BAD_REQUEST: ErrCode = ErrCode("BAD_REQUEST");
 /// meant to be used for triggering generic data validation failures
 pub const ERR_INVALID: ErrCode = ErrCode("INVALID");
 
+pub const ERR_ILLEGAL_STATE: ErrCode = ErrCode("ILLEGAL_STATE");
+
 pub const ERR_CODE_INSUFFICIENT_NEAR_DEPOSIT: ErrCode = ErrCode("INSUFFICIENT_NEAR_DEPOSIT");
 
 pub const ERR_YOCTONEAR_DEPOSIT_REQUIRED: ErrorConst = ErrorConst(

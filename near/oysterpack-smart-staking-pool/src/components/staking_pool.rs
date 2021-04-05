@@ -15,6 +15,7 @@ use oysterpack_smart_contract::{
 use oysterpack_smart_fungible_token::{
     components::fungible_token::FungibleTokenComponent, FungibleToken, TokenAmount, TokenService,
 };
+use oysterpack_smart_near::asserts::ERR_ILLEGAL_STATE;
 use oysterpack_smart_near::near_sdk::{AccountId, PromiseOrValue};
 use oysterpack_smart_near::{
     asserts::{assert_near_attached, ERR_INSUFFICIENT_FUNDS, ERR_INVALID},
@@ -391,6 +392,15 @@ impl StakingPoolOperator for StakingPoolComponent {
             StakingPoolOperatorCommand::ClearStakeCallbackGas => {
                 let mut state = Self::state();
                 state.callback_gas = None;
+                state.save();
+            }
+            StakingPoolOperatorCommand::UpdatePublicKey(public_key) => {
+                let mut state = Self::state();
+                ERR_ILLEGAL_STATE.assert(
+                    || !state.status.is_online(),
+                    || "staking pool must be paused to update the staking public key",
+                );
+                state.stake_public_key = public_key;
                 state.save();
             }
         }
@@ -813,6 +823,18 @@ mod tests {
                     _ => panic!("expected FunctionCall"),
                 }
             }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests_stake_online {
+        use super::*;
+
+        #[test]
+        fn stake_with_zero_storage_available_balance() {
+            let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
+
+            staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::Resume);
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::components::staking_pool::State;
-use oysterpack_smart_near::domain::Gas;
+use oysterpack_smart_near::domain::{Gas, PublicKey};
 use oysterpack_smart_near::near_sdk::serde::{Deserialize, Serialize};
 
 pub trait StakingPoolOperator {
@@ -23,4 +23,6 @@ pub enum StakingPoolOperatorCommand {
     Resume,
     SetStakeCallbackGas(Gas),
     ClearStakeCallbackGas,
+    /// the staking pool public key can only be changed while the staking pool is paused
+    UpdatePublicKey(PublicKey),
 }
