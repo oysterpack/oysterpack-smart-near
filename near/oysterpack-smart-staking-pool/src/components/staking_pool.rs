@@ -1,8 +1,8 @@
 use crate::{
     StakeAccountBalances, StakeActionCallbacks, StakeBalance, StakingPool, StakingPoolOperator,
     StakingPoolOperatorCommand, StakingPoolOwner, ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE,
-    ERR_STAKE_ACTION_FAILED, LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STATUS_OFFLINE,
-    LOG_EVENT_STATUS_ONLINE,
+    ERR_STAKE_ACTION_FAILED, LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE,
+    LOG_EVENT_STATUS_OFFLINE, LOG_EVENT_STATUS_ONLINE,
 };
 use oysterpack_smart_account_management::{
     components::account_management::AccountManagementComponent, AccountRepository,
@@ -241,6 +241,10 @@ impl StakingPool for StakingPoolComponent {
         }
 
         let mut state = Self::state();
+        LOG_EVENT_STAKE.log(format!(
+            "near_amount={}, stake_token_amount={}",
+            near_amount, stake_token_amount
+        ));
         match state.status {
             Status::Online => {
                 state.staked += near_amount;
@@ -834,7 +838,52 @@ mod tests {
         fn stake_with_zero_storage_available_balance() {
             let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
 
-            staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::Resume);
+            {
+                let mut ctx = ctx.clone();
+                ctx.predecessor_account_id = ADMIN.to_string();
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::Resume);
+                assert!(staking_pool.ops_stake_status().is_online());
+            }
+
+            let state = staking_pool.ops_stake_state();
+            assert_eq!(state.staked, 0.into());
+            assert_eq!(state.unstaked, 0.into());
+            {
+                let mut ctx = ctx.clone();
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = 1000;
+                testing_env!(ctx);
+                if let PromiseOrValue::Value(_) = staking_pool.ops_stake() {
+                    panic!("expected Promise")
+                }
+                let state = staking_pool.ops_stake_state();
+                println!(
+                    "staked 1000 {}",
+                    serde_json::to_string_pretty(&state).unwrap()
+                );
+                assert_eq!(state.staked, 1000.into());
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+            }
+            {
+                let mut ctx = ctx.clone();
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = 1000;
+                testing_env!(ctx);
+                if let PromiseOrValue::Value(_) = staking_pool.ops_stake() {
+                    panic!("expected Promise")
+                }
+                let state = staking_pool.ops_stake_state();
+                println!(
+                    "staked 1000 {}",
+                    serde_json::to_string_pretty(&state).unwrap()
+                );
+                assert_eq!(state.staked, 2000.into());
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+            }
         }
     }
 }

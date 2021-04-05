@@ -83,5 +83,8 @@ pub const LOG_EVENT_STATUS_OFFLINE: LogEvent = LogEvent(Level::WARN, "STATUS_OFF
 
 pub const LOG_EVENT_NOT_ENOUGH_TO_STAKE: LogEvent = LogEvent(Level::INFO, "NOT_ENOUGH_TO_STAKE");
 
+pub const LOG_EVENT_STAKE: LogEvent = LogEvent(Level::INFO, "STAKE");
+pub const LOG_EVENT_UNSTAKE: LogEvent = LogEvent(Level::INFO, "UNSTAKE");
+
 pub const ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE: ErrorConst =
     ErrorConst(ErrCode("STAKED_BALANCE_TOO_LOW_TO_UNSTAKE"), "");

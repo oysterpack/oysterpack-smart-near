@@ -168,6 +168,9 @@ impl AccountNearData {
     /// ## Panics
     /// if overflow occurs
     pub fn dec_near_balance(&mut self, amount: YoctoNear) {
+        if *amount == 0 {
+            return;
+        }
         *self.near_balance = self.near_balance.checked_sub(amount.value()).unwrap();
         eventbus::post(&AccountStorageEvent::Withdrawal(amount));
     }
