@@ -4,7 +4,7 @@ use oysterpack_smart_near::{
 };
 
 /// Tracks account storage balance
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone, Copy, Default)]
 #[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct StorageBalance {
     /// total NEAR funds that is purposed to pay for account storage

@@ -10,9 +10,10 @@ use crate::{
     contract::operator::{FungibleTokenOperator, OperatorCommand},
     FungibleToken, FungibleTokenMetadataProvider, Memo, Metadata, ResolveTransferCall, TokenAmount,
     TokenService, TransferCallMessage, ERR_CODE_FT_RESOLVE_TRANSFER, LOG_EVENT_FT_BURN,
-    LOG_EVENT_FT_MINT, LOG_EVENT_FT_TRANSFER, LOG_EVENT_FT_TRANSFER_CALL_FAILURE,
-    LOG_EVENT_FT_TRANSFER_CALL_PARTIAL_REFUND, LOG_EVENT_FT_TRANSFER_CALL_RECEIVER_DEBIT,
-    LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED, LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT,
+    LOG_EVENT_FT_LOCK, LOG_EVENT_FT_MINT, LOG_EVENT_FT_TRANSFER,
+    LOG_EVENT_FT_TRANSFER_CALL_FAILURE, LOG_EVENT_FT_TRANSFER_CALL_PARTIAL_REFUND,
+    LOG_EVENT_FT_TRANSFER_CALL_RECEIVER_DEBIT, LOG_EVENT_FT_TRANSFER_CALL_REFUND_NOT_APPLIED,
+    LOG_EVENT_FT_TRANSFER_CALL_SENDER_CREDIT, LOG_EVENT_FT_UNLOCK,
 };
 use oysterpack_smart_account_management::{
     components::account_management::AccountManagementComponent, AccountRepository,
@@ -172,7 +173,7 @@ where
     }
 }
 
-const TRANSFER_CALLBACK_GAS_KEY: u128 = 1954437955283579441216159415148835888;
+const TRANSFER_CALLBACK_GAS_KEY: u128 = 195443795528357944121615941514104351048;
 type TransferCallbackGas = Object<u128, Gas>;
 
 fn transfer_callback_gas() -> Gas {
@@ -210,11 +211,12 @@ where
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(account_id));
 
         let mut ft_balance = AccountFTBalance::load(account_id).unwrap();
+        let (available, locked) = *ft_balance.0;
         ERR_INVALID.assert(
-            || *ft_balance >= *amount,
+            || (available + locked) >= *amount,
             || "account has insufficient funds",
         );
-        *ft_balance -= *amount;
+        *ft_balance.0 = (available + locked - *amount, locked.saturating_sub(*amount));
         ft_balance.save(account_id);
 
         burn_tokens(*amount);
@@ -223,13 +225,58 @@ where
 
     fn ft_burn_all(&mut self, account_id: &str) {
         if let Some(mut ft_balance) = AccountFTBalance::load(account_id) {
-            let amount = *ft_balance;
-            *ft_balance = 0;
+            let (available, locked) = *ft_balance.0;
+            *ft_balance.0 = (0, 0);
             ft_balance.save(account_id);
 
+            let amount = available + locked;
             burn_tokens(amount);
             LOG_EVENT_FT_BURN.log(format!("account: {}, amount: {}", account_id, amount));
         }
+    }
+
+    fn ft_lock(&mut self, account_id: &str, amount: TokenAmount) {
+        ERR_INVALID.assert(|| *amount > 0, || "lock amount cannot be zero");
+        ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(account_id));
+
+        if let Some(mut ft_balance) = AccountFTBalance::load(account_id) {
+            let (available, locked) = *ft_balance.0;
+            ERR_INSUFFICIENT_FUNDS.assert(|| available >= *amount);
+            *ft_balance.0 = (available - *amount, locked + *amount);
+            ft_balance.0.save();
+
+            LOG_EVENT_FT_LOCK.log(format!("account: {}, amount: {}", account_id, amount));
+        } else {
+            ERR_INSUFFICIENT_FUNDS.panic();
+        }
+    }
+
+    fn ft_unlock(&mut self, account_id: &str, amount: TokenAmount) {
+        ERR_INVALID.assert(|| *amount > 0, || "unlock amount cannot be zero");
+        ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(account_id));
+
+        if let Some(mut ft_balance) = AccountFTBalance::load(account_id) {
+            let (available, locked) = *ft_balance.0;
+            ERR_INSUFFICIENT_FUNDS.assert(|| locked >= *amount);
+            *ft_balance.0 = (available + *amount, locked - *amount);
+            ft_balance.0.save();
+
+            LOG_EVENT_FT_UNLOCK.log(format!("account: {}, amount: {}", account_id, amount));
+        }
+    }
+
+    fn ft_unlock_all(&mut self, account_id: &str) {
+        ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(account_id));
+
+        if let Some(mut ft_balance) = AccountFTBalance::load(account_id) {
+            let (available, locked) = *ft_balance.0;
+            *ft_balance.0 = (available + locked, 0);
+            ft_balance.0.save();
+        }
+    }
+
+    fn ft_locked_balance(&mut self, account_id: &str) -> Option<TokenAmount> {
+        AccountFTBalance::load(account_id).map(|balance| (*balance.0).1.into())
     }
 }
 
@@ -394,7 +441,7 @@ fn burn_tokens(amount: u128) {
     supply.save();
 }
 
-const METADATA_KEY: u128 = 1953827270399390220126384465824835887;
+const METADATA_KEY: u128 = 19538272703993902201263844658248351047;
 type MetadataObject = Object<u128, Metadata>;
 
 impl<T> FungibleTokenMetadataProvider for FungibleTokenComponent<T>
@@ -516,7 +563,9 @@ where
 }
 
 const FT_ACCOUNT_KEY: u128 = 1953845438124731969041175284518648060;
-type AccountFTBalanceObject = Object<Hash, u128>;
+type TokenBalance = u128;
+type LockedTokenBalance = u128;
+type AccountFTBalanceObject = Object<Hash, (TokenBalance, LockedTokenBalance)>;
 struct AccountFTBalance(AccountFTBalanceObject);
 
 impl AccountFTBalance {
@@ -533,7 +582,7 @@ impl AccountFTBalance {
         Self::load(account_id).unwrap_or_else(|| {
             Self(AccountFTBalanceObject::new(
                 Self::ft_account_id_hash(account_id),
-                0,
+                (0, 0),
             ))
         })
     }
@@ -543,7 +592,7 @@ impl AccountFTBalance {
     }
 
     fn save(&self, account_id: &str) {
-        if *self.0 == 0 {
+        if *self.0 == (0, 0) {
             let initial_storage_usage = env::storage_usage();
             AccountFTBalanceObject::delete_by_key(self.0.key());
             let storage_usage_change = initial_storage_usage - env::storage_usage();
@@ -576,7 +625,7 @@ impl AccountFTBalance {
                     return;
                 }
                 let initial_storage_usage = env::storage_usage();
-                AccountFTBalanceObject::new(account_hash_id, balance).save();
+                AccountFTBalanceObject::new(account_hash_id, (balance, 0)).save();
                 let storage_usage_change = env::storage_usage() - initial_storage_usage;
                 post(&AccountStorageEvent::StorageUsageChanged(
                     account_id.into(),
@@ -593,7 +642,7 @@ impl AccountFTBalance {
                         (storage_usage_change as i64 * -1).into(),
                     ));
                 } else {
-                    *account_balance = balance;
+                    *account_balance = (balance, (*account_balance).1);
                     account_balance.save();
                 }
             }
@@ -602,16 +651,18 @@ impl AccountFTBalance {
 }
 
 impl Deref for AccountFTBalance {
-    type Target = u128;
+    type Target = TokenBalance;
 
     fn deref(&self) -> &Self::Target {
-        self.0.deref()
+        let (balance, _) = self.0.deref();
+        balance
     }
 }
 
 impl DerefMut for AccountFTBalance {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0.deref_mut()
+        let (balance, _) = self.0.deref_mut();
+        balance
     }
 }
 
@@ -801,7 +852,7 @@ mod tests_fungible_token {
                 assert_eq!(logs.len(), 1);
                 assert_eq!(
                     &logs[0],
-                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(88)"
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)"
                 );
             });
         }
@@ -824,11 +875,11 @@ mod tests_fungible_token {
                 println!("{:#?}", logs);
                 assert_eq!(
                     &logs[0],
-                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-88)" // caused by sender debit zeroing FT balance
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-104)" // caused by sender debit zeroing FT balance
                 );
                 assert_eq!(
                     &logs[1],
-                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(88)" // caused by receiver credit
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)" // caused by receiver credit
                 );
             });
         }
@@ -856,7 +907,7 @@ mod tests_fungible_token {
                 assert_eq!(logs.len(), 2);
                 assert_eq!(
                     &logs[0],
-                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(88)"
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)"
                 );
                 assert_eq!(&logs[1], "[INFO] [FT_TRANSFER] memo");
             });
@@ -985,7 +1036,7 @@ mod tests_fungible_token {
                 assert_eq!(logs.len(), 1);
                 assert_eq!(
                     &logs[0],
-                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(88)"
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)"
                 );
 
                 let receipts = deserialize_receipts();
@@ -1055,11 +1106,11 @@ mod tests_fungible_token {
                 assert_eq!(logs.len(), 2);
                 assert_eq!(
                     &logs[0],
-                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-88)"
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-104)"
                 );
                 assert_eq!(
                     &logs[1],
-                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(88)"
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)"
                 );
 
                 let receipts = deserialize_receipts();
@@ -1129,7 +1180,7 @@ mod tests_fungible_token {
                 assert_eq!(logs.len(), 2);
                 assert_eq!(
                     &logs[0],
-                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(88)"
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)"
                 );
                 assert_eq!(&logs[1], "[INFO] [FT_TRANSFER] memo");
 
@@ -1325,7 +1376,7 @@ mod tests_fungible_token {
                 assert_eq!(&logs[0], "[INFO] [FT_TRANSFER_CALL_RECEIVER_DEBIT] 500");
                 assert_eq!(
                     &logs[1],
-                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(88)"
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)"
                 );
                 assert_eq!(&logs[2], "[INFO] [FT_TRANSFER_CALL_SENDER_CREDIT] 500");
 
@@ -1392,7 +1443,7 @@ mod tests_fungible_token {
                 assert_eq!(&logs[0], "[INFO] [FT_TRANSFER_CALL_RECEIVER_DEBIT] 100");
                 assert_eq!(
                     &logs[1],
-                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(88)"
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)"
                 );
                 assert_eq!(&logs[2], "[INFO] [FT_TRANSFER_CALL_SENDER_CREDIT] 100");
 
@@ -1582,7 +1633,7 @@ mod tests_fungible_token {
                 );
                 assert_eq!(
                     &logs[1],
-                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-88)"
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-104)"
                 );
                 assert_eq!(&logs[2], "[INFO] [FT_TRANSFER_CALL_RECEIVER_DEBIT] 100");
                 assert_eq!(&logs[3], "[INFO] [FT_TRANSFER_CALL_SENDER_CREDIT] 100");
@@ -1914,7 +1965,7 @@ mod tests_token_service {
                 assert_eq!(logs.len(), 2);
                 assert_eq!(
                     &logs[0],
-                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(88)"
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)"
                 );
                 assert_eq!(&logs[1], "[INFO] [FT_MINT] account: bob, amount: 1000");
 
@@ -1995,6 +2046,32 @@ mod tests_token_service {
         }
 
         #[test]
+        fn burn_account_partial_balance_with_locked_balance() {
+            run_test(Some(10000.into()), |ctx, mut stake| {
+                testing_env!(ctx.clone());
+                stake.ft_lock(ACCOUNT, 500.into());
+
+                testing_env!(ctx.clone());
+                let initial_token_supply = stake.ft_total_supply();
+                stake.ft_burn(ACCOUNT, 1000.into());
+                assert_eq!(
+                    stake.ft_total_supply(),
+                    (*initial_token_supply - 1000).into()
+                );
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 1);
+                assert_eq!(&logs[0], "[INFO] [FT_BURN] account: bob, amount: 1000");
+
+                assert_eq!(
+                    stake.ft_balance_of(to_valid_account_id(ACCOUNT)),
+                    9000.into()
+                );
+            });
+        }
+
+        #[test]
         fn burn_account_full_balance() {
             run_test(Some(10000.into()), |ctx, mut stake| {
                 testing_env!(ctx);
@@ -2010,7 +2087,7 @@ mod tests_token_service {
                 assert_eq!(
                     logs,
                     vec![
-                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-88)",
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-104)",
                         "[INFO] [FT_BURN] account: bob, amount: 10000",
                     ]
                 );
@@ -2064,7 +2141,7 @@ mod tests_token_service {
                 assert_eq!(
                     logs,
                     vec![
-                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-88)",
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-104)",
                         "[INFO] [FT_BURN] account: bob, amount: 10000",
                     ]
                 );
@@ -2100,6 +2177,128 @@ mod tests_token_service {
                 assert!(logs.is_empty());
 
                 assert_eq!(stake.ft_balance_of(to_valid_account_id(ACCOUNT)), 0.into());
+            });
+        }
+    }
+
+    #[cfg(test)]
+    mod tests_lock_unlock {
+        use super::*;
+
+        #[test]
+        fn with_balance() {
+            run_test(Some(0.into()), |ctx, mut stake| {
+                // Arrange
+                testing_env!(ctx.clone());
+                let initial_token_supply = stake.ft_total_supply();
+                stake.ft_mint(ACCOUNT, 1000.into());
+                assert_eq!(
+                    stake.ft_total_supply(),
+                    (*initial_token_supply + 1000).into()
+                );
+
+                assert_eq!(
+                    stake.ft_balance_of(to_valid_account_id(ACCOUNT)),
+                    1000.into()
+                );
+
+                // Act
+                testing_env!(ctx.clone());
+                stake.ft_lock(ACCOUNT, 400.into());
+                // Assert
+                assert_eq!(
+                    stake.ft_total_supply(),
+                    (*initial_token_supply + 1000).into()
+                );
+                assert_eq!(
+                    stake.ft_balance_of(to_valid_account_id(ACCOUNT)),
+                    600.into()
+                );
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 1);
+                assert_eq!(&logs[0], "[INFO] [FT_LOCK] account: bob, amount: 400");
+
+                assert_eq!(stake.ft_locked_balance(ACCOUNT).unwrap(), 400.into());
+
+                // Act
+                testing_env!(ctx.clone());
+                stake.ft_lock(ACCOUNT, 600.into());
+                // Assert
+                assert_eq!(
+                    stake.ft_total_supply(),
+                    (*initial_token_supply + 1000).into()
+                );
+                assert_eq!(stake.ft_balance_of(to_valid_account_id(ACCOUNT)), 0.into());
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 1);
+                assert_eq!(&logs[0], "[INFO] [FT_LOCK] account: bob, amount: 600");
+
+                assert_eq!(stake.ft_locked_balance(ACCOUNT).unwrap(), 1000.into());
+
+                // Act
+                testing_env!(ctx.clone());
+                stake.ft_unlock(ACCOUNT, 600.into());
+                // Assert
+                assert_eq!(
+                    stake.ft_total_supply(),
+                    (*initial_token_supply + 1000).into()
+                );
+                assert_eq!(
+                    stake.ft_balance_of(to_valid_account_id(ACCOUNT)),
+                    600.into()
+                );
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs.len(), 1);
+                assert_eq!(&logs[0], "[INFO] [FT_UNLOCK] account: bob, amount: 600");
+
+                assert_eq!(stake.ft_locked_balance(ACCOUNT).unwrap(), 400.into());
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [INSUFFICIENT_FUNDS]")]
+        fn with_insufficient_balance() {
+            run_test(Some(0.into()), |ctx, mut stake| {
+                // Arrange
+                testing_env!(ctx.clone());
+                stake.ft_mint(ACCOUNT, 1000.into());
+
+                // Act
+                testing_env!(ctx);
+                stake.ft_lock(ACCOUNT, 1400.into());
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [INSUFFICIENT_FUNDS]")]
+        fn with_zero_balance() {
+            run_test(Some(0.into()), |ctx, mut stake| {
+                // Act
+                testing_env!(ctx);
+                stake.ft_lock(ACCOUNT, 400.into());
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED]")]
+        fn account_not_registered() {
+            run_test(None, |ctx, mut stake| {
+                testing_env!(ctx);
+                stake.ft_lock(ACCOUNT, 1000.into());
+            });
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [INVALID] lock amount cannot be zero")]
+        fn zero_amount() {
+            run_test(Some(1000.into()), |ctx, mut stake| {
+                testing_env!(ctx);
+                stake.ft_lock(ACCOUNT, 0.into());
             });
         }
     }

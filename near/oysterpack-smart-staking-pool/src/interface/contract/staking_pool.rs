@@ -2,6 +2,7 @@ use crate::components::staking_pool::Status;
 use crate::StakeAccountBalances;
 use oysterpack_smart_near::domain::YoctoNear;
 use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
+use oysterpack_smart_near::near_sdk::PromiseOrValue;
 use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 
 /// # **Contract Interface**: Staking Pool API
@@ -32,7 +33,7 @@ pub trait StakingPool {
     ///
     /// Any attached deposit will be fully staked in addition to any available account storage balance.
     ///
-    /// Returns the account's updated stake account balance
+    /// Returns the account's updated stake account balance after the contract's stake action completes
     ///
     /// ## NOTES
     /// - When NEAR is staked, STAKE tokens are minted. Because values are rounded down, only the actual
@@ -47,13 +48,15 @@ pub trait StakingPool {
     ///   exchange ratio, a minimum amount of NEAR is required to stake. If there is not enough to stake
     ///   then the funds will be transferred over to the account's storage balance.
     ///   - [`LOG_EVENT_NOT_ENOUGH_TO_STAKE`] event will be logged
+    /// - the NEAR stake action is async - thus, balances will not be updated until the stake action
+    ///   has completed
     ///
     /// ## Panics
     /// - if the account is not registered
     /// - if there is no attached deposit
     ///
     /// `#[payable]`
-    fn ops_stake(&mut self) -> StakeAccountBalances;
+    fn ops_stake(&mut self) -> PromiseOrValue<StakeAccountBalances>;
 
     /// Used to unstake staked NEAR.
     ///
@@ -67,7 +70,7 @@ pub trait StakingPool {
     /// ## Panics
     /// - if account is not registered
     /// - if there are insufficient staked funds to fulfill the request to unstake the specified amount
-    fn ops_unstake(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances;
+    fn ops_unstake(&mut self, amount: Option<YoctoNear>) -> PromiseOrValue<StakeAccountBalances>;
 
     /// returns the current NEAR value of 1 STAKE token
     fn ops_stake_token_value(&self) -> YoctoNear;

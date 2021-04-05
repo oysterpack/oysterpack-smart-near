@@ -11,7 +11,7 @@ pub enum StorageManagementEvent {
     ///
     /// ## Use Case
     /// Account may have funds that are locked and managed externally by other components. For example,
-    /// when unstaked NEAR balances become unlocked, then they should be made available for withdraawal.
+    /// when unstaked NEAR balances become unlocked, then they should be made available for withdrawal.
     PreWithdraw(AccountId),
     /// Invoked before the account is unregistered. It provides a hook for other components to run
     /// component specific business logic to unregister the account.
