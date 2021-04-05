@@ -251,6 +251,20 @@ where
         }
     }
 
+    fn ft_lock_all(&mut self, account_id: &str) {
+        ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(account_id));
+
+        if let Some(mut ft_balance) = AccountFTBalance::load(account_id) {
+            let (available, locked) = *ft_balance.0;
+            if available > 0 {
+                *ft_balance.0 = (0, available + locked);
+                ft_balance.0.save();
+
+                LOG_EVENT_FT_LOCK.log(format!("account: {}, amount: {}", account_id, available));
+            }
+        }
+    }
+
     fn ft_unlock(&mut self, account_id: &str, amount: TokenAmount) {
         ERR_INVALID.assert(|| *amount > 0, || "unlock amount cannot be zero");
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(account_id));
@@ -270,8 +284,12 @@ where
 
         if let Some(mut ft_balance) = AccountFTBalance::load(account_id) {
             let (available, locked) = *ft_balance.0;
-            *ft_balance.0 = (available + locked, 0);
-            ft_balance.0.save();
+            if locked > 0 {
+                *ft_balance.0 = (available + locked, 0);
+                ft_balance.0.save();
+
+                LOG_EVENT_FT_UNLOCK.log(format!("account: {}, amount: {}", account_id, locked));
+            }
         }
     }
 

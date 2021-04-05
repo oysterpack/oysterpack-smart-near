@@ -40,6 +40,9 @@ pub trait TokenService {
     /// - if amount is zero
     fn ft_lock(&mut self, account_id: &str, amount: TokenAmount);
 
+    /// convenience method that locks the remaining available balance
+    fn ft_lock_all(&mut self, account_id: &str);
+
     /// Unlocks the specified amount of tokens and makes them available for transfers
     /// - logs [`LOG_EVENT_FT_UNLOCK`]
     ///
