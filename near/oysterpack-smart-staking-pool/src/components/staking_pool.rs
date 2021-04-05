@@ -457,6 +457,7 @@ impl StakeActionCallbacks for StakingPoolComponent {
         if is_promise_success() {
             let mut state = Self::state();
             state.staked -= amount;
+            state.save();
             self.stake_token.ft_mint(&account_id, stake_token_amount);
         } else {
             Self::handle_stake_action_failure(total_staked_balance);
@@ -476,6 +477,7 @@ impl StakeActionCallbacks for StakingPoolComponent {
         if is_promise_success() {
             let mut state = Self::state();
             state.unstaked -= amount;
+            state.save();
 
             self.stake_token.ft_burn(&account_id, stake_token_amount);
 
