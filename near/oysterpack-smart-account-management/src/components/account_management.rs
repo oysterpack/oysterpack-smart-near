@@ -491,12 +491,7 @@ where
 
     fn storage_balance_of(&self, account_id: ValidAccountId) -> Option<StorageBalance> {
         self.load_account_near_data(account_id.as_ref())
-            .map(|account| StorageBalance {
-                total: account.near_balance(),
-                available: (account.near_balance().value()
-                    - self.storage_balance_bounds().min.value())
-                .into(),
-            })
+            .map(|account| account.storage_balance(self.storage_balance_bounds().min))
     }
 }
 
