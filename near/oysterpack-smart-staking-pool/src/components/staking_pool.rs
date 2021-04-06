@@ -5,8 +5,8 @@ use crate::{
     LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE, LOG_EVENT_STATUS_ONLINE,
 };
 use oysterpack_smart_account_management::{
-    components::account_management::AccountManagementComponent, AccountRepository,
-    StorageManagement, ERR_ACCOUNT_NOT_REGISTERED,
+    components::account_management::AccountManagementComponent, AccountDataObject,
+    AccountRepository, StorageManagement, ERR_ACCOUNT_NOT_REGISTERED,
 };
 use oysterpack_smart_contract::{
     components::contract_ownership::ContractOwnershipComponent, BalanceId, ContractNearBalances,
@@ -281,8 +281,12 @@ impl StakingPool for StakingPoolComponent {
             }
             Status::Offline(_) => {
                 LOG_EVENT_STATUS_OFFLINE.log("");
+
                 ContractNearBalances::decr_balance(State::TOTAL_STAKED_BALANCE, near_amount);
+                State::incr_total_unstaked_balance(near_amount);
+
                 self.stake_token.ft_burn(&account_id, stake_token_amount);
+                self.credit_unstaked_amount(&account_id, near_amount);
 
                 PromiseOrValue::Value(
                     self.ops_stake_balance(to_valid_account_id(&account_id))
@@ -511,10 +515,7 @@ impl StakeActionCallbacks for StakingPoolComponent {
             state.save();
 
             self.stake_token.ft_burn(&account_id, stake_token_amount);
-
-            let mut account = self.account_manager.registered_account_data(&account_id);
-            account.credit_unstaked(amount);
-            account.save();
+            self.credit_unstaked_amount(&account_id, amount);
             State::incr_total_unstaked_balance(amount);
         } else {
             Self::handle_stake_action_failure(total_staked_balance);
@@ -553,6 +554,17 @@ struct ResumeFinalizeCallbackArgs {
 impl StakingPoolComponent {
     fn state() -> ComponentState<State> {
         Self::load_state().expect("component has not been deployed")
+    }
+
+    fn credit_unstaked_amount(&self, account_id: &str, amount: YoctoNear) {
+        let mut account = self
+            .account_manager
+            .load_account_data(&account_id)
+            .unwrap_or_else(|| {
+                AccountDataObject::<StakeAccountData>::new(&account_id, Default::default())
+            });
+        account.credit_unstaked(amount);
+        account.save();
     }
 
     fn set_status(status: Status) {
