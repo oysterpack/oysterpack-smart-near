@@ -50,10 +50,11 @@ pub trait StakingPool {
     ///   - [`LOG_EVENT_NOT_ENOUGH_TO_STAKE`] event will be logged
     /// - the NEAR stake action is async - thus, balances will not be updated until the stake action
     ///   has completed
+    /// - if there was no attached deposit and zero available storage balance, then the current balances
+    ///   are simply returned
     ///
     /// ## Panics
     /// - if the account is not registered
-    /// - if there is no attached deposit
     ///
     /// `#[payable]`
     fn ops_stake(&mut self) -> PromiseOrValue<StakeAccountBalances>;
@@ -71,6 +72,29 @@ pub trait StakingPool {
     /// - if account is not registered
     /// - if there are insufficient staked funds to fulfill the request to unstake the specified amount
     fn ops_unstake(&mut self, amount: Option<YoctoNear>) -> PromiseOrValue<StakeAccountBalances>;
+
+    /// Re-stakes unstaked funds
+    ///
+    /// If amount is not specified, then the full unstaked balance will be re-staked.
+    ///
+    /// ## Notes
+    /// - If unstaking all, i.e., `amount` is None, then a zero staked balance is fine. However, if
+    ///   an `amount` is specified, then the method will panic if there are insufficient staked funds
+    ///   to fulfill the request
+    ///
+    /// ## Panics
+    /// - if account is not registered
+    /// - if there are insufficient funds to fulfill the request
+    fn ops_restake(&mut self, amount: Option<YoctoNear>) -> PromiseOrValue<StakeAccountBalances>;
+
+    /// Withdraws unstaked NEAR that is not locked.
+    ///
+    /// If no amount is specified, then all available unstaked NEAR will be withdrawn.
+    ///
+    /// ## Panics
+    /// - if account is not registered
+    /// - if there are insufficient funds to fulfill the request
+    fn ops_stake_withdraw(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances;
 
     /// returns the current NEAR value of 1 STAKE token
     fn ops_stake_token_value(&self) -> YoctoNear;
