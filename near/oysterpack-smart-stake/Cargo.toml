@@ -14,7 +14,7 @@ oysterpack-smart-account-management = {path = "../oysterpack-smart-account-manag
 oysterpack-smart-fungible-token = {path = "../oysterpack-smart-fungible-token"}
 oysterpack-smart-staking-pool = {path = "../oysterpack-smart-staking-pool"}
 
-near-sdk = "=3.0.1-pre.1"
+near-sdk = "3.0.1"
 
 [dev-dependencies]
 oysterpack-smart-near-test = {path = "../oysterpack-smart-near-test"}
