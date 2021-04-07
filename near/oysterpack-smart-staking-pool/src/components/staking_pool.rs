@@ -35,6 +35,7 @@ use oysterpack_smart_near::{
     },
     to_valid_account_id, TERA, YOCTO,
 };
+use std::cmp::min;
 
 type StakeAccountData = UnstakedBalances;
 
@@ -99,6 +100,8 @@ impl State {
     /// - accounts will need to withdraw unstaked balances against this balance
     pub const TOTAL_UNSTAKED_BALANCE: BalanceId = BalanceId(1955705469859818043123742456310621056);
 
+    pub const UNSTAKED_LIQUIDITY_POOL: BalanceId = BalanceId(1955784487678443851622222785149485288);
+
     pub fn callback_gas(&self) -> Gas {
         self.callback_gas.unwrap_or_else(Self::min_callback_gas)
     }
@@ -138,6 +141,24 @@ impl State {
 
     pub fn decr_total_unstaked_balance(amount: YoctoNear) {
         ContractNearBalances::decr_balance(Self::TOTAL_UNSTAKED_BALANCE, amount);
+    }
+
+    /// If there are unstaked balances, then transfer the specified amount to the liquidity pool
+    pub fn add_liquidity(amount: YoctoNear) {
+        if amount == ZERO_NEAR {
+            return;
+        }
+        let total_unstaked_balance =
+            ContractNearBalances::near_balance(Self::TOTAL_UNSTAKED_BALANCE);
+        if total_unstaked_balance > ZERO_NEAR {
+            let liquidity = min(amount, total_unstaked_balance);
+            Self::decr_total_unstaked_balance(liquidity);
+            ContractNearBalances::incr_balance(Self::UNSTAKED_LIQUIDITY_POOL, liquidity);
+        }
+    }
+
+    pub fn liquidity() -> YoctoNear {
+        ContractNearBalances::near_balance(Self::UNSTAKED_LIQUIDITY_POOL)
     }
 }
 
@@ -249,6 +270,7 @@ impl StakingPool for StakingPoolComponent {
             (stake_near_value, stake)
         };
 
+        State::add_liquidity(near_amount);
         self.stake(&account_id, near_amount, stake_token_amount)
     }
 
@@ -287,11 +309,7 @@ impl StakingPool for StakingPoolComponent {
 
                 self.stake_token.ft_burn(&account_id, stake_token_amount);
                 self.credit_unstaked_amount(&account_id, near_amount);
-
-                PromiseOrValue::Value(
-                    self.ops_stake_balance(to_valid_account_id(&account_id))
-                        .unwrap(),
-                )
+                self.registered_stake_account_balance(&account_id)
             }
         }
     }
@@ -301,10 +319,7 @@ impl StakingPool for StakingPoolComponent {
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(&account_id));
 
         match self.account_manager.load_account_data(&account_id) {
-            None => PromiseOrValue::Value(
-                self.ops_stake_balance(to_valid_account_id(&account_id))
-                    .unwrap(),
-            ),
+            None => self.registered_stake_account_balance(&account_id),
             Some(mut account) => {
                 let (near_amount, stake_token_amount) = {
                     let near = amount.unwrap_or_else(|| account.total());
@@ -552,6 +567,16 @@ struct ResumeFinalizeCallbackArgs {
 }
 
 impl StakingPoolComponent {
+    fn registered_stake_account_balance(
+        &self,
+        account_id: &str,
+    ) -> PromiseOrValue<StakeAccountBalances> {
+        PromiseOrValue::Value(
+            self.ops_stake_balance(to_valid_account_id(account_id))
+                .unwrap(),
+        )
+    }
+
     fn state() -> ComponentState<State> {
         Self::load_state().expect("component has not been deployed")
     }
@@ -578,10 +603,7 @@ impl StakingPoolComponent {
             // INVARIANT CHECK: if `near_amount` is zero, then `stake_token_amount` should be zero
             assert_eq!(*stake_token_amount, 0);
             LOG_EVENT_NOT_ENOUGH_TO_STAKE.log("");
-            return PromiseOrValue::Value(
-                self.ops_stake_balance(to_valid_account_id(account_id))
-                    .unwrap(),
-            );
+            return self.registered_stake_account_balance(account_id);
         }
 
         let mut state = Self::state();
@@ -604,11 +626,7 @@ impl StakingPoolComponent {
                 LOG_EVENT_STATUS_OFFLINE.log("");
                 ContractNearBalances::incr_balance(State::TOTAL_STAKED_BALANCE, near_amount);
                 self.stake_token.ft_mint(account_id, stake_token_amount);
-
-                PromiseOrValue::Value(
-                    self.ops_stake_balance(to_valid_account_id(account_id))
-                        .unwrap(),
-                )
+                self.registered_stake_account_balance(account_id)
             }
         }
     }

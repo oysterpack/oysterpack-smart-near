@@ -1,3 +1,4 @@
+use crate::components::staking_pool::State;
 use oysterpack_smart_near::asserts::ERR_INSUFFICIENT_FUNDS;
 use oysterpack_smart_near::domain::{EpochHeight, YoctoNear, ZERO_NEAR};
 use oysterpack_smart_near::near_sdk::{
@@ -23,14 +24,17 @@ pub struct UnstakedBalances {
 
 impl UnstakedBalances {
     pub fn total(&self) -> YoctoNear {
-        self.available
-            + self.locked.iter().fold(ZERO_NEAR, |total, entry| {
-                total + entry.map_or(ZERO_NEAR, |(_, amount)| amount)
-            })
+        self.available + self.locked_balance()
     }
 
     pub fn available(&self) -> YoctoNear {
         self.available
+    }
+
+    pub fn locked_balance(&self) -> YoctoNear {
+        self.locked.iter().fold(ZERO_NEAR, |total, entry| {
+            total + entry.map_or(ZERO_NEAR, |(_, amount)| amount)
+        })
     }
 
     pub fn locked(&self) -> Option<BTreeMap<EpochHeight, YoctoNear>> {
@@ -61,6 +65,34 @@ impl UnstakedBalances {
                 }
             }
         }
+    }
+
+    /// If there are locked balances then try to use liquidity to unlock the funds for withdrawal.
+    ///
+    /// returns the amount of liquidity that was applied
+    fn apply_liquidity(&mut self) -> YoctoNear {
+        self.unlock();
+        let locked_balance = self.locked_balance();
+        if locked_balance == ZERO_NEAR {
+            return ZERO_NEAR;
+        }
+
+        let liquidity = State::liquidity();
+        if liquidity == ZERO_NEAR {
+            return ZERO_NEAR;
+        }
+
+        if liquidity >= locked_balance {
+            self.available = self.total();
+            for i in 0..EPOCHS_LOCKED {
+                self.locked[i] = None;
+            }
+            return locked_balance;
+        }
+
+        self.available += liquidity;
+        self.debit_from_locked(liquidity);
+        liquidity
     }
 
     /// adds the unstaked balance and locks it up for 4 epochs
@@ -101,17 +133,21 @@ impl UnstakedBalances {
         });
     }
 
-    /// tries to debit the specified amount from the available balance
+    /// tries to debit the specified amount from the available balance.
+    ///
+    /// ## NOTES
+    /// - locked balances are checked if they have become available
+    /// - if there are locked balances, then liquidity will be applied
     ///
     /// ## Panics
     /// if there are insufficient funds
     pub fn debit_available_balance(&mut self, amount: YoctoNear) {
-        self.unlock();
+        self.apply_liquidity();
         ERR_INSUFFICIENT_FUNDS.assert(|| self.available >= amount);
         self.available -= amount;
     }
 
-    pub fn debit_for_restaking(&mut self, mut amount: YoctoNear) {
+    pub fn debit_for_restaking(&mut self, amount: YoctoNear) {
         let total = self.total();
         ERR_INSUFFICIENT_FUNDS.assert(|| total >= amount);
 
@@ -120,9 +156,14 @@ impl UnstakedBalances {
             return;
         }
 
+        let remainder = self.debit_from_locked(amount);
+        self.available -= remainder;
+    }
+
+    fn debit_from_locked(&mut self, mut amount: YoctoNear) -> YoctoNear {
         self.sort_locked();
 
-        // restake from the most recent unstaked balances
+        // take from the most recent unstaked balances
         for i in (0..EPOCHS_LOCKED).rev() {
             if let Some((available_on, unstaked)) = self.locked[i] {
                 if unstaked <= amount {
@@ -130,16 +171,16 @@ impl UnstakedBalances {
                     self.locked[i] = None;
                 } else {
                     self.locked[i] = Some((available_on, unstaked - amount));
-                    return;
+                    return ZERO_NEAR;
                 }
 
                 if amount == ZERO_NEAR {
-                    return;
+                    return ZERO_NEAR;
                 }
             }
         }
 
-        self.available -= amount;
+        return amount;
     }
 }
 
