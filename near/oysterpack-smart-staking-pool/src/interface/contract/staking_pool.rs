@@ -23,11 +23,10 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 /// 3. Staking adds liquidity for withdrawing unstaked NEAR that is locked on a first come, first
 ///    withdraw basis.
 ///
-/// The staking pool works with the storage management API:
+/// The staking pool is integrated with the storage management API:
 /// - accounts must be registered with the contract in order to stake
-/// - when staking, the account's available storage balance will be staked in addition to the attached deposit
-/// - the storage management APIs provide the withdrawal functionality, i.e., when unstaked near becomes
-///   available to withdraw, then it will appear as available balance on the storage management API
+/// - when staking, the account's available storage balance will be staked in addition to the
+///   attached deposit
 ///
 pub trait StakingPool {
     /// Consolidates the account's storage balance with the STAKE token balance
