@@ -3,7 +3,7 @@ use crate::{
     StakingPoolOperatorCommand, StakingPoolOwner, UnstakedBalances,
     ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE, ERR_STAKE_ACTION_FAILED, LOG_EVENT_LIQUIDITY,
     LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE,
-    LOG_EVENT_STATUS_ONLINE,
+    LOG_EVENT_STATUS_ONLINE, LOG_EVENT_UNSTAKE,
 };
 use oysterpack_smart_account_management::{
     components::account_management::AccountManagementComponent, AccountRepository,
@@ -325,6 +325,10 @@ impl StakingPool for StakingPoolComponent {
         let stake_token_amount = self.near_stake_value_rounded_up(near_amount);
         ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE.assert(|| stake_balance >= stake_token_amount);
 
+        LOG_EVENT_UNSTAKE.log(format!(
+            "near_amount={}, stake_token_amount={}",
+            near_amount, stake_token_amount
+        ));
         let mut state = Self::state();
         match state.status {
             Status::Online => {
