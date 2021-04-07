@@ -1778,7 +1778,7 @@ mod tests {
     }
 
     #[cfg(test)]
-    mod ops_stake_finalize {
+    mod tests_stake_finalize {
         use super::*;
 
         #[test]
@@ -1804,7 +1804,7 @@ mod tests {
             {
                 let mut state = StakingPoolComponent::state();
                 let mut ctx = ctx.clone();
-                ctx.attached_deposit = YOCTO;
+                ctx.attached_deposit = 0;
                 ctx.predecessor_account_id = ACCOUNT.to_string();
                 ctx.account_locked_balance = *state.total_staked_balance();
                 testing_env_with_promise_result_success(ctx.clone());
@@ -1905,6 +1905,109 @@ mod tests {
                     }
                     _ => panic!("expected stake action"),
                 };
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests_unstake_online {
+        use super::*;
+
+        #[test]
+        fn specified_amount() {
+            let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
+
+            // Arrange
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+            // stake
+            {
+                let mut ctx = ctx.clone();
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx);
+                // Act
+                if let PromiseOrValue::Value(_) = staking_pool.ops_stake() {
+                    panic!("expected Promise")
+                }
+            }
+            // finalize stake
+            {
+                let mut state = StakingPoolComponent::state();
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = 0;
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_locked_balance = *state.total_staked_balance();
+                testing_env_with_promise_result_success(ctx.clone());
+                let balances = staking_pool.ops_stake_finalize(
+                    ACCOUNT.to_string(),
+                    YOCTO.into(),
+                    YOCTO.into(),
+                    state.total_staked_balance(),
+                );
+                println!("{:#?}", balances);
+            }
+            let state = staking_pool.ops_stake_state();
+            println!(
+                "before unstaking {}",
+                serde_json::to_string_pretty(&state).unwrap()
+            );
+            // Act
+            {
+                testing_env!(ctx.clone());
+                if let PromiseOrValue::Value(_) = staking_pool.ops_unstake(Some(1000.into())) {
+                    panic!("expected Promise");
+                }
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(
+                    logs,
+                    vec![
+                        "[INFO] [UNSTAKE] near_amount=1000, stake_token_amount=1000",
+                        "[INFO] [FT_LOCK] account: bob, amount: 1000",
+                    ]
+                );
+                assert_eq!(ft_stake().ft_locked_balance(ACCOUNT).unwrap(), 1000.into());
+                assert_eq!(
+                    ft_stake().ft_balance_of(to_valid_account_id(ACCOUNT)),
+                    (YOCTO - 1000).into()
+                );
+                let state = staking_pool.ops_stake_state();
+                println!("{}", serde_json::to_string_pretty(&state).unwrap());
+                assert_eq!(state.total_staked_balance, YOCTO.into());
+                assert_eq!(state.unstaked, 1000.into());
+
+                let receipts = deserialize_receipts();
+                assert_eq!(receipts.len(), 2);
+                {
+                    let receipt = &receipts[0];
+                    assert_eq!(receipt.receiver_id, env::current_account_id());
+                    assert_eq!(receipt.actions.len(), 1);
+                    let action = &receipt.actions[0];
+                    match action {
+                        Action::Stake(action) => {
+                            assert_eq!(action.stake, YOCTO - 1000);
+                        }
+                        _ => panic!("expected StakeAction"),
+                    }
+                }
+                {
+                    let receipt = &receipts[1];
+                    assert_eq!(receipt.receiver_id, env::current_account_id());
+                    assert_eq!(receipt.actions.len(), 1);
+                    let action = &receipt.actions[0];
+                    match action {
+                        Action::FunctionCall(f) => {
+                            assert_eq!(f.method_name, "ops_unstake_finalize");
+                            let args: StakeActionCallbackArgs =
+                                serde_json::from_str(&f.args).unwrap();
+                            assert_eq!(args.account_id, ACCOUNT);
+                            assert_eq!(args.amount, 1000.into());
+                            assert_eq!(args.stake_token_amount, 1000.into());
+                            assert_eq!(args.total_staked_balance, (YOCTO - 1000).into());
+                        }
+                        _ => panic!("expected FunctionCall"),
+                    }
+                }
             }
         }
     }
