@@ -22,8 +22,7 @@ use oysterpack_smart_near::{
     component::{Component, ComponentState, Deploy},
     data::numbers::U256,
     domain::{
-        ActionType, ByteLen, Gas, PublicKey, SenderIsReceiver, TransactionResource, YoctoNear,
-        ZERO_NEAR,
+        ActionType, Gas, PublicKey, SenderIsReceiver, TransactionResource, YoctoNear, ZERO_NEAR,
     },
     json_function_callback,
     near_sdk::{
@@ -115,10 +114,6 @@ impl State {
                 ),
                 (
                     TransactionResource::Action(ActionType::Stake(SenderIsReceiver(false))),
-                    1,
-                ),
-                (
-                    TransactionResource::DataReceipt(SenderIsReceiver(false), ByteLen(200)),
                     1,
                 ),
             ]) + TERA.into()
@@ -395,7 +390,13 @@ impl StakingPoolOperator for StakingPoolComponent {
                                 staked_balance,
                             );
                             Promise::new(env::current_account_id())
-                                .stake(0, state.stake_public_key.into());
+                                .stake(0, state.stake_public_key.into())
+                                .then(json_function_callback(
+                                    "ops_stake_pause_finalize",
+                                    Option::<()>::None,
+                                    ZERO_NEAR,
+                                    state.callback_gas(),
+                                ));
                         }
                     }
                     // update the status
@@ -509,16 +510,16 @@ impl StakeActionCallbacks for StakingPoolComponent {
         stake_token_amount: TokenAmount,
         total_staked_balance: YoctoNear,
     ) -> StakeAccountBalances {
+        let mut state = Self::state();
+        state.staked -= amount;
         if is_promise_success() {
-            let mut state = Self::state();
-            state.staked -= amount;
             state.total_staked_balance = env::account_locked_balance().into();
-            state.save();
-            self.stake_token.ft_mint(&account_id, stake_token_amount);
         } else {
             Self::handle_stake_action_failure(total_staked_balance);
         }
+        state.save();
 
+        self.stake_token.ft_mint(&account_id, stake_token_amount);
         self.ops_stake_balance(to_valid_account_id(&account_id))
             .unwrap()
     }
@@ -530,19 +531,18 @@ impl StakeActionCallbacks for StakingPoolComponent {
         stake_token_amount: TokenAmount,
         total_staked_balance: YoctoNear,
     ) -> StakeAccountBalances {
+        let mut state = Self::state();
+        state.unstaked -= amount;
         if is_promise_success() {
-            let mut state = Self::state();
-            state.unstaked -= amount;
             state.total_staked_balance = env::account_locked_balance().into();
-            state.save();
-
-            self.stake_token.ft_burn(&account_id, stake_token_amount);
-            self.credit_unstaked_amount(&account_id, amount);
-            State::incr_total_unstaked_balance(amount);
         } else {
             Self::handle_stake_action_failure(total_staked_balance);
         }
+        state.save();
+        State::incr_total_unstaked_balance(amount);
 
+        self.stake_token.ft_burn(&account_id, stake_token_amount);
+        self.credit_unstaked_amount(&account_id, amount);
         self.ops_stake_balance(to_valid_account_id(&account_id))
             .unwrap()
     }
@@ -554,6 +554,17 @@ impl StakeActionCallbacks for StakingPoolComponent {
             state.save();
         } else {
             Self::handle_stake_action_failure(total_staked_balance);
+        }
+    }
+
+    fn ops_stake_pause_finalize(&mut self) {
+        if is_promise_success() {
+            let mut state = Self::state();
+            state.total_staked_balance = env::account_locked_balance().into();
+            state.save();
+            LOG_EVENT_STATUS_OFFLINE.log("all NEAR has been unstaked");
+        } else {
+            ERR_STAKE_ACTION_FAILED.log("failed to go offline");
         }
     }
 }
@@ -622,6 +633,7 @@ impl StakingPoolComponent {
             Status::Online => {
                 state.staked += near_amount;
                 state.save();
+
                 PromiseOrValue::Promise(Self::stake_funds(
                     *state,
                     account_id,
