@@ -125,9 +125,16 @@ impl State {
         }
     }
 
-    fn total_staked_balance(&self) -> YoctoNear {
+    fn total_staked_balance(&mut self) -> YoctoNear {
         match self.status {
-            Status::Online => self.total_staked_balance + self.staked - self.unstaked,
+            Status::Online => {
+                // if there are no stake actions in flight, then resync the total staked balance
+                // to ensure any staking rewards are captured
+                if self.staked == ZERO_NEAR && self.unstaked == ZERO_NEAR {
+                    self.total_staked_balance = env::account_locked_balance().into();
+                }
+                self.total_staked_balance + self.staked - self.unstaked
+            }
             Status::Offline(_) => ContractNearBalances::load_near_balances()
                 .get(&Self::TOTAL_STAKED_BALANCE)
                 .cloned()
@@ -662,7 +669,7 @@ impl StakingPoolComponent {
     }
 
     fn create_stake_workflow(
-        state: State,
+        mut state: State,
         account_id: &str,
         amount: YoctoNear,
         stake_token_amount: TokenAmount,
