@@ -115,5 +115,7 @@ pub const LOG_EVENT_NOT_ENOUGH_TO_STAKE: LogEvent = LogEvent(Level::INFO, "NOT_E
 pub const LOG_EVENT_STAKE: LogEvent = LogEvent(Level::INFO, "STAKE");
 pub const LOG_EVENT_UNSTAKE: LogEvent = LogEvent(Level::INFO, "UNSTAKE");
 
+pub const LOG_EVENT_LIQUIDITY: LogEvent = LogEvent(Level::INFO, "LIQUIDITY");
+
 pub const ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE: ErrorConst =
     ErrorConst(ErrCode("STAKED_BALANCE_TOO_LOW_TO_UNSTAKE"), "");

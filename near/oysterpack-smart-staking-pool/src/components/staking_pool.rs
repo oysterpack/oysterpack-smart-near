@@ -1,8 +1,9 @@
 use crate::{
     StakeAccountBalances, StakeActionCallbacks, StakedBalance, StakingPool, StakingPoolOperator,
     StakingPoolOperatorCommand, StakingPoolOwner, UnstakedBalances,
-    ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE, ERR_STAKE_ACTION_FAILED, LOG_EVENT_NOT_ENOUGH_TO_STAKE,
-    LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE, LOG_EVENT_STATUS_ONLINE,
+    ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE, ERR_STAKE_ACTION_FAILED, LOG_EVENT_LIQUIDITY,
+    LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE,
+    LOG_EVENT_STATUS_ONLINE,
 };
 use oysterpack_smart_account_management::{
     components::account_management::AccountManagementComponent, AccountRepository,
@@ -137,16 +138,33 @@ impl State {
         }
     }
 
-    pub fn incr_total_unstaked_balance(amount: YoctoNear) {
+    fn incr_total_unstaked_balance(amount: YoctoNear) {
         ContractNearBalances::incr_balance(Self::TOTAL_UNSTAKED_BALANCE, amount);
     }
 
-    pub fn decr_total_unstaked_balance(amount: YoctoNear) {
-        ContractNearBalances::decr_balance(Self::TOTAL_UNSTAKED_BALANCE, amount);
+    fn decr_total_unstaked_balance(mut amount: YoctoNear) {
+        let liquidity = Self::liquidity();
+        if liquidity > ZERO_NEAR {
+            if amount <= liquidity {
+                let total_liquidity =
+                    ContractNearBalances::decr_balance(Self::UNSTAKED_LIQUIDITY_POOL, amount);
+                LOG_EVENT_LIQUIDITY
+                    .log(format!("removed={}, total={}", liquidity, total_liquidity));
+                return;
+            }
+            amount -= liquidity;
+            ContractNearBalances::clear_balance(Self::UNSTAKED_LIQUIDITY_POOL);
+            LOG_EVENT_LIQUIDITY.log(format!("removed={}, total=0", liquidity));
+            if amount > ZERO_NEAR {
+                ContractNearBalances::decr_balance(Self::TOTAL_UNSTAKED_BALANCE, amount);
+            }
+        } else {
+            ContractNearBalances::decr_balance(Self::TOTAL_UNSTAKED_BALANCE, amount);
+        }
     }
 
     /// If there are unstaked balances, then transfer the specified amount to the liquidity pool
-    pub fn add_liquidity(amount: YoctoNear) {
+    fn add_liquidity(amount: YoctoNear) {
         if amount == ZERO_NEAR {
             return;
         }
@@ -154,13 +172,19 @@ impl State {
             ContractNearBalances::near_balance(Self::TOTAL_UNSTAKED_BALANCE);
         if total_unstaked_balance > ZERO_NEAR {
             let liquidity = min(amount, total_unstaked_balance);
-            Self::decr_total_unstaked_balance(liquidity);
-            ContractNearBalances::incr_balance(Self::UNSTAKED_LIQUIDITY_POOL, liquidity);
+            ContractNearBalances::decr_balance(Self::TOTAL_UNSTAKED_BALANCE, liquidity);
+            let total_liquidity =
+                ContractNearBalances::incr_balance(Self::UNSTAKED_LIQUIDITY_POOL, liquidity);
+            LOG_EVENT_LIQUIDITY.log(format!("added={}, total={}", liquidity, total_liquidity));
         }
     }
 
     pub fn liquidity() -> YoctoNear {
         ContractNearBalances::near_balance(Self::UNSTAKED_LIQUIDITY_POOL)
+    }
+
+    pub fn total_unstaked_balance() -> YoctoNear {
+        ContractNearBalances::near_balance(Self::TOTAL_UNSTAKED_BALANCE)
     }
 }
 
@@ -986,6 +1010,7 @@ mod tests {
                     panic!("expected Promise")
                 }
                 // Assert
+                assert_eq!(State::liquidity(), ZERO_NEAR);
                 let state = staking_pool.ops_stake_state();
                 println!(
                     "staked 1000 {}",
@@ -1102,6 +1127,7 @@ mod tests {
             // Arrange
             bring_pool_online(ctx.clone(), &mut staking_pool);
 
+            // deposit some funds into account's storage balance
             {
                 let mut ctx = ctx.clone();
                 ctx.predecessor_account_id = ACCOUNT.to_string();
@@ -1120,6 +1146,8 @@ mod tests {
                 if let PromiseOrValue::Value(_) = staking_pool.ops_stake() {
                     panic!("expected Promise")
                 }
+                // Assert
+                assert_eq!(State::liquidity(), ZERO_NEAR);
                 let state = staking_pool.ops_stake_state();
                 println!(
                     "staked 1000 {}",
@@ -1326,6 +1354,58 @@ mod tests {
 
             let receipts = deserialize_receipts();
             assert!(receipts.is_empty());
+        }
+
+        #[test]
+        fn with_liquidity_needed() {
+            let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
+
+            // Arrange
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+            // simulate some unstaked balance
+            testing_env!(ctx.clone());
+            State::incr_total_unstaked_balance((10 * YOCTO).into());
+
+            // Act
+            {
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = YOCTO;
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                testing_env!(ctx.clone());
+                if let PromiseOrValue::Value(_) = staking_pool.ops_stake() {
+                    panic!("expected Promise")
+                }
+            }
+            // Assert
+            assert_eq!(State::liquidity(), YOCTO.into());
+            assert_eq!(State::total_unstaked_balance(), (9 * YOCTO).into());
+            let logs = test_utils::get_logs();
+            println!("{:#?}", logs);
+            assert_eq!(logs, vec![
+                "[INFO] [LIQUIDITY] added=1000000000000000000000000, total=1000000000000000000000000",
+                "[INFO] [STAKE] near_amount=1000000000000000000000000, stake_token_amount=1000000000000000000000000",
+            ]);
+
+            // Act
+            {
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = YOCTO;
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                testing_env!(ctx);
+                if let PromiseOrValue::Value(_) = staking_pool.ops_stake() {
+                    panic!("expected Promise")
+                }
+            }
+            // Assert
+            let logs = test_utils::get_logs();
+            println!("{:#?}", logs);
+            assert_eq!(logs, vec![
+                "[INFO] [LIQUIDITY] added=1000000000000000000000000, total=2000000000000000000000000",
+                "[INFO] [STAKE] near_amount=1000000000000000000000000, stake_token_amount=1000000000000000000000000",
+            ]);
+
+            assert_eq!(State::liquidity(), (2 * YOCTO).into());
+            assert_eq!(State::total_unstaked_balance(), (8 * YOCTO).into());
         }
     }
 }
