@@ -58,9 +58,13 @@ where
     }
 
     fn registered_account_data(&self, account_id: &str) -> AccountDataObject<T> {
-        let account = self.load_account_data(account_id);
-        ERR_ACCOUNT_NOT_REGISTERED.assert(|| account.is_some());
-        account.unwrap()
+        match self.load_account_data(account_id) {
+            None => {
+                ERR_ACCOUNT_ALREADY_REGISTERED.assert(|| AccountNearDataObject::exists(account_id));
+                AccountDataObject::new(account_id, Default::default())
+            }
+            Some(account_data) => account_data,
+        }
     }
 
     fn account_exists(&self, account_id: &str) -> bool {

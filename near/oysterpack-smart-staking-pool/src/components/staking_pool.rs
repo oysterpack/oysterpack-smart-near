@@ -5,8 +5,8 @@ use crate::{
     LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE, LOG_EVENT_STATUS_ONLINE,
 };
 use oysterpack_smart_account_management::{
-    components::account_management::AccountManagementComponent, AccountDataObject,
-    AccountRepository, StorageManagement, ERR_ACCOUNT_NOT_REGISTERED,
+    components::account_management::AccountManagementComponent, AccountRepository,
+    StorageManagement, ERR_ACCOUNT_NOT_REGISTERED,
 };
 use oysterpack_smart_contract::{
     components::contract_ownership::ContractOwnershipComponent, BalanceId, ContractNearBalances,
@@ -557,12 +557,7 @@ impl StakingPoolComponent {
     }
 
     fn credit_unstaked_amount(&self, account_id: &str, amount: YoctoNear) {
-        let mut account = self
-            .account_manager
-            .load_account_data(&account_id)
-            .unwrap_or_else(|| {
-                AccountDataObject::<StakeAccountData>::new(&account_id, Default::default())
-            });
+        let mut account = self.account_manager.registered_account_data(&account_id);
         account.credit_unstaked(amount);
         account.save();
     }

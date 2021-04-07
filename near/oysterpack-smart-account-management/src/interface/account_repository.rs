@@ -36,14 +36,20 @@ where
     /// tries to load the account NEAR data from storage
     fn load_account_near_data(&self, account_id: &str) -> Option<AccountNearDataObject>;
 
+    /// Looks up the account for the specified registered account ID.
+    ///
     /// ## Panics
     /// if the account is not registered
     fn registered_account(&self, account_id: &str) -> Account<T>;
+
+    /// Looks up the account NEAR data for the specified registered account ID.
+    ///
     /// ## Panics
     /// if the account is not registered
     fn registered_account_near_data(&self, account_id: &str) -> AccountNearDataObject;
 
-    /// Assumes that the account will always have data if registered.
+    /// If the account is registered but has no data, then a default instance will be created and
+    /// returned.
     ///
     /// ## Panics
     /// if the account is not registered
