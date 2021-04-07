@@ -959,18 +959,19 @@ mod tests {
     mod tests_stake_online {
         use super::*;
 
+        fn bring_pool_online(mut ctx: VMContext, staking_pool: &mut StakingPoolComponent) {
+            ctx.predecessor_account_id = ADMIN.to_string();
+            testing_env!(ctx.clone());
+            staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::Resume);
+            assert!(staking_pool.ops_stake_status().is_online());
+        }
+
         #[test]
         fn stake_with_zero_storage_available_balance() {
             let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
 
             // Arrange
-            {
-                let mut ctx = ctx.clone();
-                ctx.predecessor_account_id = ADMIN.to_string();
-                testing_env!(ctx.clone());
-                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::Resume);
-                assert!(staking_pool.ops_stake_status().is_online());
-            }
+            bring_pool_online(ctx.clone(), &mut staking_pool);
 
             let state = staking_pool.ops_stake_state();
             assert_eq!(state.staked, 0.into());
@@ -1099,13 +1100,7 @@ mod tests {
             let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
 
             // Arrange
-            {
-                let mut ctx = ctx.clone();
-                ctx.predecessor_account_id = ADMIN.to_string();
-                testing_env!(ctx.clone());
-                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::Resume);
-                assert!(staking_pool.ops_stake_status().is_online());
-            }
+            bring_pool_online(ctx.clone(), &mut staking_pool);
 
             {
                 let mut ctx = ctx.clone();
@@ -1182,13 +1177,7 @@ mod tests {
             let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
 
             // Arrange
-            {
-                let mut ctx = ctx.clone();
-                ctx.predecessor_account_id = ADMIN.to_string();
-                testing_env!(ctx.clone());
-                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::Resume);
-                assert!(staking_pool.ops_stake_status().is_online());
-            }
+            bring_pool_online(ctx.clone(), &mut staking_pool);
 
             let total_supply: TokenAmount = 1000.into();
             let total_staked_balance: YoctoNear = 1005.into();
@@ -1265,17 +1254,30 @@ mod tests {
         }
 
         #[test]
+        fn with_zero_stake_amount() {
+            let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
+
+            // Arrange
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+
+            let mut ctx = ctx.clone();
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            testing_env!(ctx);
+            match staking_pool.ops_stake() {
+                PromiseOrValue::Value(balance) => {
+                    assert!(balance.staked.is_none());
+                    assert_eq!(balance.storage_balance.available, ZERO_NEAR);
+                }
+                _ => panic!("expected Value"),
+            }
+        }
+
+        #[test]
         fn not_enough_to_stake() {
             let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
 
             // Arrange
-            {
-                let mut ctx = ctx.clone();
-                ctx.predecessor_account_id = ADMIN.to_string();
-                testing_env!(ctx.clone());
-                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::Resume);
-                assert!(staking_pool.ops_stake_status().is_online());
-            }
+            bring_pool_online(ctx.clone(), &mut staking_pool);
 
             let total_supply: TokenAmount = 1000.into();
             let total_staked_balance: YoctoNear = 1005.into();
