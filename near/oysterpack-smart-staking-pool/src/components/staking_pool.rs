@@ -35,7 +35,7 @@ use oysterpack_smart_near::{
 };
 use std::cmp::min;
 
-type StakeAccountData = UnstakedBalances;
+pub type StakeAccountData = UnstakedBalances;
 
 pub struct StakingPoolComponent {
     account_manager: AccountManagementComponent<StakeAccountData>,

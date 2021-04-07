@@ -6,6 +6,7 @@ mod contract_operator;
 mod contract_ownership;
 mod contract_sale;
 mod fungible_token;
+mod staking_pool;
 mod storage_management;
 
 use components::*;
@@ -23,6 +24,10 @@ use oysterpack_smart_fungible_token::components::fungible_token::{
 };
 use oysterpack_smart_fungible_token::*;
 use oysterpack_smart_near::component::{Deploy, ManagesAccountData};
+use oysterpack_smart_near::domain::PublicKey;
+use oysterpack_smart_staking_pool::components::staking_pool::{
+    StakingPoolComponent, StakingPoolComponentConfig,
+};
 use std::convert::TryInto;
 
 near_sdk::setup_alloc!();
@@ -35,7 +40,7 @@ pub struct Contract;
 impl Contract {
     /// If owner is not specified, then predecessor Account ID will be set as the contract owner.
     #[init]
-    pub fn deploy(owner: Option<ValidAccountId>) -> Self {
+    pub fn deploy(owner: Option<ValidAccountId>, stake_public_key: PublicKey) -> Self {
         let owner = owner.unwrap_or_else(|| env::predecessor_account_id().try_into().unwrap());
         ContractOwnershipComponent::deploy(owner.clone());
 
@@ -57,6 +62,8 @@ impl Contract {
             },
             token_supply: 0,
         });
+
+        StakingPoolComponent::deploy(StakingPoolComponentConfig { stake_public_key });
 
         Self
     }
