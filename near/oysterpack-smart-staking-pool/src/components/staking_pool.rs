@@ -871,6 +871,13 @@ mod tests {
         )
     }
 
+    fn bring_pool_online(mut ctx: VMContext, staking_pool: &mut StakingPoolComponent) {
+        ctx.predecessor_account_id = ADMIN.to_string();
+        testing_env!(ctx.clone());
+        staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::Resume);
+        assert!(staking_pool.ops_stake_status().is_online());
+    }
+
     const OWNER: &str = "owner";
     const ADMIN: &str = "admin";
     const ACCOUNT: &str = "bob";
@@ -982,13 +989,6 @@ mod tests {
     #[cfg(test)]
     mod tests_stake_online {
         use super::*;
-
-        fn bring_pool_online(mut ctx: VMContext, staking_pool: &mut StakingPoolComponent) {
-            ctx.predecessor_account_id = ADMIN.to_string();
-            testing_env!(ctx.clone());
-            staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::Resume);
-            assert!(staking_pool.ops_stake_status().is_online());
-        }
 
         #[test]
         fn stake_with_zero_storage_available_balance() {
@@ -1412,5 +1412,55 @@ mod tests {
     #[cfg(test)]
     mod ops_stake_finalize {
         use super::*;
+
+        #[test]
+        fn stake_success() {
+            let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
+
+            // Arrange
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+            // stake
+            {
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = YOCTO;
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                testing_env!(ctx.clone());
+                if let PromiseOrValue::Value(_) = staking_pool.ops_stake() {
+                    panic!("expected Promise")
+                }
+            }
+            let logs = test_utils::get_logs();
+            println!("{:#?}", logs);
+
+            // Act
+            {
+                let mut state = StakingPoolComponent::state();
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = YOCTO;
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_locked_balance = *state.total_staked_balance();
+                testing_env_with_promise_result_success(ctx.clone());
+                let balances = staking_pool.ops_stake_finalize(
+                    ACCOUNT.to_string(),
+                    YOCTO.into(),
+                    YOCTO.into(),
+                    state.total_staked_balance(),
+                );
+                // Assert
+                let logs = test_utils::get_logs();
+                println!("ops_stake_finalize: {:#?}", logs);
+                println!("{:#?}", balances);
+                {
+                    let staked_balance = balances.staked.unwrap();
+                    assert_eq!(staked_balance.stake, YOCTO.into());
+                    assert_eq!(staked_balance.near_value, YOCTO.into());
+                }
+                assert!(balances.unstaked.is_none());
+                let state = staking_pool.ops_stake_state();
+                println!("{}", serde_json::to_string_pretty(&state).unwrap());
+                assert_eq!(state.staked, ZERO_NEAR);
+                assert_eq!(state.total_staked_balance, YOCTO.into());
+            }
+        }
     }
 }
