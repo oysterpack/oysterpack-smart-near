@@ -1499,6 +1499,14 @@ mod tests {
                 // Assert
                 let logs = test_utils::get_logs();
                 println!("ops_stake_finalize: {:#?}", logs);
+                assert_eq!(
+                    logs,
+                    vec![
+                        "[ERR] [STAKE_ACTION_FAILED] ",
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                        "[INFO] [FT_MINT] account: bob, amount: 1000000000000000000000000",
+                    ]
+                );
                 println!("{:#?}", balances);
                 {
                     let staked_balance = balances.staked.unwrap();
@@ -1516,6 +1524,19 @@ mod tests {
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
                 assert_eq!(state.staked, ZERO_NEAR);
                 assert_eq!(state.total_staked_balance, YOCTO.into());
+
+                let receipts = deserialize_receipts();
+                assert_eq!(receipts.len(), 1);
+                let receipt = &receipts[0];
+                assert_eq!(receipt.receiver_id, env::current_account_id());
+                assert_eq!(receipt.actions.len(), 1);
+                let action = &receipt.actions[0];
+                match action {
+                    Action::Stake(action) => {
+                        assert_eq!(action.stake, 0);
+                    }
+                    _ => panic!("expected stake action"),
+                };
             }
         }
     }
