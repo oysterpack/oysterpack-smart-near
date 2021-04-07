@@ -1615,8 +1615,6 @@ mod tests {
             let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
 
             // Arrange
-            bring_pool_online(ctx.clone(), &mut staking_pool);
-
             let mut ctx = ctx.clone();
             ctx.predecessor_account_id = ACCOUNT.to_string();
             testing_env!(ctx);
@@ -1634,8 +1632,6 @@ mod tests {
             let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
 
             // Arrange
-            bring_pool_online(ctx.clone(), &mut staking_pool);
-
             let total_supply: TokenAmount = 1000.into();
             let total_staked_balance: YoctoNear = 1005.into();
             {
@@ -1644,9 +1640,10 @@ mod tests {
                 ft_stake.ft_mint(ACCOUNT, total_supply);
                 assert_eq!(ft_stake.ft_total_supply(), total_supply);
 
-                let mut state = StakingPoolComponent::state();
-                state.staked = total_staked_balance;
-                state.save();
+                ContractNearBalances::set_balance(
+                    State::TOTAL_STAKED_BALANCE,
+                    total_staked_balance,
+                );
             }
             let mut ctx = ctx.clone();
             ctx.predecessor_account_id = ACCOUNT.to_string();
@@ -1690,7 +1687,6 @@ mod tests {
             let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
 
             // Arrange
-            bring_pool_online(ctx.clone(), &mut staking_pool);
             // simulate some unstaked balance
             testing_env!(ctx.clone());
             State::incr_total_unstaked_balance((10 * YOCTO).into());
@@ -1701,7 +1697,16 @@ mod tests {
                 ctx.attached_deposit = YOCTO;
                 ctx.predecessor_account_id = ACCOUNT.to_string();
                 testing_env!(ctx.clone());
-                if let PromiseOrValue::Value(_) = staking_pool.ops_stake() {
+                if let PromiseOrValue::Value(balances) = staking_pool.ops_stake() {
+                    println!("{:#?}", balances);
+                    assert_eq!(
+                        balances.staked.unwrap(),
+                        StakedBalance {
+                            stake: YOCTO.into(),
+                            near_value: YOCTO.into()
+                        }
+                    );
+                } else {
                     panic!("expected Promise")
                 }
             }
@@ -1713,6 +1718,9 @@ mod tests {
             assert_eq!(logs, vec![
                 "[INFO] [LIQUIDITY] added=1000000000000000000000000, total=1000000000000000000000000",
                 "[INFO] [STAKE] near_amount=1000000000000000000000000, stake_token_amount=1000000000000000000000000",
+                "[WARN] [STATUS_OFFLINE] ",
+                "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                "[INFO] [FT_MINT] account: bob, amount: 1000000000000000000000000",
             ]);
 
             // Act
@@ -1721,7 +1729,15 @@ mod tests {
                 ctx.attached_deposit = YOCTO;
                 ctx.predecessor_account_id = ACCOUNT.to_string();
                 testing_env!(ctx);
-                if let PromiseOrValue::Value(_) = staking_pool.ops_stake() {
+                if let PromiseOrValue::Value(balances) = staking_pool.ops_stake() {
+                    assert_eq!(
+                        balances.staked.unwrap(),
+                        StakedBalance {
+                            stake: (2 * YOCTO).into(),
+                            near_value: (2 * YOCTO).into()
+                        }
+                    );
+                } else {
                     panic!("expected Promise")
                 }
             }
@@ -1731,6 +1747,8 @@ mod tests {
             assert_eq!(logs, vec![
                 "[INFO] [LIQUIDITY] added=1000000000000000000000000, total=2000000000000000000000000",
                 "[INFO] [STAKE] near_amount=1000000000000000000000000, stake_token_amount=1000000000000000000000000",
+                "[WARN] [STATUS_OFFLINE] ",
+                "[INFO] [FT_MINT] account: bob, amount: 1000000000000000000000000",
             ]);
 
             assert_eq!(State::liquidity(), (2 * YOCTO).into());
