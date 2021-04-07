@@ -9,13 +9,19 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 ///
 /// Staking pools enable accounts to delegate NEAR to stake with a validator. The main benefits of using
 /// this staking pool are:
-/// 1. The staking pool does not support lockup contracts. The benefit is this lifts the restriction
-///    to lock unstaked NEAR for withdrawal. Unstaked NEAR can be immediately withdrawn. The tradeoff
-///    is that lockup contracts will not be allowed to delegate their NEAR to stake with this staking
-///    pool because they are only permitted to go through a NEAR managed whitelisted staking pool
-///    that guarantees that unstaked NEAR will be locked for 4 epochs.
-/// 2. STAKE fungible token is provided for staked NEAR. This enables staked NEAR value to be transferred
+/// 1. STAKE fungible token is provided for staked NEAR. This enables staked NEAR value to be transferred
 ///    while still being staked.
+/// 2. unstaked NEAR is locked for 4 epochs before it becomes available to be withdrawn, but is tracked
+///    per epoch. Thus, more funds can be unstaked without affecting funds that were unstaked in previous
+///    epochs. Compare this to the NEAR provided staking pool, where each time you unstake, it resets
+///    the lockup period to 4 epochs for the total unstaked NEAR balance. For example, if 100 NEAR is
+///    unstaked in EPOCH 1 and 10 NEAR is unstaked in EPOCH 3. Then 100 NEAR is available for
+///    withdrawal in EPOCH 5 and 10 NEAR in EPOCH 7. In the current NEAR provided staking pool
+///    implementation, unstaking in the 10 NEAR in EPOCH 3 would reset the lock period for the total
+///    unstaked, i.e., you would not be able to withdraw the 100 NEAR that was unstaked in EPOCH 1
+///    until EPOCH 7.
+/// 3. Staking adds liquidity for withdrawing unstaked NEAR that is locked on a first come, first
+///    withdraw basis.
 ///
 /// The staking pool works with the storage management API:
 /// - accounts must be registered with the contract in order to stake
