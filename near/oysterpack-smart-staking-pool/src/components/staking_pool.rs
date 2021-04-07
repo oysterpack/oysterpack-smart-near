@@ -1408,4 +1408,9 @@ mod tests {
             assert_eq!(State::total_unstaked_balance(), (8 * YOCTO).into());
         }
     }
+
+    #[cfg(test)]
+    mod ops_stake_finalize {
+        use super::*;
+    }
 }

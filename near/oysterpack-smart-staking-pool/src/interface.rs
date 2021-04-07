@@ -1,6 +1,6 @@
 pub use contract::operator::*;
 pub use contract::owner::*;
-pub use contract::stake_action_callback::*;
+pub use contract::stake_action_callbacks::*;
 pub use contract::staking_pool::*;
 
 pub mod contract;
