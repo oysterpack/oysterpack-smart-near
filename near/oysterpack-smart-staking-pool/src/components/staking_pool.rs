@@ -133,6 +133,22 @@ impl State {
         }
     }
 
+    fn incr_total_staked_balance(amount: YoctoNear) {
+        ContractNearBalances::incr_balance(State::TOTAL_STAKED_BALANCE, amount);
+    }
+
+    fn decr_total_staked_balance(amount: YoctoNear) {
+        ContractNearBalances::decr_balance(State::TOTAL_STAKED_BALANCE, amount);
+    }
+
+    fn set_total_staked_balance(amount: YoctoNear) {
+        ContractNearBalances::set_balance(State::TOTAL_STAKED_BALANCE, amount);
+    }
+
+    fn clear_total_staked_balance() {
+        ContractNearBalances::clear_balance(Self::TOTAL_STAKED_BALANCE);
+    }
+
     fn incr_total_unstaked_balance(amount: YoctoNear) {
         ContractNearBalances::incr_balance(Self::TOTAL_UNSTAKED_BALANCE, amount);
     }
@@ -325,11 +341,12 @@ impl StakingPool for StakingPoolComponent {
             Status::Offline(_) => {
                 LOG_EVENT_STATUS_OFFLINE.log("");
 
-                ContractNearBalances::decr_balance(State::TOTAL_STAKED_BALANCE, near_amount);
+                State::decr_total_staked_balance(near_amount);
                 State::incr_total_unstaked_balance(near_amount);
 
                 self.stake_token.ft_burn(&account_id, stake_token_amount);
                 self.credit_unstaked_amount(&account_id, near_amount);
+
                 self.registered_stake_account_balance(&account_id)
             }
         }
@@ -443,7 +460,7 @@ impl StakingPoolOperator for StakingPoolComponent {
                     // stake
                     {
                         if total_staked_balance > ZERO_NEAR {
-                            ContractNearBalances::clear_balance(State::TOTAL_STAKED_BALANCE);
+                            State::clear_total_staked_balance();
                             Promise::new(env::current_account_id())
                                 .stake(*total_staked_balance, state.stake_public_key.into())
                                 .then(json_function_callback(
@@ -668,7 +685,7 @@ impl StakingPoolComponent {
             }
             Status::Offline(_) => {
                 LOG_EVENT_STATUS_OFFLINE.log("");
-                ContractNearBalances::incr_balance(State::TOTAL_STAKED_BALANCE, near_amount);
+                State::incr_total_staked_balance(near_amount);
                 self.stake_token.ft_mint(account_id, stake_token_amount);
                 self.registered_stake_account_balance(account_id)
             }
@@ -731,7 +748,7 @@ impl StakingPoolComponent {
 
     fn handle_stake_action_failure(total_staked_balance: YoctoNear) {
         ERR_STAKE_ACTION_FAILED.log("");
-        ContractNearBalances::set_balance(State::TOTAL_STAKED_BALANCE, total_staked_balance);
+        State::set_total_staked_balance(total_staked_balance);
         if env::account_locked_balance() > 0 {
             Promise::new(env::current_account_id()).stake(0, Self::state().stake_public_key.into());
         }
