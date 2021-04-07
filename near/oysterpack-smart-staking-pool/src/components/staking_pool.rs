@@ -16,10 +16,8 @@ use oysterpack_smart_contract::{
 use oysterpack_smart_fungible_token::{
     components::fungible_token::FungibleTokenComponent, FungibleToken, TokenAmount, TokenService,
 };
-use oysterpack_smart_near::asserts::ERR_ILLEGAL_STATE;
-use oysterpack_smart_near::near_sdk::{AccountId, PromiseOrValue};
 use oysterpack_smart_near::{
-    asserts::{ERR_INSUFFICIENT_FUNDS, ERR_INVALID},
+    asserts::{ERR_ILLEGAL_STATE, ERR_INSUFFICIENT_FUNDS, ERR_INVALID},
     component::{Component, ComponentState, Deploy},
     data::numbers::U256,
     domain::{
@@ -31,7 +29,7 @@ use oysterpack_smart_near::{
         env, is_promise_success,
         json_types::ValidAccountId,
         serde::{Deserialize, Serialize},
-        Promise,
+        AccountId, Promise, PromiseOrValue,
     },
     to_valid_account_id, TERA, YOCTO,
 };
@@ -131,10 +129,7 @@ impl State {
                 }
                 self.total_staked_balance + self.staked - self.unstaked
             }
-            Status::Offline(_) => ContractNearBalances::load_near_balances()
-                .get(&Self::TOTAL_STAKED_BALANCE)
-                .cloned()
-                .unwrap_or(ZERO_NEAR),
+            Status::Offline(_) => ContractNearBalances::near_balance(Self::TOTAL_STAKED_BALANCE),
         }
     }
 
@@ -495,7 +490,11 @@ impl StakingPoolOperator for StakingPoolComponent {
     }
 
     fn ops_stake_state(&self) -> State {
-        *Self::state()
+        let mut state = *Self::state();
+        if !state.status.is_online() {
+            state.total_staked_balance = state.total_staked_balance();
+        }
+        state
     }
 }
 
@@ -534,15 +533,13 @@ impl StakeActionCallbacks for StakingPoolComponent {
         stake_token_amount: TokenAmount,
         total_staked_balance: YoctoNear,
     ) -> StakeAccountBalances {
-        let mut state = Self::state();
-        state.staked -= amount;
-        if is_promise_success() {
-            state.total_staked_balance = env::account_locked_balance().into();
-        } else {
-            Self::handle_stake_action_failure(total_staked_balance);
+        // update state
+        {
+            let mut state = Self::state();
+            state.staked -= amount;
+            Self::handle_stake_action_result(&mut state, total_staked_balance);
+            state.save();
         }
-        state.save();
-
         self.stake_token.ft_mint(&account_id, stake_token_amount);
         self.ops_stake_balance(to_valid_account_id(&account_id))
             .unwrap()
@@ -555,18 +552,19 @@ impl StakeActionCallbacks for StakingPoolComponent {
         stake_token_amount: TokenAmount,
         total_staked_balance: YoctoNear,
     ) -> StakeAccountBalances {
-        let mut state = Self::state();
-        state.unstaked -= amount;
-        if is_promise_success() {
-            state.total_staked_balance = env::account_locked_balance().into();
-        } else {
-            Self::handle_stake_action_failure(total_staked_balance);
+        // update state
+        {
+            let mut state = Self::state();
+            state.unstaked -= amount;
+            Self::handle_stake_action_result(&mut state, total_staked_balance);
+            state.save();
+            State::incr_total_unstaked_balance(amount);
         }
-        state.save();
-        State::incr_total_unstaked_balance(amount);
-
-        self.stake_token.ft_burn(&account_id, stake_token_amount);
-        self.credit_unstaked_amount(&account_id, amount);
+        // update account balances
+        {
+            self.stake_token.ft_burn(&account_id, stake_token_amount);
+            self.credit_unstaked_amount(&account_id, amount);
+        }
         self.ops_stake_balance(to_valid_account_id(&account_id))
             .unwrap()
     }
@@ -609,6 +607,15 @@ struct ResumeFinalizeCallbackArgs {
 }
 
 impl StakingPoolComponent {
+    fn handle_stake_action_result(state: &mut State, total_staked_balance: YoctoNear) {
+        if is_promise_success() {
+            state.total_staked_balance = env::account_locked_balance().into();
+        } else {
+            state.status = Status::Offline(OfflineReason::StakeActionFailed);
+            Self::handle_stake_action_failure(total_staked_balance);
+        }
+    }
+
     fn registered_stake_account_balance(
         &self,
         account_id: &str,
@@ -627,12 +634,6 @@ impl StakingPoolComponent {
         let mut account = self.account_manager.registered_account_data(&account_id);
         account.credit_unstaked(amount);
         account.save();
-    }
-
-    fn set_status(status: Status) {
-        let mut state = Self::state();
-        state.status = status;
-        state.save();
     }
 
     fn stake(
@@ -733,7 +734,6 @@ impl StakingPoolComponent {
         ContractNearBalances::set_balance(State::TOTAL_STAKED_BALANCE, total_staked_balance);
         if env::account_locked_balance() > 0 {
             Promise::new(env::current_account_id()).stake(0, Self::state().stake_public_key.into());
-            Self::set_status(Status::Offline(OfflineReason::StakeActionFailed));
         }
     }
 
@@ -1414,7 +1414,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn stake_success() {
+        fn stake_action_success() {
             let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
 
             // Arrange
@@ -1456,6 +1456,62 @@ mod tests {
                     assert_eq!(staked_balance.near_value, YOCTO.into());
                 }
                 assert!(balances.unstaked.is_none());
+                let state = staking_pool.ops_stake_state();
+                println!("{}", serde_json::to_string_pretty(&state).unwrap());
+                assert_eq!(state.staked, ZERO_NEAR);
+                assert_eq!(state.total_staked_balance, YOCTO.into());
+            }
+        }
+
+        #[test]
+        fn stake_action_failed() {
+            let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
+
+            // Arrange
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+            // stake
+            {
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = YOCTO;
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                testing_env!(ctx.clone());
+                if let PromiseOrValue::Value(_) = staking_pool.ops_stake() {
+                    panic!("expected Promise")
+                }
+            }
+            let logs = test_utils::get_logs();
+            println!("{:#?}", logs);
+
+            // Act
+            {
+                let mut state = StakingPoolComponent::state();
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = YOCTO;
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_locked_balance = *state.total_staked_balance();
+                testing_env_with_promise_result_failure(ctx);
+                let balances = staking_pool.ops_stake_finalize(
+                    ACCOUNT.to_string(),
+                    YOCTO.into(),
+                    YOCTO.into(),
+                    state.total_staked_balance(),
+                );
+                // Assert
+                let logs = test_utils::get_logs();
+                println!("ops_stake_finalize: {:#?}", logs);
+                println!("{:#?}", balances);
+                {
+                    let staked_balance = balances.staked.unwrap();
+                    assert_eq!(staked_balance.stake, YOCTO.into());
+                    assert_eq!(staked_balance.near_value, YOCTO.into());
+                }
+                assert!(balances.unstaked.is_none());
+
+                assert_eq!(
+                    ContractNearBalances::near_balance(State::TOTAL_STAKED_BALANCE),
+                    YOCTO.into()
+                );
+
                 let state = staking_pool.ops_stake_state();
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
                 assert_eq!(state.staked, ZERO_NEAR);
