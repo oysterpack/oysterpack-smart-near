@@ -5,6 +5,6 @@ authors = ["oysterpack.inc <2zP6OaymGZhJTHFvQMzp6Ze>"]
 edition = "2018"
 
 [dependencies]
-near-sdk = "3.0.1"
-near-vm-logic = "3.0.0"
+near-sdk = "3"
+near-vm-logic = "3"
 oysterpack-smart-near = {path = "../oysterpack-smart-near"}

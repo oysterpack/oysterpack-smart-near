@@ -203,7 +203,7 @@ mod tests {
     #[test]
     fn is_not_owner() {
         let account = "bob";
-        let mut ctx = new_context(account);
+        let ctx = new_context(account);
 
         testing_env!(ctx.clone());
         ContractOwnerObject::initialize_contract(to_valid_account_id("alice"));
@@ -213,7 +213,7 @@ mod tests {
     #[test]
     fn is_owner() {
         let account = "bob";
-        let mut ctx = new_context(account);
+        let ctx = new_context(account);
 
         testing_env!(ctx.clone());
         ContractOwnerObject::initialize_contract(to_valid_account_id(account));

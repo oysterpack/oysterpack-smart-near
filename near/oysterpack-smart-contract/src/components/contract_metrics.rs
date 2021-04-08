@@ -61,8 +61,8 @@ mod tests {
     };
     use oysterpack_smart_near::component::*;
     use oysterpack_smart_near::domain::YoctoNear;
+    use oysterpack_smart_near::near_sdk::VMContext;
     use oysterpack_smart_near::YOCTO;
-    use oysterpack_smart_near_test::near_vm_logic::VMContext;
     use oysterpack_smart_near_test::*;
 
     pub type AccountManager = AccountManagementComponent<()>;

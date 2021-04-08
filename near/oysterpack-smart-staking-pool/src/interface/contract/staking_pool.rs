@@ -22,6 +22,17 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 ///    until EPOCH 7.
 /// 3. Staking adds liquidity for withdrawing unstaked NEAR that is locked on a first come, first
 ///    withdraw basis.
+/// 4. Transaction fee based model
+///    - instead of charging delegators a percentage of the staking rewards, a transaction fee based
+///      model is used:
+///      - staking fee (0.5%)
+///      - unstaking fee (0.3%)
+///    - fees are deposited in the staking pool treasury fund
+/// 5. Profit sharing
+///    - a percentage (50%) of the staking rewards earned by the treasury are distributed by burning
+///      STAKE tokens that are earned by the treasury
+/// 6. Revenue income generating streams
+///    - revenue
 ///
 /// The staking pool is integrated with the storage management API:
 /// - accounts must be registered with the contract in order to stake
