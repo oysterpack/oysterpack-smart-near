@@ -91,6 +91,7 @@ impl ContractNearBalances {
         self.owner
     }
 
+    /// balance locked for validator staking
     pub fn locked(&self) -> YoctoNear {
         self.locked
     }

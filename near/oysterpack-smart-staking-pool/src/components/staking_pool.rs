@@ -2108,5 +2108,15 @@ mod tests {
                 }
             }
         }
+
+        #[test]
+        fn insufficient_staked_funds() {
+            todo!()
+        }
+
+        #[test]
+        fn account_not_registered() {
+            todo!()
+        }
     }
 }
