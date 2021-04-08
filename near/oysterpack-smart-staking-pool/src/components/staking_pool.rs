@@ -319,11 +319,16 @@ impl StakingPool for StakingPoolComponent {
             .stake_token
             .ft_balance_of(to_valid_account_id(&account_id));
         let stake_near_value = self.stake_near_value_rounded_down(stake_balance);
-        let near_amount = amount.unwrap_or(stake_near_value);
-
-        ERR_INSUFFICIENT_FUNDS.assert(|| stake_near_value >= near_amount);
-        let stake_token_amount = self.near_stake_value_rounded_up(near_amount);
-        ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE.assert(|| stake_balance >= stake_token_amount);
+        let (near_amount, stake_token_amount) = match amount {
+            None => (stake_near_value, stake_balance),
+            Some(near_amount) => {
+                ERR_INSUFFICIENT_FUNDS.assert(|| stake_near_value >= near_amount);
+                let stake_token_amount = self.near_stake_value_rounded_up(near_amount);
+                ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE
+                    .assert(|| stake_balance >= stake_token_amount);
+                (near_amount, stake_token_amount)
+            }
+        };
 
         LOG_EVENT_UNSTAKE.log(format!(
             "near_amount={}, stake_token_amount={}",
@@ -2110,13 +2115,23 @@ mod tests {
         }
 
         #[test]
+        #[should_panic(expected = "[ERR] [INSUFFICIENT_FUNDS]")]
         fn insufficient_staked_funds() {
-            todo!()
+            let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+
+            // Act
+            testing_env!(ctx.clone());
+            staking_pool.ops_unstake(Some(YOCTO.into()));
         }
 
         #[test]
+        #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED]")]
         fn account_not_registered() {
-            todo!()
+            let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, false);
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+            testing_env!(ctx.clone());
+            staking_pool.ops_unstake(None);
         }
     }
 }

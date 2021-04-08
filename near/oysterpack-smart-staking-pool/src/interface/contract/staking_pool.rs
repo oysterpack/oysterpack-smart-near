@@ -25,14 +25,18 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 /// 4. Transaction fee based model
 ///    - instead of charging delegators a percentage of the staking rewards, a transaction fee based
 ///      model is used:
-///      - staking fee (0.5%)
-///      - unstaking fee (0.3%)
+///      - configurable staking fee (0.5% - min 0.05 NEAR)
+///      - immutable unstaking fee (0.3%)
+///    - configurable fee means the fee can be later changed by the contract owner, while unstaking
+///      fees can never be changed for the life time of the contract.
 ///    - fees are deposited in the staking pool treasury fund
-/// 5. Profit sharing
-///    - a percentage (50%) of the staking rewards earned by the treasury are distributed by burning
-///      STAKE tokens that are earned by the treasury
-/// 6. Revenue income generating streams
-///    - revenue
+/// 5. Profit sharing through dividends
+///    - a percentage (50%) of the staking rewards earned by the treasury are distributed as dividends
+///      by burning STAKE tokens that are earned by the treasury, there by boosting the yield, i.e.,
+///      STAKE token value
+///    - dividends are paid on a quarterly basis
+///    - dividends are announced and set a quarter in advance - they are coded into the contract and
+///      cannot be changed
 ///
 /// The staking pool is integrated with the storage management API:
 /// - accounts must be registered with the contract in order to stake
