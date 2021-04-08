@@ -2,6 +2,7 @@
 //! - all domain objects support Borsh and JSON serialization
 
 mod account_id_hash;
+mod basis_points;
 mod block_height;
 mod block_time;
 mod block_timestamp;
@@ -15,6 +16,7 @@ mod tgas;
 mod yocto_near;
 
 pub use account_id_hash::*;
+pub use basis_points::*;
 pub use block_height::*;
 pub use block_time::*;
 pub use block_timestamp::*;

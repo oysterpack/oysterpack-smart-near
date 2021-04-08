@@ -1,6 +1,6 @@
 use crate::{
     StakeAccountBalances, StakeActionCallbacks, StakedBalance, StakingPool, StakingPoolOperator,
-    StakingPoolOperatorCommand, StakingPoolOwner, UnstakedBalances,
+    StakingPoolOperatorCommand, StakingPoolOwner, Treasury, UnstakedBalances,
     ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE, ERR_STAKE_ACTION_FAILED, LOG_EVENT_LIQUIDITY,
     LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE,
     LOG_EVENT_STATUS_ONLINE, LOG_EVENT_UNSTAKE,
@@ -16,6 +16,7 @@ use oysterpack_smart_contract::{
 use oysterpack_smart_fungible_token::{
     components::fungible_token::FungibleTokenComponent, FungibleToken, TokenAmount, TokenService,
 };
+use oysterpack_smart_near::domain::BasisPoints;
 use oysterpack_smart_near::{
     asserts::{ERR_ILLEGAL_STATE, ERR_INSUFFICIENT_FUNDS, ERR_INVALID},
     component::{Component, ComponentState, Deploy},
@@ -37,16 +38,19 @@ use std::cmp::min;
 
 pub type StakeAccountData = UnstakedBalances;
 
+pub type AccountManager = AccountManagementComponent<StakeAccountData>;
+pub type StakeFungibleToken = FungibleTokenComponent<StakeAccountData>;
+
 pub struct StakingPoolComponent {
-    account_manager: AccountManagementComponent<StakeAccountData>,
-    stake_token: FungibleTokenComponent<StakeAccountData>,
+    account_manager: AccountManager,
+    stake_token: StakeFungibleToken,
     contract_ownership: ContractOwnershipComponent,
 }
 
 impl StakingPoolComponent {
     pub fn new(
         account_manager: AccountManagementComponent<StakeAccountData>,
-        stake: FungibleTokenComponent<StakeAccountData>,
+        stake: StakeFungibleToken,
     ) -> Self {
         Self {
             account_manager,
@@ -80,6 +84,9 @@ pub struct State {
 
     // used to override the built in computed gas amount
     pub callback_gas: Option<Gas>,
+    pub staking_fee: BasisPoints,
+
+    pub treasury: Treasury,
 }
 
 impl State {
@@ -241,17 +248,23 @@ impl Deploy for StakingPoolComponent {
             unstaked: ZERO_NEAR,
             total_staked_balance: ZERO_NEAR,
             callback_gas: None,
+            staking_fee: 80.into(),
+            treasury: Default::default(),
         };
         let state = Self::new_state(state);
         state.save();
+
+        // the contract account serves as the treasury account
+        // we need to register an account with storage management in order to deposit STAKE into the
+        // treasury
+        let treasury = env::current_account_id();
+        AccountManager::get_or_register_account(&treasury);
     }
 }
 
 pub struct StakingPoolComponentConfig {
     pub stake_public_key: PublicKey,
 }
-
-pub const MIN_STAKE_AMOUNT: YoctoNear = YoctoNear(1000);
 
 impl StakingPool for StakingPoolComponent {
     fn ops_stake_balance(&self, account_id: ValidAccountId) -> Option<StakeAccountBalances> {
@@ -508,6 +521,11 @@ impl StakingPoolOperator for StakingPoolComponent {
                 state.stake_public_key = public_key;
                 state.save();
             }
+            StakingPoolOperatorCommand::UpdateStakingFee(fee) => {
+                let mut state = Self::state();
+                state.staking_fee = fee;
+                state.save();
+            }
         }
     }
 
@@ -559,14 +577,25 @@ impl StakeActionCallbacks for StakingPoolComponent {
         stake_token_amount: TokenAmount,
         total_staked_balance: YoctoNear,
     ) -> StakeAccountBalances {
-        // update state
-        {
+        let staking_fee_stake = {
             let mut state = Self::state();
             state.staked -= amount;
             Self::handle_stake_action_result(&mut state, total_staked_balance);
+            // apply staking fees
+            let staking_fee_stake = self.near_stake_value_rounded_down(amount * state.staking_fee);
+            let staking_fee_near = self.stake_near_value_rounded_down(staking_fee_stake);
+            state.treasury.treasury_balance += staking_fee_near;
             state.save();
+            staking_fee_stake
+        };
+        // mint STAKE
+        {
+            self.stake_token
+                .ft_mint(&account_id, stake_token_amount - staking_fee_stake);
+            self.stake_token
+                .ft_mint(&env::current_account_id(), staking_fee_stake);
         }
-        self.stake_token.ft_mint(&account_id, stake_token_amount);
+
         self.ops_stake_balance(to_valid_account_id(&account_id))
             .unwrap()
     }
@@ -827,9 +856,6 @@ mod tests {
     use oysterpack_smart_near_test::*;
     use std::convert::*;
 
-    type AccountManager = AccountManagementComponent<StakeAccountData>;
-    type StakeFungibleToken = FungibleTokenComponent<StakeAccountData>;
-
     fn account_manager() -> AccountManager {
         StakeFungibleToken::register_storage_management_event_handler();
         AccountManager::default()
@@ -883,6 +909,8 @@ mod tests {
         StakingPoolComponent::deploy(StakingPoolComponentConfig {
             stake_public_key: staking_public_key(),
         });
+        assert!(AccountNearDataObject::exists(env::current_account_id().as_str()),
+                "staking pool deployment should have registered an account for itself to serve as the treasury");
 
         if register_account {
             let mut ctx = ctx.clone();
@@ -1825,8 +1853,9 @@ mod tests {
                 println!("{:#?}", balances);
                 {
                     let staked_balance = balances.staked.unwrap();
-                    assert_eq!(staked_balance.stake, YOCTO.into());
-                    assert_eq!(staked_balance.near_value, YOCTO.into());
+                    let expected_amount = YOCTO - *(state.staking_fee * YOCTO.into());
+                    assert_eq!(staked_balance.stake, expected_amount.into());
+                    assert_eq!(staked_balance.near_value, expected_amount.into());
                 }
                 assert!(balances.unstaked.is_none());
                 let state = staking_pool.ops_stake_state();
@@ -1877,14 +1906,17 @@ mod tests {
                     vec![
                         "[ERR] [STAKE_ACTION_FAILED] ",
                         "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
-                        "[INFO] [FT_MINT] account: bob, amount: 1000000000000000000000000",
+                        "[INFO] [FT_MINT] account: bob, amount: 992000000000000000000000",
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                        "[INFO] [FT_MINT] account: contract.near, amount: 8000000000000000000000",
                     ]
                 );
                 println!("{:#?}", balances);
                 {
                     let staked_balance = balances.staked.unwrap();
-                    assert_eq!(staked_balance.stake, YOCTO.into());
-                    assert_eq!(staked_balance.near_value, YOCTO.into());
+                    let expected_amount = YOCTO - *(state.staking_fee * YOCTO.into());
+                    assert_eq!(staked_balance.stake, expected_amount.into());
+                    assert_eq!(staked_balance.near_value, expected_amount.into());
                 }
                 assert!(balances.unstaked.is_none());
 
@@ -1972,9 +2004,10 @@ mod tests {
                     ]
                 );
                 assert_eq!(ft_stake().ft_locked_balance(ACCOUNT).unwrap(), 1000.into());
+                let stake_balance = YOCTO - *(state.staking_fee * YOCTO.into());
                 assert_eq!(
                     ft_stake().ft_balance_of(to_valid_account_id(ACCOUNT)),
-                    (YOCTO - 1000).into()
+                    (stake_balance - 1000).into()
                 );
                 let state = staking_pool.ops_stake_state();
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
@@ -2065,11 +2098,15 @@ mod tests {
                 assert_eq!(
                     logs,
                     vec![
-                        "[INFO] [UNSTAKE] near_amount=1000000000000000000000000, stake_token_amount=1000000000000000000000000",
-                        "[INFO] [FT_LOCK] account: bob, amount: 1000000000000000000000000",
+                        "[INFO] [UNSTAKE] near_amount=992000000000000000000000, stake_token_amount=992000000000000000000000",
+                        "[INFO] [FT_LOCK] account: bob, amount: 992000000000000000000000",
                     ]
                 );
-                assert_eq!(ft_stake().ft_locked_balance(ACCOUNT).unwrap(), YOCTO.into());
+                let expected_locked_balance = YOCTO - *(state.staking_fee * YOCTO.into());
+                assert_eq!(
+                    ft_stake().ft_locked_balance(ACCOUNT).unwrap(),
+                    expected_locked_balance.into()
+                );
                 assert_eq!(
                     ft_stake().ft_balance_of(to_valid_account_id(ACCOUNT)),
                     0.into()
@@ -2077,7 +2114,7 @@ mod tests {
                 let state = staking_pool.ops_stake_state();
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
                 assert_eq!(state.total_staked_balance, YOCTO.into());
-                assert_eq!(state.unstaked, YOCTO.into());
+                assert_eq!(state.unstaked, expected_locked_balance.into());
 
                 let receipts = deserialize_receipts();
                 assert_eq!(receipts.len(), 2);
@@ -2088,7 +2125,7 @@ mod tests {
                     let action = &receipt.actions[0];
                     match action {
                         Action::Stake(action) => {
-                            assert_eq!(action.stake, 0);
+                            assert_eq!(action.stake, *(state.staking_fee * YOCTO.into()));
                         }
                         _ => panic!("expected StakeAction"),
                     }
@@ -2104,9 +2141,9 @@ mod tests {
                             let args: StakeActionCallbackArgs =
                                 serde_json::from_str(&f.args).unwrap();
                             assert_eq!(args.account_id, ACCOUNT);
-                            assert_eq!(args.amount, YOCTO.into());
-                            assert_eq!(args.stake_token_amount, YOCTO.into());
-                            assert_eq!(args.total_staked_balance, 0.into());
+                            assert_eq!(args.amount, expected_locked_balance.into());
+                            assert_eq!(args.stake_token_amount, expected_locked_balance.into());
+                            assert_eq!(args.total_staked_balance, state.staking_fee * YOCTO.into());
                         }
                         _ => panic!("expected FunctionCall"),
                     }

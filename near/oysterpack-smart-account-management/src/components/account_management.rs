@@ -246,6 +246,27 @@ where
     pub fn account_metrics() -> AccountMetrics {
         AccountMetrics::load()
     }
+
+    /// if the account is not registered, then the contract will register the account and pay for its
+    /// storage
+    pub fn get_or_register_account(account_id: &str) -> AccountNearDataObject {
+        AccountNearDataObject::load(account_id).unwrap_or_else(|| {
+            // register the account
+            {
+                AccountMetrics::register_account_storage_event_handler();
+                let storage_balance_bounds: StorageBalanceBounds = AccountStorageUsageComponent
+                    .ops_storage_usage_bounds()
+                    .into();
+                let account = AccountNearDataObject::new(account_id, storage_balance_bounds.min);
+                let storage_balance = account.storage_balance(storage_balance_bounds.min);
+                account.save();
+                eventbus::post(&AccountStorageEvent::Registered(storage_balance));
+            }
+            // the account storage usage is updated by the storage event handler - thus the object state
+            // becomes stale, and we need to return a fresh updated instance from storage
+            AccountNearDataObject::registered_account(account_id)
+        })
+    }
 }
 
 impl<T> Deploy for AccountManagementComponent<T>
@@ -255,7 +276,8 @@ where
     type Config = AccountManagementComponentConfig;
 
     fn deploy(config: Self::Config) {
-        let storage_usage_bounds = {
+        // configure storage usage bounds
+        {
             let mut storage_usage_bounds =
                 config
                     .storage_usage_bounds
@@ -276,30 +298,13 @@ where
                     });
 
             AccountStorageUsageComponent::deploy(storage_usage_bounds);
-            storage_usage_bounds
-        };
+        }
 
         // create admin account
         {
-            let storage_balance_bounds: StorageBalanceBounds = storage_usage_bounds.into();
-            AccountMetrics::register_account_storage_event_handler();
-            match AccountNearDataObject::load(config.admin_account.as_ref().as_str()) {
-                None => {
-                    let mut account = AccountNearDataObject::new(
-                        config.admin_account.as_ref(),
-                        storage_balance_bounds.min,
-                    );
-                    account.grant_admin();
-                    account.save();
-                    eventbus::post(&AccountStorageEvent::Registered(
-                        account.storage_balance(storage_balance_bounds.min),
-                    ));
-                }
-                Some(mut account) => {
-                    account.grant_admin();
-                    account.save();
-                }
-            }
+            let mut account = Self::get_or_register_account(config.admin_account.as_ref().as_str());
+            account.grant_admin();
+            account.save();
         }
     }
 }
@@ -439,7 +444,8 @@ where
     fn storage_withdraw(&mut self, amount: Option<YoctoNear>) -> StorageBalance {
         assert_yocto_near_attached();
 
-        let mut account = self.registered_account_near_data(env::predecessor_account_id().as_str());
+        let account_id = env::predecessor_account_id();
+        let mut account = self.registered_account_near_data(&account_id);
         let storage_balance_bounds = self.storage_balance_bounds();
         let account_available_balance = account
             .storage_balance(storage_balance_bounds.min)
@@ -2677,7 +2683,7 @@ mod tests_account_storage_usage {
 #[cfg(test)]
 mod tests_account_metrics {
     use super::*;
-    use oysterpack_smart_near::near_sdk;
+    use oysterpack_smart_near::near_sdk::{self, test_utils};
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
@@ -2701,11 +2707,16 @@ mod tests_account_metrics {
         println!("{:?}", metrics);
         println!("measured storage_usage_bounds = {:?}", storage_usage_bounds);
 
+        let metrics = AccountManager::account_metrics();
+        println!("before deploy: {:?}", metrics);
         AccountManager::deploy(AccountManagementComponentConfig {
             storage_usage_bounds: Some(storage_usage_bounds),
             admin_account: to_valid_account_id("admin"),
             component_account_storage_mins: None,
         });
+        let metrics = AccountManager::account_metrics();
+        println!("after deploy: {:?}", metrics);
+        println!("{:#?}", test_utils::get_logs());
 
         let mut service = AccountManager::new(&Default::default());
         let admin_account = service.registered_account_near_data("admin");
