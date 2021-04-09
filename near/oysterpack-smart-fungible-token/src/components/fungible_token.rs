@@ -191,7 +191,7 @@ impl<T> TokenService for FungibleTokenComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    fn ft_mint(&mut self, account_id: &str, amount: TokenAmount) {
+    fn ft_mint(&mut self, account_id: &str, amount: TokenAmount) -> TokenAmount {
         ERR_INVALID.assert(|| *amount > 0, || "mint amount cannot be zero");
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(account_id));
 
@@ -204,9 +204,10 @@ where
         token_supply.save();
 
         LOG_EVENT_FT_MINT.log(format!("account: {}, amount: {}", account_id, amount));
+        (*ft_balance).into()
     }
 
-    fn ft_burn(&mut self, account_id: &str, amount: TokenAmount) {
+    fn ft_burn(&mut self, account_id: &str, amount: TokenAmount) -> TokenAmount {
         ERR_INVALID.assert(|| *amount > 0, || "burn amount cannot be zero");
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(account_id));
 
@@ -221,6 +222,7 @@ where
 
         burn_tokens(*amount);
         LOG_EVENT_FT_BURN.log(format!("account: {}, amount: {}", account_id, amount));
+        (*ft_balance).into()
     }
 
     fn ft_burn_all(&mut self, account_id: &str) {

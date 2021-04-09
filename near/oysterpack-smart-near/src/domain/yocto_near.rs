@@ -13,6 +13,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+// #[deprecated]
 pub const ZERO_NEAR: YoctoNear = YoctoNear(0);
 
 #[derive(
@@ -31,6 +32,8 @@ pub const ZERO_NEAR: YoctoNear = YoctoNear(0);
 pub struct YoctoNear(pub u128);
 
 impl YoctoNear {
+    pub const ZERO: YoctoNear = YoctoNear(0);
+
     pub fn value(&self) -> u128 {
         self.0
     }

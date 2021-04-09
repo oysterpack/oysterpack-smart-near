@@ -7,6 +7,10 @@ use std::ops::{Deref, DerefMut, Sub};
 #[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct TokenAmount(pub U128);
 
+impl TokenAmount {
+    pub const ZERO: TokenAmount = TokenAmount(U128(0));
+}
+
 impl Deref for TokenAmount {
     type Target = u128;
 

@@ -1,6 +1,6 @@
 use crate::{
     StakeAccountBalances, StakeActionCallbacks, StakedBalance, StakingPool, StakingPoolOperator,
-    StakingPoolOperatorCommand, StakingPoolOwner, Treasury, UnstakedBalances,
+    StakingPoolOperatorCommand, StakingPoolOwner, UnstakedBalances,
     ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE, ERR_STAKE_ACTION_FAILED, LOG_EVENT_LIQUIDITY,
     LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE,
     LOG_EVENT_STATUS_ONLINE, LOG_EVENT_UNSTAKE,
@@ -86,7 +86,12 @@ pub struct State {
     pub callback_gas: Option<Gas>,
     pub staking_fee: BasisPoints,
 
-    pub treasury: Treasury,
+    /// NEAR deposited into the treasury is staked and stake earnings are used to boost the
+    /// staking pool yield
+    /// - this is used to track the treasury STAKE NEAR value
+    /// - if it changes before staking fees are deposited, then it means the treasury received
+    ///   staking rewards. The staking rewards will be burned before depositing the staking fee
+    pub treasury_balance: YoctoNear,
 }
 
 impl State {
@@ -249,7 +254,7 @@ impl Deploy for StakingPoolComponent {
             total_staked_balance: ZERO_NEAR,
             callback_gas: None,
             staking_fee: 80.into(),
-            treasury: Default::default(),
+            treasury_balance: ZERO_NEAR,
         };
         let state = Self::new_state(state);
         state.save();
@@ -577,24 +582,14 @@ impl StakeActionCallbacks for StakingPoolComponent {
         stake_token_amount: TokenAmount,
         total_staked_balance: YoctoNear,
     ) -> StakeAccountBalances {
-        let staking_fee_stake = {
-            let mut state = Self::state();
-            state.staked -= amount;
-            Self::handle_stake_action_result(&mut state, total_staked_balance);
-            // apply staking fees
-            let staking_fee_stake = self.near_stake_value_rounded_down(amount * state.staking_fee);
-            let staking_fee_near = self.stake_near_value_rounded_down(staking_fee_stake);
-            state.treasury.treasury_balance += staking_fee_near;
-            state.save();
-            staking_fee_stake
-        };
-        // mint STAKE
-        {
-            self.stake_token
-                .ft_mint(&account_id, stake_token_amount - staking_fee_stake);
-            self.stake_token
-                .ft_mint(&env::current_account_id(), staking_fee_stake);
-        }
+        let mut state = Self::state();
+        state.staked -= amount;
+
+        Self::handle_stake_action_result(&mut state, total_staked_balance);
+
+        let staking_fee = self.apply_staking_fees(state, amount);
+        self.stake_token
+            .ft_mint(&account_id, stake_token_amount - staking_fee);
 
         self.ops_stake_balance(to_valid_account_id(&account_id))
             .unwrap()
@@ -662,6 +657,41 @@ struct ResumeFinalizeCallbackArgs {
 }
 
 impl StakingPoolComponent {
+    /// if treasury has earned staking rewards then burn STAKE tokens to distribute earnings
+    fn apply_staking_fees(
+        &mut self,
+        mut state: ComponentState<State>,
+        amount: YoctoNear,
+    ) -> TokenAmount {
+        let treasury_stake_balance = self
+            .stake_token
+            .ft_balance_of(to_valid_account_id(&env::current_account_id()));
+        let current_treasury_near_value =
+            self.stake_near_value_rounded_down(treasury_stake_balance);
+        let treasury_staking_earnings = current_treasury_near_value - state.treasury_balance;
+        let treasury_staking_earnings_stake_value =
+            self.near_stake_value_rounded_down(treasury_staking_earnings);
+        if treasury_staking_earnings_stake_value > TokenAmount::ZERO {
+            self.stake_token.ft_burn(
+                &env::current_account_id(),
+                treasury_staking_earnings_stake_value,
+            );
+        }
+
+        let staking_fee = self.near_stake_value_rounded_down(amount * state.staking_fee);
+        if staking_fee > TokenAmount::ZERO {
+            let treasury_stake_balance = self
+                .stake_token
+                .ft_mint(&env::current_account_id(), staking_fee);
+            state.treasury_balance = self.stake_near_value_rounded_down(treasury_stake_balance);
+        } else {
+            state.treasury_balance = current_treasury_near_value;
+        }
+
+        state.save();
+        staking_fee
+    }
+
     fn handle_stake_action_result(state: &mut State, total_staked_balance: YoctoNear) {
         if is_promise_success() {
             state.total_staked_balance = env::account_locked_balance().into();
@@ -723,8 +753,13 @@ impl StakingPoolComponent {
             }
             Status::Offline(_) => {
                 LOG_EVENT_STATUS_OFFLINE.log("");
+
+                let staking_fee = self.apply_staking_fees(Self::state(), near_amount);
+                self.stake_token
+                    .ft_mint(account_id, stake_token_amount - staking_fee);
+
                 State::incr_total_staked_balance(near_amount);
-                self.stake_token.ft_mint(account_id, stake_token_amount);
+
                 self.registered_stake_account_balance(account_id)
             }
         }
@@ -794,7 +829,7 @@ impl StakingPoolComponent {
 
     fn stake_near_value_rounded_down(&self, stake: TokenAmount) -> YoctoNear {
         if *stake == 0 {
-            return ZERO_NEAR;
+            return YoctoNear::ZERO;
         }
 
         let total_staked_near_balance = Self::state().total_staked_balance();
@@ -967,11 +1002,12 @@ mod tests {
             testing_env!(ctx.clone());
             assert_eq!(env::account_locked_balance(), 0);
             if let PromiseOrValue::Value(balance) = staking_pool.ops_stake() {
+                let staking_fee = state.staking_fee * YOCTO.into();
                 assert_eq!(
                     balance.staked,
                     Some(StakedBalance {
-                        stake: YOCTO.into(),
-                        near_value: YOCTO.into()
+                        stake: (YOCTO - *staking_fee).into(),
+                        near_value: (YOCTO - *staking_fee).into()
                     })
                 );
                 assert_eq!(env::account_locked_balance(), 0);
@@ -1481,11 +1517,18 @@ mod tests {
                 ctx.attached_deposit = 1000;
                 testing_env!(ctx);
                 // Act
+                let state = staking_pool.ops_stake_state();
+                println!(
+                    "before staking {}\ncurrent treasury stake balance: {}",
+                    serde_json::to_string_pretty(&state).unwrap(),
+                    ft_stake().ft_balance_of(to_valid_account_id(&env::current_account_id()))
+                );
                 if let PromiseOrValue::Value(balances) = staking_pool.ops_stake() {
                     println!("{:#?}", balances);
                     let staked_balance = balances.staked.unwrap();
-                    assert_eq!(staked_balance.stake, 1000.into());
-                    assert_eq!(staked_balance.near_value, 1000.into());
+                    let staking_fee = state.staking_fee * 1000.into();
+                    assert_eq!(staked_balance.stake, (1000 - *staking_fee).into());
+                    assert_eq!(staked_balance.near_value, (1000 - *staking_fee).into());
                 } else {
                     panic!("expected Value");
                 }
@@ -1497,6 +1540,7 @@ mod tests {
                     serde_json::to_string_pretty(&state).unwrap()
                 );
                 assert_eq!(state.staked, 0.into());
+                assert_eq!(state.treasury_balance, state.staking_fee * 1000.into());
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
@@ -1506,7 +1550,9 @@ mod tests {
                         "[INFO] [STAKE] near_amount=1000, stake_token_amount=1000",
                         "[WARN] [STATUS_OFFLINE] ",
                         "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
-                        "[INFO] [FT_MINT] account: bob, amount: 1000",
+                        "[INFO] [FT_MINT] account: contract.near, amount: 8",
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                        "[INFO] [FT_MINT] account: bob, amount: 992",
                     ]
                 );
 
@@ -1540,7 +1586,8 @@ mod tests {
                     vec![
                         "[INFO] [STAKE] near_amount=1000, stake_token_amount=1000",
                         "[WARN] [STATUS_OFFLINE] ",
-                        "[INFO] [FT_MINT] account: bob, amount: 1000",
+                        "[INFO] [FT_MINT] account: contract.near, amount: 8",
+                        "[INFO] [FT_MINT] account: bob, amount: 992",
                     ]
                 );
 
@@ -1571,11 +1618,16 @@ mod tests {
                 ctx.attached_deposit = 1000;
                 testing_env!(ctx);
                 // Act
+                let state = staking_pool.ops_stake_state();
                 if let PromiseOrValue::Value(balances) = staking_pool.ops_stake() {
                     println!("{:#?}", balances);
                     let staked_balances = balances.staked.unwrap();
-                    assert_eq!(staked_balances.stake, (YOCTO + 1000).into());
-                    assert_eq!(staked_balances.near_value, (YOCTO + 1000).into());
+                    let staking_fee = state.staking_fee * (YOCTO + 1000).into();
+                    assert_eq!(staked_balances.stake, (YOCTO + 1000 - *staking_fee).into());
+                    assert_eq!(
+                        staked_balances.near_value,
+                        (YOCTO + 1000 - *staking_fee).into()
+                    );
                 } else {
                     panic!("expected Promise")
                 }
@@ -1597,7 +1649,9 @@ mod tests {
                         "[INFO] [STAKE] near_amount=1000000000000000000001000, stake_token_amount=1000000000000000000001000",
                         "[WARN] [STATUS_OFFLINE] ",
                         "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
-                        "[INFO] [FT_MINT] account: bob, amount: 1000000000000000000001000",
+                        "[INFO] [FT_MINT] account: contract.near, amount: 8000000000000000000008",
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                        "[INFO] [FT_MINT] account: bob, amount: 992000000000000000000992",
                     ]
                 );
 
@@ -1628,6 +1682,11 @@ mod tests {
             testing_env!(ctx.clone());
             let account = account_manager().registered_account_near_data(ACCOUNT);
             // Act
+            let state = staking_pool.ops_stake_state();
+            println!(
+                "before staking: {}",
+                serde_json::to_string_pretty(&state).unwrap()
+            );
             if let PromiseOrValue::Value(balances) = staking_pool.ops_stake() {
                 println!("{:#?}", balances);
                 let staked_balances = balances.staked.unwrap();
@@ -1753,11 +1812,13 @@ mod tests {
                 testing_env!(ctx.clone());
                 if let PromiseOrValue::Value(balances) = staking_pool.ops_stake() {
                     println!("{:#?}", balances);
+                    let state = staking_pool.ops_stake_state();
+                    let staking_fee = state.staking_fee * YOCTO.into();
                     assert_eq!(
                         balances.staked.unwrap(),
                         StakedBalance {
-                            stake: YOCTO.into(),
-                            near_value: YOCTO.into()
+                            stake: (YOCTO - *staking_fee).into(),
+                            near_value: (YOCTO - *staking_fee).into()
                         }
                     );
                 } else {
@@ -1774,7 +1835,9 @@ mod tests {
                 "[INFO] [STAKE] near_amount=1000000000000000000000000, stake_token_amount=1000000000000000000000000",
                 "[WARN] [STATUS_OFFLINE] ",
                 "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
-                "[INFO] [FT_MINT] account: bob, amount: 1000000000000000000000000",
+                "[INFO] [FT_MINT] account: contract.near, amount: 8000000000000000000000",
+                "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                "[INFO] [FT_MINT] account: bob, amount: 992000000000000000000000",
             ]);
 
             // Act
@@ -1784,11 +1847,13 @@ mod tests {
                 ctx.predecessor_account_id = ACCOUNT.to_string();
                 testing_env!(ctx);
                 if let PromiseOrValue::Value(balances) = staking_pool.ops_stake() {
+                    let state = staking_pool.ops_stake_state();
+                    let staking_fee = state.staking_fee * YOCTO.into();
                     assert_eq!(
                         balances.staked.unwrap(),
                         StakedBalance {
-                            stake: (2 * YOCTO).into(),
-                            near_value: (2 * YOCTO).into()
+                            stake: (2 * YOCTO - (2 * *staking_fee)).into(),
+                            near_value: (2 * YOCTO - (2 * *staking_fee)).into()
                         }
                     );
                 } else {
@@ -1802,7 +1867,8 @@ mod tests {
                 "[INFO] [LIQUIDITY] added=1000000000000000000000000, total=2000000000000000000000000",
                 "[INFO] [STAKE] near_amount=1000000000000000000000000, stake_token_amount=1000000000000000000000000",
                 "[WARN] [STATUS_OFFLINE] ",
-                "[INFO] [FT_MINT] account: bob, amount: 1000000000000000000000000",
+                "[INFO] [FT_MINT] account: contract.near, amount: 8000000000000000000000",
+                "[INFO] [FT_MINT] account: bob, amount: 992000000000000000000000",
             ]);
 
             assert_eq!(State::liquidity(), (2 * YOCTO).into());
@@ -1906,9 +1972,9 @@ mod tests {
                     vec![
                         "[ERR] [STAKE_ACTION_FAILED] ",
                         "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
-                        "[INFO] [FT_MINT] account: bob, amount: 992000000000000000000000",
-                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
                         "[INFO] [FT_MINT] account: contract.near, amount: 8000000000000000000000",
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                        "[INFO] [FT_MINT] account: bob, amount: 992000000000000000000000",
                     ]
                 );
                 println!("{:#?}", balances);

@@ -28,9 +28,10 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 ///      - configurable staking fee (0.8%)
 ///    - fees are deposited in the staking pool treasury fund
 /// 5. Profit sharing through dividends
-///    - a percentage (50%) of the staking rewards earned by the treasury are distributed as dividends
-///      by burning STAKE tokens, which boosts the yield, i.e., STAKE token value
-///    - dividends are paid on a quarterly basis - every 180 epochs (~90 days)
+///    - staking rewards earned by the treasury are distributed as dividends by burning STAKE tokens,
+///      which boosts the yield, i.e., STAKE token value
+///    - dividends are paid out on each staking event, i.e., if the treasury has received staking
+///      rewards since the last staking, then the STAKE token equivalent will be burned
 ///
 /// The staking pool is integrated with the storage management API:
 /// - accounts must be registered with the contract in order to stake

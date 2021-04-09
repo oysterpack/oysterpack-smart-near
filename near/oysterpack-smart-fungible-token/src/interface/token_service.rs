@@ -6,15 +6,19 @@ pub trait TokenService {
     /// Mints new tokens and credits them to the specified account ID, which increases the total supply.
     /// - logs [`LOG_EVENT_FT_MINT`]
     ///
+    /// Returns updated token balance
+    ///
     /// **Use Case:** STAKE tokens are minted when NEAR is staked.
     ///
     /// ## Panics
     /// - if the account is not registered
     /// - if amount is zero
-    fn ft_mint(&mut self, account_id: &str, amount: TokenAmount);
+    fn ft_mint(&mut self, account_id: &str, amount: TokenAmount) -> TokenAmount;
 
     /// Debits tokens from the specified account ID and burns them, which decreases the total supply.
     /// - logs [`LOG_EVENT_FT_BURN`]
+    ///
+    /// Returns updated token balance
     ///
     /// **Use Case:** STAKE tokens are burned when they are unstaked and converted back to NEAR.
     ///
@@ -24,7 +28,7 @@ pub trait TokenService {
     /// ## Panics
     /// - if the account is not registered
     /// - if amount is zero
-    fn ft_burn(&mut self, account_id: &str, amount: TokenAmount);
+    fn ft_burn(&mut self, account_id: &str, amount: TokenAmount) -> TokenAmount;
 
     /// Attempts to burn the account's total token balance.
     /// - logs [`LOG_EVENT_FT_BURN`]
