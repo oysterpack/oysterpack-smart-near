@@ -11,7 +11,7 @@ pub trait Treasury {
     /// `#[payable]`
     fn ops_stake_treasury_deposit(&mut self);
 
-    /// transfers the specified amount from the treasury to the contract owners account
+    /// Transfers the specified amount from the treasury to the contract owners account
     /// - if no amount is specified, then the total treasury balance is transferred to the owner's account
     ///
     /// ## Panics

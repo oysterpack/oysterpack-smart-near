@@ -587,7 +587,7 @@ impl StakeActionCallbacks for StakingPoolComponent {
         let mut state = Self::state();
         state.staked -= amount;
         Self::handle_stake_action_result(&mut state, total_staked_balance);
-        self.apply_staking_fees(&account_id, state, amount, stake_token_amount);
+        self.pay_dividend_and_apply_staking_fees(&account_id, state, amount, stake_token_amount);
 
         self.ops_stake_balance(to_valid_account_id(&account_id))
             .unwrap()
@@ -656,7 +656,7 @@ struct ResumeFinalizeCallbackArgs {
 
 impl StakingPoolComponent {
     /// if treasury has earned staking rewards then burn STAKE tokens to distribute earnings
-    fn apply_staking_fees(
+    fn pay_dividend_and_apply_staking_fees(
         &mut self,
         account_id: &str,
         mut state: ComponentState<State>,
@@ -664,25 +664,31 @@ impl StakingPoolComponent {
         stake_token_amount: TokenAmount,
     ) -> TokenAmount {
         self.stake_token.ft_mint(&account_id, stake_token_amount);
-        let treasury_stake_balance = self
-            .stake_token
-            .ft_balance_of(to_valid_account_id(&env::current_account_id()));
-        let current_treasury_near_value =
-            self.stake_near_value_rounded_down(treasury_stake_balance);
-        let treasury_staking_earnings = current_treasury_near_value - state.treasury_balance;
-        let treasury_staking_earnings_stake_value =
-            self.near_stake_value_rounded_down(treasury_staking_earnings);
-        if treasury_staking_earnings_stake_value > TokenAmount::ZERO {
-            self.stake_token.ft_burn(
-                &env::current_account_id(),
-                treasury_staking_earnings_stake_value,
-            );
-            LOG_EVENT_TREASURY_DIVIDEND.log(format!(
-                "{} NEAR / {} STAKE",
-                treasury_staking_earnings, treasury_staking_earnings_stake_value
-            ));
-        }
 
+        // if treasury received staking rewards, then pay out the dividend
+        let current_treasury_near_value = {
+            let treasury_stake_balance = self
+                .stake_token
+                .ft_balance_of(to_valid_account_id(&env::current_account_id()));
+            let current_treasury_near_value =
+                self.stake_near_value_rounded_down(treasury_stake_balance);
+            let treasury_staking_earnings = current_treasury_near_value - state.treasury_balance;
+            let treasury_staking_earnings_stake_value =
+                self.near_stake_value_rounded_down(treasury_staking_earnings);
+            if treasury_staking_earnings_stake_value > TokenAmount::ZERO {
+                self.stake_token.ft_burn(
+                    &env::current_account_id(),
+                    treasury_staking_earnings_stake_value,
+                );
+                LOG_EVENT_TREASURY_DIVIDEND.log(format!(
+                    "{} NEAR / {} STAKE",
+                    treasury_staking_earnings, treasury_staking_earnings_stake_value
+                ));
+            }
+            current_treasury_near_value
+        };
+
+        // apply staking fee
         let staking_fee = self.near_stake_value_rounded_down(amount * state.staking_fee);
         if staking_fee > TokenAmount::ZERO {
             self.stake_token.ft_burn(&account_id, staking_fee);
@@ -760,7 +766,12 @@ impl StakingPoolComponent {
             Status::Offline(_) => {
                 LOG_EVENT_STATUS_OFFLINE.log("");
                 State::incr_total_staked_balance(near_amount);
-                self.apply_staking_fees(account_id, Self::state(), near_amount, stake_token_amount);
+                self.pay_dividend_and_apply_staking_fees(
+                    account_id,
+                    Self::state(),
+                    near_amount,
+                    stake_token_amount,
+                );
                 self.registered_stake_account_balance(account_id)
             }
         }
