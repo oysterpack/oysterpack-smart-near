@@ -1,6 +1,6 @@
 use crate::{
     StakeAccountBalances, StakeActionCallbacks, StakedBalance, StakingPool, StakingPoolOperator,
-    StakingPoolOperatorCommand, StakingPoolOwner, UnstakedBalances,
+    StakingPoolOperatorCommand, StakingPoolOwner, Treasury, UnstakedBalances,
     ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE, ERR_STAKE_ACTION_FAILED, LOG_EVENT_LIQUIDITY,
     LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE,
     LOG_EVENT_STATUS_ONLINE, LOG_EVENT_TREASURY_DIVIDEND, LOG_EVENT_UNSTAKE,
@@ -636,6 +636,16 @@ impl StakeActionCallbacks for StakingPoolComponent {
         } else {
             ERR_STAKE_ACTION_FAILED.log("failed to go offline");
         }
+    }
+}
+
+impl Treasury for StakingPoolComponent {
+    fn ops_stake_treasury_deposit(&mut self) {
+        todo!()
+    }
+
+    fn ops_stake_treasury_transfer_to_owner(&mut self, amount: Option<YoctoNear>) {
+        todo!()
     }
 }
 

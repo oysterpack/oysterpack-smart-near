@@ -8,6 +8,12 @@ pub trait Treasury {
     ///
     /// This enables external sources of revenue to be deposited into the treasury.
     ///
+    /// ## Notes
+    /// Because of rounding, any remainder will be added to the liquidity fund
+    ///
+    /// ## Panics
+    /// if no deposit is attached
+    ///
     /// `#[payable]`
     fn ops_stake_treasury_deposit(&mut self);
 
