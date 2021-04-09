@@ -4,6 +4,7 @@ use oysterpack_smart_near::domain::YoctoNear;
 use oysterpack_smart_near::near_sdk::AccountId;
 use oysterpack_smart_near::ErrCode;
 
+/// # **Contract Interface**: Private Staking Pool Callbacks
 pub trait StakeActionCallbacks {
     /// Finalizes the stake action when funds are staked
     ///

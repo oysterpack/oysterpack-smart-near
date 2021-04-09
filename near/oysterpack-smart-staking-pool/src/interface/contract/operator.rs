@@ -2,6 +2,7 @@ use crate::components::staking_pool::State;
 use oysterpack_smart_near::domain::{BasisPoints, Gas, PublicKey};
 use oysterpack_smart_near::near_sdk::serde::{Deserialize, Serialize};
 
+/// # **Contract Interface**: Staking Pool Operator API
 pub trait StakingPoolOperator {
     /// Executes the specified operator command
     ///

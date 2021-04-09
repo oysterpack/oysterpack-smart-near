@@ -39,6 +39,10 @@ pub type StakeAccountData = UnstakedBalances;
 pub type AccountManager = AccountManagementComponent<StakeAccountData>;
 pub type StakeFungibleToken = FungibleTokenComponent<StakeAccountData>;
 
+/// Staking Pool Component
+///
+/// ## Deployment
+/// - permissions: [`crate::PERMISSION_TREASURER`];
 pub struct StakingPoolComponent {
     account_manager: AccountManager,
     stake_token: StakeFungibleToken,

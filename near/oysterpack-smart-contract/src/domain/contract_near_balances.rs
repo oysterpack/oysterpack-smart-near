@@ -83,7 +83,7 @@ impl ContractNearBalances {
     }
 
     /// returns portion of total contract NEAR balance that is owned by the contract owner, which is
-    /// computed as: `total - accounts - balances`
+    /// computed as: `total - locked - accounts - balances`
     pub fn owner(&self) -> YoctoNear {
         self.owner
     }

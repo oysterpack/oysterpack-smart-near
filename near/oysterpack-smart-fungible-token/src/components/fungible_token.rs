@@ -692,10 +692,8 @@ mod tests_fungible_token {
     use crate::FungibleToken;
     use crate::*;
     use near_sdk::{test_utils, VMContext};
-    use oysterpack_smart_account_management::components::account_management::{
-        AccountManagementComponentConfig, ContractPermissions,
-    };
-    use oysterpack_smart_account_management::StorageManagement;
+    use oysterpack_smart_account_management::components::account_management::AccountManagementComponentConfig;
+    use oysterpack_smart_account_management::{ContractPermissions, StorageManagement};
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
@@ -1742,10 +1740,10 @@ mod tests_operator {
     use super::*;
     use crate::*;
     use near_sdk::VMContext;
-    use oysterpack_smart_account_management::components::account_management::{
-        AccountManagementComponentConfig, ContractPermissions,
+    use oysterpack_smart_account_management::components::account_management::AccountManagementComponentConfig;
+    use oysterpack_smart_account_management::{
+        ContractPermissions, PermissionsManagement, StorageManagement,
     };
-    use oysterpack_smart_account_management::{PermissionsManagement, StorageManagement};
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
@@ -1896,10 +1894,8 @@ mod tests_token_service {
 
     use crate::*;
     use near_sdk::{test_utils, VMContext};
-    use oysterpack_smart_account_management::components::account_management::{
-        AccountManagementComponentConfig, ContractPermissions,
-    };
-    use oysterpack_smart_account_management::StorageManagement;
+    use oysterpack_smart_account_management::components::account_management::AccountManagementComponentConfig;
+    use oysterpack_smart_account_management::{ContractPermissions, StorageManagement};
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
