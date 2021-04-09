@@ -145,7 +145,7 @@ mod test {
     use super::*;
     use crate::StorageBalance;
     use near_sdk::test_utils;
-    use oysterpack_smart_near::domain::{StorageUsageChange, ZERO_NEAR};
+    use oysterpack_smart_near::domain::StorageUsageChange;
     use oysterpack_smart_near::*;
     use oysterpack_smart_near_test::*;
 
@@ -163,7 +163,7 @@ mod test {
         assert_eq!(stats.total_near_balance, 0.into());
         assert_eq!(stats.total_storage_usage, 0.into());
 
-        let account = AccountNearDataObject::new(account_id, ZERO_NEAR);
+        let account = AccountNearDataObject::new(account_id, YoctoNear::ZERO);
         account.save();
 
         // Act - account registered

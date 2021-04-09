@@ -13,9 +13,6 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-// #[deprecated]
-pub const ZERO_NEAR: YoctoNear = YoctoNear(0);
-
 #[derive(
     BorshSerialize,
     BorshDeserialize,

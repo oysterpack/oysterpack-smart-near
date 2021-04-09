@@ -298,13 +298,13 @@ impl From<&str> for AccountNearDataHash {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use oysterpack_smart_near::domain::ZERO_NEAR;
+    use oysterpack_smart_near::domain::YoctoNear;
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
     #[test]
     fn bitflags() {
-        let mut account = AccountNearData::new(ZERO_NEAR, 0.into());
+        let mut account = AccountNearData::new(YoctoNear::ZERO, 0.into());
 
         assert!(!account.is_admin());
         account.grant_admin();
@@ -326,7 +326,7 @@ mod tests {
         let context = new_context(account_id);
         testing_env!(context);
 
-        let mut account = AccountNearDataObject::new(account_id.into(), ZERO_NEAR);
+        let mut account = AccountNearDataObject::new(account_id.into(), YoctoNear::ZERO);
 
         // Act - incr near balance
         account.incr_near_balance(YOCTO.into());
@@ -342,7 +342,7 @@ mod tests {
 
         // Assert
         let mut account = AccountNearDataObject::load(account_id).unwrap();
-        assert_eq!(account.near_balance(), ZERO_NEAR);
+        assert_eq!(account.near_balance(), YoctoNear::ZERO);
 
         // Act - set near balance
         account.set_near_balance((2 * YOCTO).into());
@@ -360,7 +360,7 @@ mod tests {
         let context = new_context(account_id);
         testing_env!(context);
 
-        let mut account = AccountNearDataObject::new(account_id.into(), ZERO_NEAR);
+        let mut account = AccountNearDataObject::new(account_id.into(), YoctoNear::ZERO);
         account.save();
         let initial_storage_usage = account.storage_usage;
 

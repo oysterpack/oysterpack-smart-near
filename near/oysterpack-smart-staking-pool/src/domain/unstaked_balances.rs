@@ -1,6 +1,6 @@
 use crate::components::staking_pool::State;
 use oysterpack_smart_near::asserts::ERR_INSUFFICIENT_FUNDS;
-use oysterpack_smart_near::domain::{EpochHeight, YoctoNear, ZERO_NEAR};
+use oysterpack_smart_near::domain::{EpochHeight, YoctoNear};
 use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
@@ -32,8 +32,8 @@ impl UnstakedBalances {
     }
 
     pub fn locked_balance(&self) -> YoctoNear {
-        self.locked.iter().fold(ZERO_NEAR, |total, entry| {
-            total + entry.map_or(ZERO_NEAR, |(_, amount)| amount)
+        self.locked.iter().fold(YoctoNear::ZERO, |total, entry| {
+            total + entry.map_or(YoctoNear::ZERO, |(_, amount)| amount)
         })
     }
 
@@ -73,13 +73,13 @@ impl UnstakedBalances {
     fn apply_liquidity(&mut self) -> YoctoNear {
         self.unlock();
         let locked_balance = self.locked_balance();
-        if locked_balance == ZERO_NEAR {
-            return ZERO_NEAR;
+        if locked_balance == YoctoNear::ZERO {
+            return YoctoNear::ZERO;
         }
 
         let liquidity = State::liquidity();
-        if liquidity == ZERO_NEAR {
-            return ZERO_NEAR;
+        if liquidity == YoctoNear::ZERO {
+            return YoctoNear::ZERO;
         }
 
         if liquidity >= locked_balance {
@@ -171,11 +171,11 @@ impl UnstakedBalances {
                     self.locked[i] = None;
                 } else {
                     self.locked[i] = Some((available_on, unstaked - amount));
-                    return ZERO_NEAR;
+                    return YoctoNear::ZERO;
                 }
 
-                if amount == ZERO_NEAR {
-                    return ZERO_NEAR;
+                if amount == YoctoNear::ZERO {
+                    return YoctoNear::ZERO;
                 }
             }
         }
@@ -187,7 +187,7 @@ impl UnstakedBalances {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use oysterpack_smart_near::domain::ZERO_NEAR;
+    use oysterpack_smart_near::domain::YoctoNear;
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
@@ -202,7 +202,7 @@ mod tests {
         unstaked_balances.credit_unstaked(YOCTO.into());
         unstaked_balances.credit_unstaked(YOCTO.into());
 
-        assert_eq!(unstaked_balances.available, ZERO_NEAR);
+        assert_eq!(unstaked_balances.available, YoctoNear::ZERO);
         let expected_available_on: EpochHeight = (ctx.epoch_height + EPOCHS_LOCKED as u64).into();
         assert_eq!(
             *unstaked_balances
@@ -217,7 +217,7 @@ mod tests {
         ctx.epoch_height = 101;
         testing_env!(ctx.clone());
         unstaked_balances.credit_unstaked(YOCTO.into());
-        assert_eq!(unstaked_balances.available, ZERO_NEAR);
+        assert_eq!(unstaked_balances.available, YoctoNear::ZERO);
         assert_eq!(
             *unstaked_balances
                 .locked()
@@ -365,7 +365,7 @@ mod tests {
         ctx.epoch_height = 104;
         testing_env!(ctx.clone());
         unstaked_balances.debit_available_balance(YOCTO.into());
-        assert_eq!(unstaked_balances.total(), ZERO_NEAR);
+        assert_eq!(unstaked_balances.total(), YoctoNear::ZERO);
     }
 
     #[test]

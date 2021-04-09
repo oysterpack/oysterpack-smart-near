@@ -22,7 +22,7 @@ use crate::components::account_repository::AccountRepositoryComponent;
 use crate::components::account_storage_usage::AccountStorageUsageComponent;
 use oysterpack_smart_near::asserts::{assert_account_not_predecessor, ERR_INVALID};
 use oysterpack_smart_near::component::Deploy;
-use oysterpack_smart_near::domain::{StorageUsage, ZERO_NEAR};
+use oysterpack_smart_near::domain::StorageUsage;
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 
@@ -452,7 +452,7 @@ where
             .available;
         match amount {
             Some(amount) => {
-                if amount > ZERO_NEAR {
+                if amount > YoctoNear::ZERO {
                     ERR_INSUFFICIENT_STORAGE_BALANCE.assert(|| account_available_balance >= amount);
                     send_refund(amount + 1);
                     account.dec_near_balance(amount);
@@ -461,7 +461,7 @@ where
             }
             None => {
                 // withdraw the total available balance
-                if account_available_balance > ZERO_NEAR {
+                if account_available_balance > YoctoNear::ZERO {
                     send_refund(account_available_balance + 1);
                     account.dec_near_balance(account_available_balance);
                     account.save();

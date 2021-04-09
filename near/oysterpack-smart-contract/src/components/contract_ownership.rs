@@ -14,7 +14,7 @@ use oysterpack_smart_near::asserts::{
     assert_request, assert_yocto_near_attached, ERR_CODE_BAD_REQUEST,
 };
 use oysterpack_smart_near::component::Deploy;
-use oysterpack_smart_near::domain::{AccountIdHash, YoctoNear, ZERO_NEAR};
+use oysterpack_smart_near::domain::{AccountIdHash, YoctoNear};
 use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
 use oysterpack_smart_near::near_sdk::{env, AccountId, Promise};
 
@@ -144,8 +144,10 @@ impl ContractOwnership for ContractOwnershipComponent {
         let amount = match amount {
             None => owner_balance.available,
             Some(amount) => {
-                ERR_CODE_BAD_REQUEST
-                    .assert(|| amount > ZERO_NEAR, || "withdraw amount cannot be zero");
+                ERR_CODE_BAD_REQUEST.assert(
+                    || amount > YoctoNear::ZERO,
+                    || "withdraw amount cannot be zero",
+                );
                 ERR_OWNER_BALANCE_OVERDRAW.assert(|| owner_balance.available >= amount);
                 amount
             }
@@ -163,7 +165,7 @@ impl ContractOwnership for ContractOwnershipComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use oysterpack_smart_near::domain::ZERO_NEAR;
+    use oysterpack_smart_near::domain::YoctoNear;
     use oysterpack_smart_near_test::*;
 
     #[test]
@@ -229,7 +231,7 @@ mod tests {
         let owner_balance = ContractOwnershipComponent.ops_owner_withdraw_balance(None);
         println!("after withdrawal: {:?}", owner_balance);
         // Assert
-        assert_eq!(owner_balance.available, ZERO_NEAR);
+        assert_eq!(owner_balance.available, YoctoNear::ZERO);
         assert_eq!(
             owner_balance,
             ContractOwnershipComponent.ops_owner_balance()
@@ -834,7 +836,7 @@ mod tests_cancel_ownership_transfer {
 #[cfg(test)]
 mod owner_balance {
     use super::*;
-    use oysterpack_smart_near::domain::ZERO_NEAR;
+    use oysterpack_smart_near::domain::YoctoNear;
     use oysterpack_smart_near_test::*;
 
     #[test]
@@ -847,12 +849,12 @@ mod owner_balance {
         ContractOwnershipComponent::deploy(to_valid_account_id(alfio));
 
         let owner_balance_1 = ContractOwnershipComponent.ops_owner_balance();
-        assert!(owner_balance_1.available > ZERO_NEAR);
+        assert!(owner_balance_1.available > YoctoNear::ZERO);
         // Act
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
         let owner_balance_2 = ContractOwnershipComponent.ops_owner_withdraw_balance(None);
-        assert_eq!(owner_balance_2.available, ZERO_NEAR);
+        assert_eq!(owner_balance_2.available, YoctoNear::ZERO);
         let receipts = deserialize_receipts();
         assert_eq!(
             &receipts[0].receiver_id,
@@ -929,7 +931,7 @@ mod owner_balance {
         // Act
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractOwnershipComponent.ops_owner_withdraw_balance(Some(ZERO_NEAR));
+        ContractOwnershipComponent.ops_owner_withdraw_balance(Some(YoctoNear::ZERO));
     }
 
     #[test]

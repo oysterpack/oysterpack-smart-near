@@ -14,8 +14,6 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-pub const ZERO_GAS: Gas = Gas(0);
-
 /// provides support to also [compute][`Gas::compute`] runtime gas costs
 #[derive(
     BorshSerialize, BorshDeserialize, Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Default,
@@ -25,6 +23,8 @@ pub struct Gas(pub u64);
 pub type TransactionResourceCount = u8;
 
 impl Gas {
+    pub const ZERO: Gas = Gas(0);
+
     pub fn value(&self) -> u64 {
         self.0
     }

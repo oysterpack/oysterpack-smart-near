@@ -3,10 +3,7 @@ use oysterpack_smart_near::near_sdk::{
     env,
     serde::{Deserialize, Serialize},
 };
-use oysterpack_smart_near::{
-    data::Object,
-    domain::{YoctoNear, ZERO_NEAR},
-};
+use oysterpack_smart_near::{data::Object, domain::YoctoNear};
 use std::{collections::HashMap, ops::Deref};
 
 /// Balance ID is used to track separate NEAR balances
@@ -53,7 +50,7 @@ impl ContractNearBalances {
         let owner = total
             - locked
             - accounts
-            - balances.as_ref().map_or(ZERO_NEAR, |balances| {
+            - balances.as_ref().map_or(YoctoNear::ZERO, |balances| {
                 balances
                     .values()
                     .map(|balance| balance.value())
@@ -108,8 +105,8 @@ impl ContractNearBalances {
     }
 
     pub fn near_balance(id: BalanceId) -> YoctoNear {
-        DAO::load(&NEAR_BALANCES_KEY).map_or(ZERO_NEAR, |object| {
-            object.get(&id).cloned().unwrap_or(ZERO_NEAR)
+        DAO::load(&NEAR_BALANCES_KEY).map_or(YoctoNear::ZERO, |object| {
+            object.get(&id).cloned().unwrap_or(YoctoNear::ZERO)
         })
     }
 
@@ -117,7 +114,7 @@ impl ContractNearBalances {
     pub fn incr_balance(id: BalanceId, amount: YoctoNear) -> YoctoNear {
         let mut balances = DAO::load(&NEAR_BALANCES_KEY)
             .unwrap_or_else(|| DAO::new(NEAR_BALANCES_KEY, NearBalances::new()));
-        let mut balance = balances.get(&id).cloned().unwrap_or(ZERO_NEAR);
+        let mut balance = balances.get(&id).cloned().unwrap_or(YoctoNear::ZERO);
         balance += amount;
         balances.insert(id, balance);
         balances.save();
@@ -128,9 +125,9 @@ impl ContractNearBalances {
     pub fn decr_balance(id: BalanceId, amount: YoctoNear) -> YoctoNear {
         let mut balances = DAO::load(&NEAR_BALANCES_KEY)
             .unwrap_or_else(|| DAO::new(NEAR_BALANCES_KEY, NearBalances::new()));
-        let mut balance = balances.get(&id).cloned().unwrap_or(ZERO_NEAR);
+        let mut balance = balances.get(&id).cloned().unwrap_or(YoctoNear::ZERO);
         balance -= amount;
-        if balance == ZERO_NEAR {
+        if balance == YoctoNear::ZERO {
             balances.remove(&id);
         } else {
             balances.insert(id, balance);
@@ -143,7 +140,7 @@ impl ContractNearBalances {
     pub fn set_balance(id: BalanceId, amount: YoctoNear) {
         let mut balances = DAO::load(&NEAR_BALANCES_KEY)
             .unwrap_or_else(|| DAO::new(NEAR_BALANCES_KEY, NearBalances::new()));
-        if amount == ZERO_NEAR {
+        if amount == YoctoNear::ZERO {
             balances.remove(&id);
         } else {
             balances.insert(id, amount);

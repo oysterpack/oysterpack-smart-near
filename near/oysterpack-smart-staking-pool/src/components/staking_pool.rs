@@ -21,9 +21,7 @@ use oysterpack_smart_near::{
     asserts::{ERR_ILLEGAL_STATE, ERR_INSUFFICIENT_FUNDS, ERR_INVALID},
     component::{Component, ComponentState, Deploy},
     data::numbers::U256,
-    domain::{
-        ActionType, Gas, PublicKey, SenderIsReceiver, TransactionResource, YoctoNear, ZERO_NEAR,
-    },
+    domain::{ActionType, Gas, PublicKey, SenderIsReceiver, TransactionResource, YoctoNear},
     json_function_callback,
     near_sdk::{
         borsh::{self, BorshDeserialize, BorshSerialize},
@@ -136,7 +134,7 @@ impl State {
             Status::Online => {
                 // if there are no stake actions in flight, then resync the total staked balance
                 // to ensure any staking rewards are captured
-                if self.staked == ZERO_NEAR && self.unstaked == ZERO_NEAR {
+                if self.staked == YoctoNear::ZERO && self.unstaked == YoctoNear::ZERO {
                     self.total_staked_balance = env::account_locked_balance().into();
                 }
                 self.total_staked_balance + self.staked - self.unstaked
@@ -167,7 +165,7 @@ impl State {
 
     fn decr_total_unstaked_balance(mut amount: YoctoNear) {
         let liquidity = Self::liquidity();
-        if liquidity > ZERO_NEAR {
+        if liquidity > YoctoNear::ZERO {
             if amount <= liquidity {
                 let total_liquidity =
                     ContractNearBalances::decr_balance(Self::UNSTAKED_LIQUIDITY_POOL, amount);
@@ -178,7 +176,7 @@ impl State {
             amount -= liquidity;
             ContractNearBalances::clear_balance(Self::UNSTAKED_LIQUIDITY_POOL);
             LOG_EVENT_LIQUIDITY.log(format!("removed={}, total=0", liquidity));
-            if amount > ZERO_NEAR {
+            if amount > YoctoNear::ZERO {
                 ContractNearBalances::decr_balance(Self::TOTAL_UNSTAKED_BALANCE, amount);
             }
         } else {
@@ -188,12 +186,12 @@ impl State {
 
     /// If there are unstaked balances, then transfer the specified amount to the liquidity pool
     fn add_liquidity(amount: YoctoNear) {
-        if amount == ZERO_NEAR {
+        if amount == YoctoNear::ZERO {
             return;
         }
         let total_unstaked_balance =
             ContractNearBalances::near_balance(Self::TOTAL_UNSTAKED_BALANCE);
-        if total_unstaked_balance > ZERO_NEAR {
+        if total_unstaked_balance > YoctoNear::ZERO {
             let liquidity = min(amount, total_unstaked_balance);
             ContractNearBalances::decr_balance(Self::TOTAL_UNSTAKED_BALANCE, liquidity);
             let total_liquidity =
@@ -249,12 +247,12 @@ impl Deploy for StakingPoolComponent {
         let state = State {
             stake_public_key: config.stake_public_key,
             status: Status::Offline(OfflineReason::Paused),
-            staked: ZERO_NEAR,
-            unstaked: ZERO_NEAR,
-            total_staked_balance: ZERO_NEAR,
+            staked: YoctoNear::ZERO,
+            unstaked: YoctoNear::ZERO,
+            total_staked_balance: YoctoNear::ZERO,
             callback_gas: None,
             staking_fee: 80.into(),
-            treasury_balance: ZERO_NEAR,
+            treasury_balance: YoctoNear::ZERO,
         };
         let state = Self::new_state(state);
         state.save();
@@ -408,7 +406,7 @@ impl StakingPool for StakingPoolComponent {
 
         if let Some(mut account) = self.account_manager.load_account_data(&account_id) {
             let amount = amount.unwrap_or_else(|| account.total());
-            if amount > ZERO_NEAR {
+            if amount > YoctoNear::ZERO {
                 account.debit_available_balance(amount);
                 account.save();
                 State::decr_total_unstaked_balance(amount);
@@ -457,7 +455,7 @@ impl StakingPoolOperator for StakingPoolComponent {
                                 .then(json_function_callback(
                                     "ops_stake_pause_finalize",
                                     Option::<()>::None,
-                                    ZERO_NEAR,
+                                    YoctoNear::ZERO,
                                     state.callback_gas(),
                                 ));
                         }
@@ -465,7 +463,7 @@ impl StakingPoolOperator for StakingPoolComponent {
                     // update the status
                     {
                         state.status = Status::Offline(OfflineReason::Paused);
-                        state.total_staked_balance = ZERO_NEAR;
+                        state.total_staked_balance = YoctoNear::ZERO;
                         state.save();
                     }
                     LOG_EVENT_STATUS_OFFLINE.log("");
@@ -486,7 +484,7 @@ impl StakingPoolOperator for StakingPoolComponent {
 
                     // stake
                     {
-                        if total_staked_balance > ZERO_NEAR {
+                        if total_staked_balance > YoctoNear::ZERO {
                             State::clear_total_staked_balance();
                             Promise::new(env::current_account_id())
                                 .stake(*total_staked_balance, state.stake_public_key.into())
@@ -495,7 +493,7 @@ impl StakingPoolOperator for StakingPoolComponent {
                                     Some(ResumeFinalizeCallbackArgs {
                                         total_staked_balance,
                                     }),
-                                    ZERO_NEAR,
+                                    YoctoNear::ZERO,
                                     state.callback_gas(),
                                 ));
                         }
@@ -813,7 +811,7 @@ impl StakingPoolComponent {
                 stake_token_amount,
                 total_staked_balance,
             }),
-            ZERO_NEAR,
+            YoctoNear::ZERO,
             state.callback_gas(),
         );
         stake.then(finalize)
@@ -988,7 +986,7 @@ mod tests {
             Some(StakeAccountBalances {
                 storage_balance: StorageBalance {
                     total: account_manager.storage_balance_bounds().min,
-                    available: ZERO_NEAR
+                    available: YoctoNear::ZERO
                 },
                 staked: None,
                 unstaked: None
@@ -1100,7 +1098,7 @@ mod tests {
                     panic!("expected Promise")
                 }
                 // Assert
-                assert_eq!(State::liquidity(), ZERO_NEAR);
+                assert_eq!(State::liquidity(), YoctoNear::ZERO);
                 let state = staking_pool.ops_stake_state();
                 println!(
                     "staked 1000 {}",
@@ -1237,7 +1235,7 @@ mod tests {
                     panic!("expected Promise")
                 }
                 // Assert
-                assert_eq!(State::liquidity(), ZERO_NEAR);
+                assert_eq!(State::liquidity(), YoctoNear::ZERO);
                 let state = staking_pool.ops_stake_state();
                 println!(
                     "staked 1000 {}",
@@ -1384,7 +1382,7 @@ mod tests {
             match staking_pool.ops_stake() {
                 PromiseOrValue::Value(balance) => {
                     assert!(balance.staked.is_none());
-                    assert_eq!(balance.storage_balance.available, ZERO_NEAR);
+                    assert_eq!(balance.storage_balance.available, YoctoNear::ZERO);
                 }
                 _ => panic!("expected Value"),
             }
@@ -1533,7 +1531,7 @@ mod tests {
                     panic!("expected Value");
                 }
                 // Assert
-                assert_eq!(State::liquidity(), ZERO_NEAR);
+                assert_eq!(State::liquidity(), YoctoNear::ZERO);
                 let state = staking_pool.ops_stake_state();
                 println!(
                     "staked 1000 {}",
@@ -1632,7 +1630,7 @@ mod tests {
                     panic!("expected Promise")
                 }
                 // Assert
-                assert_eq!(State::liquidity(), ZERO_NEAR);
+                assert_eq!(State::liquidity(), YoctoNear::ZERO);
                 let state = staking_pool.ops_stake_state();
                 println!(
                     "staked 1000 {}",
@@ -1734,7 +1732,7 @@ mod tests {
             match staking_pool.ops_stake() {
                 PromiseOrValue::Value(balance) => {
                     assert!(balance.staked.is_none());
-                    assert_eq!(balance.storage_balance.available, ZERO_NEAR);
+                    assert_eq!(balance.storage_balance.available, YoctoNear::ZERO);
                 }
                 _ => panic!("expected Value"),
             }
@@ -1926,7 +1924,7 @@ mod tests {
                 assert!(balances.unstaked.is_none());
                 let state = staking_pool.ops_stake_state();
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
-                assert_eq!(state.staked, ZERO_NEAR);
+                assert_eq!(state.staked, YoctoNear::ZERO);
                 assert_eq!(state.total_staked_balance, YOCTO.into());
             }
         }
@@ -1993,7 +1991,7 @@ mod tests {
 
                 let state = staking_pool.ops_stake_state();
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
-                assert_eq!(state.staked, ZERO_NEAR);
+                assert_eq!(state.staked, YoctoNear::ZERO);
                 assert_eq!(state.total_staked_balance, YOCTO.into());
 
                 let receipts = deserialize_receipts();

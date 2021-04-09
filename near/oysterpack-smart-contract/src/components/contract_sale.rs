@@ -16,7 +16,7 @@ use oysterpack_smart_near::domain::ExpirationSetting;
 use oysterpack_smart_near::near_sdk::{env, Promise};
 use oysterpack_smart_near::{
     asserts::assert_yocto_near_attached,
-    domain::{Expiration, YoctoNear, ZERO_NEAR},
+    domain::{Expiration, YoctoNear},
     LogEvent,
 };
 
@@ -159,7 +159,7 @@ impl ContractSale for ContractSaleComponent {
     ) -> ContractBid {
         assert_yocto_near_attached();
         Self::assert_not_expired(expiration);
-        ERR_CODE_BAD_REQUEST.assert(|| amount > ZERO_NEAR, || "amount cannot be zero");
+        ERR_CODE_BAD_REQUEST.assert(|| amount > YoctoNear::ZERO, || "amount cannot be zero");
 
         let mut owner = ContractOwnerObject::load();
         let bid = match owner.bid {
@@ -173,7 +173,8 @@ impl ContractSale for ContractSaleComponent {
                     .assert(|| buyer_account_id_hash == env::predecessor_account_id().into());
 
                 bid.amount = bid.amount.saturating_sub(amount.value()).into();
-                ERR_CODE_BAD_REQUEST.assert(|| bid.amount > ZERO_NEAR, || "bid cannot be zero");
+                ERR_CODE_BAD_REQUEST
+                    .assert(|| bid.amount > YoctoNear::ZERO, || "bid cannot be zero");
                 bid.update_expiration(expiration);
 
                 ContractBid::decr_near_balance(amount);
@@ -341,7 +342,7 @@ impl ContractSaleComponent {
             || !contract_owner.transfer_initiated(),
             || "contract cannot be sold after transfer process has been started",
         );
-        ERR_CONTRACT_SALE_PRICE_MUST_NOT_BE_ZERO.assert(|| price > ZERO_NEAR);
+        ERR_CONTRACT_SALE_PRICE_MUST_NOT_BE_ZERO.assert(|| price > YoctoNear::ZERO);
         contract_owner
     }
 
@@ -546,7 +547,7 @@ mod tests {
         println!("{:#?}", logs);
         assert!(ContractSaleComponent.ops_contract_sale_price().is_none());
         assert!(ContractSaleComponent.ops_contract_bid().is_none());
-        assert_eq!(ContractBid::near_balance(), ZERO_NEAR);
+        assert_eq!(ContractBid::near_balance(), YoctoNear::ZERO);
 
         // Act - owner sells contract
         ctx.predecessor_account_id = alfio.to_string();
@@ -571,7 +572,7 @@ mod tests {
         let logs = test_utils::get_logs();
         println!("{:#?}", logs);
         assert_eq!(ContractOwnershipComponent.ops_owner().as_str(), bob);
-        assert_eq!(ContractBid::near_balance(), ZERO_NEAR);
+        assert_eq!(ContractBid::near_balance(), YoctoNear::ZERO);
         let receipts = deserialize_receipts();
         assert_eq!(&previous_owner, &receipts[0].receiver_id.as_str());
         let action = &receipts[0].actions[0];
@@ -1012,7 +1013,7 @@ mod tests_sell_contract {
         // Act
         ctx.attached_deposit = 1;
         testing_env!(ctx.clone());
-        ContractSaleComponent.ops_contract_sell(ZERO_NEAR);
+        ContractSaleComponent.ops_contract_sell(YoctoNear::ZERO);
     }
 }
 
