@@ -383,7 +383,13 @@ impl StakingPool for StakingPoolComponent {
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(&account_id));
 
         match self.account_manager.load_account_data(&account_id) {
-            None => self.registered_stake_account_balance(&account_id),
+            None => match amount {
+                None => self.registered_stake_account_balance(&account_id),
+                Some(_) => {
+                    ERR_INSUFFICIENT_FUNDS.panic();
+                    unreachable!()
+                }
+            },
             Some(mut account) => {
                 let (near_amount, stake_token_amount) = {
                     let near = amount.unwrap_or_else(|| account.total());
@@ -976,6 +982,14 @@ mod tests {
     fn staking_public_key_as_string() -> String {
         let pk_bytes: Vec<u8> = staking_public_key().into();
         bs58::encode(pk_bytes).into_string()
+    }
+
+    fn deploy_with_registered_account() -> (VMContext, StakingPoolComponent) {
+        deploy(OWNER, ADMIN, ACCOUNT, true)
+    }
+
+    fn deploy_with_unregistered_account() -> (VMContext, StakingPoolComponent) {
+        deploy(OWNER, ADMIN, ACCOUNT, false)
     }
 
     fn deploy(
@@ -2401,6 +2415,58 @@ mod tests {
             bring_pool_online(ctx.clone(), &mut staking_pool);
             testing_env!(ctx.clone());
             staking_pool.ops_unstake(None);
+        }
+    }
+
+    #[cfg(test)]
+    mod tests_restake_online {
+        use super::*;
+
+        #[test]
+        fn all_with_unstaked_funds() {
+            todo!()
+        }
+
+        #[test]
+        fn all_with_zero_unstaked_funds() {
+            todo!()
+        }
+
+        #[test]
+        fn all_with_zero_staked_and_unstaked_funds() {
+            let (_ctx, mut staking_pool) = deploy_with_registered_account();
+            if let PromiseOrValue::Value(balance) = staking_pool.ops_restake(None) {
+                assert!(balance.staked.is_none());
+                assert!(balance.unstaked.is_none());
+            } else {
+                panic!("expected Value");
+            }
+        }
+
+        #[test]
+        fn partial_with_unstaked_funds() {
+            todo!()
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [INSUFFICIENT_FUNDS]")]
+        fn partial_insufficient_unstaked_funds() {
+            let (_ctx, mut staking_pool) = deploy_with_registered_account();
+            staking_pool.ops_restake(Some(YOCTO.into()));
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED]")]
+        fn all_with_unregistered_account() {
+            let (_ctx, mut staking_pool) = deploy_with_unregistered_account();
+            staking_pool.ops_restake(None);
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED]")]
+        fn partial_with_unregistered_account() {
+            let (_ctx, mut staking_pool) = deploy_with_unregistered_account();
+            staking_pool.ops_restake(Some(YOCTO.into()));
         }
     }
 }
