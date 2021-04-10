@@ -409,14 +409,15 @@ impl StakingPool for StakingPoolComponent {
         let account_id = env::predecessor_account_id();
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(&account_id));
 
-        if let Some(mut account) = self.account_manager.load_account_data(&account_id) {
-            let amount = amount.unwrap_or_else(|| account.total());
+        if let Some(mut unstaked_balances) = self.account_manager.load_account_data(&account_id) {
+            unstaked_balances.unlock();
+            let amount = amount.unwrap_or_else(|| unstaked_balances.available());
             if amount > YoctoNear::ZERO {
-                account.debit_available_balance(amount);
-                if account.total() == YoctoNear::ZERO {
-                    account.delete();
+                unstaked_balances.debit_available_balance(amount);
+                if unstaked_balances.total() == YoctoNear::ZERO {
+                    unstaked_balances.delete();
                 } else {
-                    account.save();
+                    unstaked_balances.save();
                 }
                 State::decr_total_unstaked_balance(amount);
                 Promise::new(env::predecessor_account_id()).transfer(*amount);
@@ -2974,7 +2975,28 @@ mod tests {
 
         #[test]
         fn all_with_locked_unstaked_funds_and_zero_available() {
-            todo!()
+            let (ctx, mut staking_pool) = deploy_with_registered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+
+            stake_unstake(
+                ctx.clone(),
+                &mut staking_pool,
+                YOCTO.into(),
+                (YOCTO / 2).into(),
+            );
+            let mut ctx = ctx.clone();
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            testing_env!(ctx.clone());
+            let starting_balances = staking_pool
+                .ops_stake_balance(to_valid_account_id(ACCOUNT))
+                .unwrap();
+            assert_eq!(
+                starting_balances.unstaked.as_ref().unwrap().available,
+                YoctoNear::ZERO
+            );
+            let balances = staking_pool.ops_stake_withdraw(None);
+            assert_eq!(balances, starting_balances);
+            assert!(deserialize_receipts().is_empty())
         }
 
         #[test]
