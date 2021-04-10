@@ -789,9 +789,9 @@ impl StakingPoolComponent {
         near_amount: YoctoNear,
         stake_token_amount: TokenAmount,
     ) -> PromiseOrValue<StakeAccountBalances> {
-        if *near_amount == 0 {
+        if near_amount == YoctoNear::ZERO {
             // INVARIANT CHECK: if `near_amount` is zero, then `stake_token_amount` should be zero
-            assert_eq!(*stake_token_amount, 0);
+            assert_eq!(stake_token_amount, TokenAmount::ZERO);
             LOG_EVENT_NOT_ENOUGH_TO_STAKE.log("");
             return self.registered_stake_account_balance(account_id);
         }
@@ -2424,7 +2424,83 @@ mod tests {
 
         #[test]
         fn all_with_unstaked_funds() {
-            todo!()
+            let (ctx, mut staking_pool) = deploy_with_registered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+            // stake
+            {
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx);
+                staking_pool.ops_stake();
+            }
+            // finalize stake
+            {
+                let mut state = staking_pool.ops_stake_state();
+                println!("{}", serde_json::to_string_pretty(&state).unwrap());
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = 0;
+                ctx.account_locked_balance = *state.total_staked_balance();
+                testing_env_with_promise_result_success(ctx.clone());
+                staking_pool.ops_stake_finalize(
+                    ctx.predecessor_account_id,
+                    state.staked,
+                    staking_pool.near_stake_value_rounded_down(state.staked),
+                    state.total_staked_balance(),
+                );
+                let logs = test_utils::get_logs();
+                println!("finalized stake: {:#?}", logs);
+            }
+            // unstake all
+            {
+                let mut state = staking_pool.ops_stake_state();
+                println!("{}", serde_json::to_string_pretty(&state).unwrap());
+                let mut ctx = ctx.clone();
+                ctx.account_locked_balance = *state.total_staked_balance();
+                testing_env!(ctx);
+                staking_pool.ops_unstake(None);
+                let logs = test_utils::get_logs();
+                println!("unstake: {:#?}", logs);
+            }
+            // finalize unstaking
+            {
+                let state = staking_pool.ops_stake_state();
+                println!("{}", serde_json::to_string_pretty(&state).unwrap());
+                let mut ctx = ctx.clone();
+                ctx.account_locked_balance = *state.treasury_balance;
+                testing_env_with_promise_result_success(ctx.clone());
+                staking_pool.ops_unstake_finalize(
+                    ctx.predecessor_account_id,
+                    state.unstaked,
+                    (*state.unstaked).into(),
+                    state.treasury_balance,
+                );
+                let logs = test_utils::get_logs();
+                println!("finalized unstake {:#?}", logs);
+                let state = staking_pool.ops_stake_state();
+                println!("{}", serde_json::to_string_pretty(&state).unwrap());
+            }
+            assert_eq!(
+                ft_stake().ft_balance_of(to_valid_account_id(ACCOUNT)),
+                TokenAmount::ZERO
+            );
+
+            // Act - restake
+            {
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx);
+                let account = account_manager().registered_account_data(ACCOUNT);
+                assert!(account.locked().is_some());
+                staking_pool.ops_restake(None);
+                let logs = test_utils::get_logs();
+                println!("restaked all: {:#?}", logs);
+                assert_eq!(logs, vec![
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-24)", // storage for unstaked balances was freed up
+                    "[INFO] [STAKE] near_amount=992000000000000000000000, stake_token_amount=992000000000000000000000", 
+                ]);
+                let account = account_manager().registered_account_data(ACCOUNT);
+                assert!(account.locked().is_none());
+            }
         }
 
         #[test]
