@@ -2505,12 +2505,55 @@ mod tests {
 
         #[test]
         fn all_with_zero_unstaked_funds() {
-            todo!()
+            let (ctx, mut staking_pool) = deploy_with_registered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+
+            // stake
+            {
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx);
+                staking_pool.ops_stake();
+            }
+            // finalize stake
+            let balances = {
+                let mut state = staking_pool.ops_stake_state();
+                println!("{}", serde_json::to_string_pretty(&state).unwrap());
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = 0;
+                ctx.account_locked_balance = *state.total_staked_balance();
+                testing_env_with_promise_result_success(ctx.clone());
+                let balances = staking_pool.ops_stake_finalize(
+                    ctx.predecessor_account_id,
+                    state.staked,
+                    staking_pool.near_stake_value_rounded_down(state.staked),
+                    state.total_staked_balance(),
+                );
+                let logs = test_utils::get_logs();
+                println!("finalized stake: {:#?}", logs);
+                balances
+            };
+
+            // Act
+            {
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx);
+                if let PromiseOrValue::Value(balances_after_restaking) =
+                    staking_pool.ops_restake(None)
+                {
+                    assert_eq!(balances_after_restaking, balances);
+                } else {
+                    panic!("expected Value");
+                }
+                assert!(test_utils::get_logs().is_empty());
+            }
         }
 
         #[test]
         fn all_with_zero_staked_and_unstaked_funds() {
-            let (_ctx, mut staking_pool) = deploy_with_registered_account();
+            let (ctx, mut staking_pool) = deploy_with_registered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
             if let PromiseOrValue::Value(balance) = staking_pool.ops_restake(None) {
                 assert!(balance.staked.is_none());
                 assert!(balance.unstaked.is_none());
@@ -2521,27 +2564,118 @@ mod tests {
 
         #[test]
         fn partial_with_unstaked_funds() {
-            todo!()
+            let (ctx, mut staking_pool) = deploy_with_registered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+            // stake
+            {
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx);
+                staking_pool.ops_stake();
+            }
+            // finalize stake
+            {
+                let mut state = staking_pool.ops_stake_state();
+                println!("{}", serde_json::to_string_pretty(&state).unwrap());
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = 0;
+                ctx.account_locked_balance = *state.total_staked_balance();
+                testing_env_with_promise_result_success(ctx.clone());
+                staking_pool.ops_stake_finalize(
+                    ctx.predecessor_account_id,
+                    state.staked,
+                    staking_pool.near_stake_value_rounded_down(state.staked),
+                    state.total_staked_balance(),
+                );
+                let logs = test_utils::get_logs();
+                println!("finalized stake: {:#?}", logs);
+            }
+            // unstake all
+            {
+                let mut state = staking_pool.ops_stake_state();
+                println!("{}", serde_json::to_string_pretty(&state).unwrap());
+                let mut ctx = ctx.clone();
+                ctx.account_locked_balance = *state.total_staked_balance();
+                testing_env!(ctx);
+                staking_pool.ops_unstake(None);
+                let logs = test_utils::get_logs();
+                println!("unstake: {:#?}", logs);
+            }
+            // finalize unstaking
+            {
+                let state = staking_pool.ops_stake_state();
+                println!("{}", serde_json::to_string_pretty(&state).unwrap());
+                let mut ctx = ctx.clone();
+                ctx.account_locked_balance = *state.treasury_balance;
+                testing_env_with_promise_result_success(ctx.clone());
+                staking_pool.ops_unstake_finalize(
+                    ctx.predecessor_account_id,
+                    state.unstaked,
+                    (*state.unstaked).into(),
+                    state.treasury_balance,
+                );
+                let logs = test_utils::get_logs();
+                println!("finalized unstake {:#?}", logs);
+                let state = staking_pool.ops_stake_state();
+                println!("{}", serde_json::to_string_pretty(&state).unwrap());
+            }
+            assert_eq!(
+                ft_stake().ft_balance_of(to_valid_account_id(ACCOUNT)),
+                TokenAmount::ZERO
+            );
+
+            // Act - restake
+            {
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx);
+                let account_before_restaking = account_manager().registered_account_data(ACCOUNT);
+                assert!(account_before_restaking.locked().is_some());
+                staking_pool.ops_restake(Some(10000.into()));
+                let logs = test_utils::get_logs();
+                println!("restaked: {:#?}", logs);
+                assert_eq!(
+                    logs,
+                    vec!["[INFO] [STAKE] near_amount=10000, stake_token_amount=10000",]
+                );
+                let account = account_manager().registered_account_data(ACCOUNT);
+                assert_eq!(
+                    account.locked_balance(),
+                    account_before_restaking.locked_balance() - 10000
+                );
+            }
         }
 
         #[test]
         #[should_panic(expected = "[ERR] [INSUFFICIENT_FUNDS]")]
         fn partial_insufficient_unstaked_funds() {
-            let (_ctx, mut staking_pool) = deploy_with_registered_account();
+            let (mut ctx, mut staking_pool) = deploy_with_registered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            testing_env!(ctx);
             staking_pool.ops_restake(Some(YOCTO.into()));
         }
 
         #[test]
         #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED]")]
         fn all_with_unregistered_account() {
-            let (_ctx, mut staking_pool) = deploy_with_unregistered_account();
+            let (mut ctx, mut staking_pool) = deploy_with_unregistered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            testing_env!(ctx);
             staking_pool.ops_restake(None);
         }
 
         #[test]
         #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED]")]
         fn partial_with_unregistered_account() {
-            let (_ctx, mut staking_pool) = deploy_with_unregistered_account();
+            let (mut ctx, mut staking_pool) = deploy_with_unregistered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            testing_env!(ctx);
             staking_pool.ops_restake(Some(YOCTO.into()));
         }
     }
