@@ -3037,11 +3037,53 @@ mod tests {
             } else {
                 panic!("expected transfer action");
             }
+            assert_eq!(State::liquidity(), YoctoNear::ZERO);
         }
 
         #[test]
         fn all_with_locked_unstaked_funds_with_liquidity_partially_available_with_unlocked_funds() {
-            todo!()
+            let (ctx, mut staking_pool) = deploy_with_registered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+
+            stake_unstake(
+                ctx.clone(),
+                &mut staking_pool,
+                YOCTO.into(),
+                (YOCTO / 2).into(),
+            );
+            let mut ctx = ctx.clone();
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            testing_env!(ctx.clone());
+            State::add_liquidity((YOCTO / 4).into());
+            assert_eq!(State::liquidity(), (YOCTO / 4).into());
+            let starting_balances = staking_pool
+                .ops_stake_balance(to_valid_account_id(ACCOUNT))
+                .unwrap();
+            assert_eq!(
+                starting_balances.unstaked.as_ref().unwrap().available,
+                YoctoNear::ZERO
+            );
+
+            let mut ctx = ctx.clone();
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.epoch_height += 4;
+            testing_env!(ctx.clone());
+            let balances = staking_pool.ops_stake_withdraw(None);
+            println!("{:#?}", balances);
+            assert!(balances.unstaked.is_none());
+
+            let receipts = deserialize_receipts();
+            assert_eq!(receipts.len(), 1);
+            let receipt = &receipts[0];
+            assert_eq!(receipt.receiver_id, ACCOUNT.to_string());
+            assert_eq!(receipt.actions.len(), 1);
+            let action = &receipt.actions[0];
+            if let Action::Transfer(transfer) = action {
+                assert_eq!(transfer.deposit, YOCTO / 2);
+            } else {
+                panic!("expected transfer action");
+            }
+            assert_eq!(State::liquidity(), YoctoNear::ZERO);
         }
 
         #[test]
