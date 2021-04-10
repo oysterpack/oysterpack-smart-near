@@ -24,9 +24,9 @@ pub struct StakedBalance {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 #[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct UnstakedBalance {
-    total: YoctoNear,
-    available: YoctoNear,
-    locked: Option<BTreeMap<EpochHeight, YoctoNear>>,
+    pub total: YoctoNear,
+    pub available: YoctoNear,
+    pub locked: Option<BTreeMap<EpochHeight, YoctoNear>>,
 }
 
 impl From<UnstakedBalances> for UnstakedBalance {
