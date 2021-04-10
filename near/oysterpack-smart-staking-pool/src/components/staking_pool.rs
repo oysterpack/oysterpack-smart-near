@@ -3,11 +3,11 @@ use crate::{
     StakingPoolOperatorCommand, StakingPoolOwner, Treasury, UnstakedBalances,
     ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE, ERR_STAKE_ACTION_FAILED, LOG_EVENT_LIQUIDITY,
     LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE,
-    LOG_EVENT_STATUS_ONLINE, LOG_EVENT_TREASURY_DIVIDEND, LOG_EVENT_UNSTAKE,
+    LOG_EVENT_STATUS_ONLINE, LOG_EVENT_TREASURY_DIVIDEND, LOG_EVENT_UNSTAKE, PERMISSION_TREASURER,
 };
 use oysterpack_smart_account_management::{
-    components::account_management::AccountManagementComponent, AccountRepository,
-    StorageManagement, ERR_ACCOUNT_NOT_REGISTERED,
+    components::account_management::AccountManagementComponent, AccountRepository, Permission,
+    StorageManagement, ERR_ACCOUNT_NOT_REGISTERED, ERR_NOT_AUTHORIZED,
 };
 use oysterpack_smart_contract::{
     components::contract_ownership::ContractOwnershipComponent, BalanceId, ContractNearBalances,
@@ -266,7 +266,7 @@ impl Deploy for StakingPoolComponent {
         // we need to register an account with storage management in order to deposit STAKE into the
         // treasury
         let treasury = env::current_account_id();
-        AccountManager::get_or_register_account(&treasury);
+        AccountManager::register_account_if_not_exists(&treasury);
     }
 }
 
@@ -647,7 +647,20 @@ impl Treasury for StakingPoolComponent {
     }
 
     fn ops_stake_treasury_transfer_to_owner(&mut self, amount: Option<YoctoNear>) {
-        todo!()
+        ERR_NOT_AUTHORIZED.assert(|| {
+            let account = self
+                .account_manager
+                .registered_account_near_data(&env::predecessor_account_id());
+            account.contains_permissions(self.treasurer_permission().into())
+        });
+
+        let owner_account_id = ContractOwnershipComponent.ops_owner();
+        AccountManager::register_account_if_not_exists(&owner_account_id);
+
+        match amount {
+            None => {}
+            Some(_) => {}
+        }
     }
 }
 
@@ -667,6 +680,12 @@ struct ResumeFinalizeCallbackArgs {
 }
 
 impl StakingPoolComponent {
+    fn treasurer_permission(&self) -> Permission {
+        self.account_manager
+            .permission_by_name(PERMISSION_TREASURER)
+            .unwrap()
+    }
+
     /// if treasury has earned staking rewards then burn STAKE tokens to distribute earnings
     fn pay_dividend_and_apply_staking_fees(
         &mut self,

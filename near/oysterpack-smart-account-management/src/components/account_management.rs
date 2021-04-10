@@ -125,6 +125,19 @@ where
             AccountNearDataObject::registered_account(account_id)
         })
     }
+
+    pub fn register_account_if_not_exists(account_id: &str) {
+        if !AccountNearDataObject::exists(account_id) {
+            AccountMetrics::register_account_storage_event_handler();
+            let storage_balance_bounds: StorageBalanceBounds = AccountStorageUsageComponent
+                .ops_storage_usage_bounds()
+                .into();
+            let account = AccountNearDataObject::new(account_id, storage_balance_bounds.min);
+            let storage_balance = account.storage_balance(storage_balance_bounds.min);
+            account.save();
+            eventbus::post(&AccountStorageEvent::Registered(storage_balance));
+        }
+    }
 }
 
 impl<T> Deploy for AccountManagementComponent<T>
@@ -654,6 +667,74 @@ impl Deref for MaxStorageBalance {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oysterpack_smart_near::near_sdk::*;
+    use oysterpack_smart_near_test::*;
+
+    pub type AccountManager = AccountManagementComponent<()>;
+    const ADMIN: &str = "admin";
+    const ACCOUNT: &str = "bob";
+
+    fn deploy(
+        account_id: &str,
+        config: Option<AccountManagementComponentConfig>,
+    ) -> (VMContext, AccountManager) {
+        let ctx = new_context(account_id);
+        testing_env!(ctx.clone());
+
+        AccountManager::deploy(config.unwrap_or_else(|| AccountManagementComponentConfig {
+            storage_usage_bounds: Some(StorageUsageBounds {
+                min: 1000.into(),
+                max: None,
+            }),
+            component_account_storage_mins: None,
+            admin_account: to_valid_account_id(ADMIN),
+        }));
+
+        (ctx, AccountManager::new(&Default::default()))
+    }
+
+    #[test]
+    fn get_or_register_account() {
+        let (ctx, _account_manager) = deploy(ACCOUNT, None);
+        testing_env!(ctx.clone());
+        let _alice = AccountManager::get_or_register_account("alice");
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
+        assert_eq!(logs, vec![
+            "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(97)",
+            "[INFO] [ACCOUNT_STORAGE_CHANGED] Registered(StorageBalance { total: YoctoNear(10000000000000000000000), available: YoctoNear(0) })",
+        ]);
+
+        testing_env!(ctx.clone());
+        let _alice = AccountManager::get_or_register_account("alice");
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
+        assert!(logs.is_empty());
+    }
+
+    #[test]
+    fn register_account_if_not_exists() {
+        let (ctx, _account_manager) = deploy(ACCOUNT, None);
+        testing_env!(ctx.clone());
+        AccountManager::register_account_if_not_exists("alice");
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
+        assert_eq!(logs, vec![
+            "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(97)",
+            "[INFO] [ACCOUNT_STORAGE_CHANGED] Registered(StorageBalance { total: YoctoNear(10000000000000000000000), available: YoctoNear(0) })",
+        ]);
+
+        testing_env!(ctx.clone());
+        AccountManager::register_account_if_not_exists("alice");
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
+        assert!(logs.is_empty());
     }
 }
 
