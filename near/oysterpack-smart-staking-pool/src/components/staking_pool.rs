@@ -545,31 +545,22 @@ impl StakingPoolOperator for StakingPoolComponent {
 }
 
 impl StakingPoolOwner for StakingPoolComponent {
-    fn ops_stake_owner_balance(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances {
+    fn ops_stake_owner_balance(
+        &mut self,
+        amount: Option<YoctoNear>,
+    ) -> PromiseOrValue<StakeAccountBalances> {
         ContractOwnerObject::assert_owner_access();
         let balance = self.contract_ownership.ops_owner_balance();
         let amount = amount.unwrap_or_else(|| balance.available);
         ERR_INSUFFICIENT_FUNDS.assert(|| balance.available >= amount);
+
         let owner_account_id = env::predecessor_account_id();
+        AccountManager::register_account_if_not_exists(&owner_account_id);
 
-        match self
-            .account_manager
-            .load_account_near_data(&owner_account_id)
-        {
-            None => {
-                self.account_manager
-                    .register_account(&owner_account_id, amount, false);
-            }
-            Some(mut account) => {
-                account.incr_near_balance(amount);
-                account.save();
-            }
-        }
-
-        todo!();
-
-        self.ops_stake_balance(to_valid_account_id(&owner_account_id))
-            .unwrap()
+        let (stake, remainder) = self.convert_near_to_stake(amount);
+        let deposit = amount - remainder;
+        State::add_liquidity(deposit);
+        self.stake(&env::current_account_id(), deposit, stake)
     }
 }
 
@@ -657,10 +648,25 @@ impl Treasury for StakingPoolComponent {
         let owner_account_id = ContractOwnershipComponent.ops_owner();
         AccountManager::register_account_if_not_exists(&owner_account_id);
 
-        match amount {
-            None => {}
-            Some(_) => {}
+        let treasury_account = env::current_account_id();
+        let treasury_balance = self
+            .stake_token
+            .ft_balance_of(to_valid_account_id(&treasury_account));
+        if treasury_balance == TokenAmount::ZERO {
+            return;
         }
+
+        let treasury_near_balance = self.stake_near_value_rounded_down(treasury_balance);
+        let amount = match amount {
+            None => treasury_near_balance,
+            Some(amount) => {
+                ERR_INSUFFICIENT_FUNDS.assert(|| treasury_near_balance >= amount);
+                amount
+            }
+        };
+        let stake = self.near_stake_value_rounded_down(amount);
+        self.stake_token.ft_burn(&treasury_account, stake);
+        self.stake_token.ft_mint(&owner_account_id, stake);
     }
 }
 

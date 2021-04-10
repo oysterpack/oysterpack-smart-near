@@ -5,7 +5,7 @@ use oysterpack_smart_near::near_sdk::{AccountId, PromiseOrValue};
 use oysterpack_smart_staking_pool::components::staking_pool::{State, Status};
 use oysterpack_smart_staking_pool::{
     StakeAccountBalances, StakeActionCallbacks, StakingPool, StakingPoolOperator,
-    StakingPoolOperatorCommand, StakingPoolOwner,
+    StakingPoolOperatorCommand, StakingPoolOwner, Treasury,
 };
 
 #[near_bindgen]
@@ -102,7 +102,21 @@ impl StakingPoolOperator for Contract {
 
 #[near_bindgen]
 impl StakingPoolOwner for Contract {
-    fn ops_stake_owner_balance(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances {
+    fn ops_stake_owner_balance(
+        &mut self,
+        amount: Option<YoctoNear>,
+    ) -> PromiseOrValue<StakeAccountBalances> {
         Self::staking_pool().ops_stake_owner_balance(amount)
+    }
+}
+
+#[near_bindgen]
+impl Treasury for Contract {
+    fn ops_stake_treasury_deposit(&mut self) -> PromiseOrValue<StakeAccountBalances> {
+        Self::staking_pool().ops_stake_treasury_deposit()
+    }
+
+    fn ops_stake_treasury_transfer_to_owner(&mut self, amount: Option<YoctoNear>) {
+        Self::staking_pool().ops_stake_treasury_transfer_to_owner(amount);
     }
 }

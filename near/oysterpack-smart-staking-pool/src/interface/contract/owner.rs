@@ -1,5 +1,6 @@
 use crate::StakeAccountBalances;
 use oysterpack_smart_near::domain::YoctoNear;
+use oysterpack_smart_near::near_sdk::PromiseOrValue;
 
 /// # **Contract Interface**: Staking Pool Owner API
 pub trait StakingPoolOwner {
@@ -12,5 +13,8 @@ pub trait StakingPoolOwner {
     /// ## Panics
     /// - if predecessor account is not the owner
     /// - if specified amount is more than the owner's available balance
-    fn ops_stake_owner_balance(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances;
+    fn ops_stake_owner_balance(
+        &mut self,
+        amount: Option<YoctoNear>,
+    ) -> PromiseOrValue<StakeAccountBalances>;
 }
