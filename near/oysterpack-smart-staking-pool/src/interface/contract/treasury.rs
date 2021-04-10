@@ -1,4 +1,6 @@
+use crate::StakeAccountBalances;
 use oysterpack_smart_near::domain::YoctoNear;
+use oysterpack_smart_near::near_sdk::PromiseOrValue;
 use oysterpack_smart_near::{Level, LogEvent};
 
 /// # **Contract Interface**: Staking Pool Treasury API
@@ -9,13 +11,15 @@ pub trait Treasury {
     /// This enables external sources of revenue to be deposited into the treasury.
     ///
     /// ## Notes
-    /// Because of rounding, any remainder will be added to the liquidity fund
+    /// The entire deposit is staked. When minting STAKE, the conversion from NEAR -> STAKE is rounded
+    /// down. Thus, the NEAR deposit remainder will also get staked, effectively distributing the
+    /// funds to the current stakers.
     ///
     /// ## Panics
     /// if no deposit is attached
     ///
     /// `#[payable]`
-    fn ops_stake_treasury_deposit(&mut self);
+    fn ops_stake_treasury_deposit(&mut self) -> PromiseOrValue<StakeAccountBalances>;
 
     /// Transfers the specified amount from the treasury to the contract owners account
     /// - if no amount is specified, then the total treasury balance is transferred to the owner's account

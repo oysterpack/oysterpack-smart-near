@@ -16,6 +16,7 @@ use oysterpack_smart_contract::{
 use oysterpack_smart_fungible_token::{
     components::fungible_token::FungibleTokenComponent, FungibleToken, TokenAmount, TokenService,
 };
+use oysterpack_smart_near::asserts::ERR_NEAR_DEPOSIT_REQUIRED;
 use oysterpack_smart_near::domain::BasisPoints;
 use oysterpack_smart_near::{
     asserts::{ERR_ILLEGAL_STATE, ERR_INSUFFICIENT_FUNDS, ERR_INVALID},
@@ -316,15 +317,11 @@ impl StakingPool for StakingPoolComponent {
             account.dec_near_balance(account_storage_available_balance);
 
             let near = account_storage_available_balance + env::attached_deposit();
-            let stake = self.near_stake_value_rounded_down(near);
-            // because of rounding down we need to convert the STAKE value back to NEAR, which ensures
-            // that the account will not be short changed when they unstake
-            let stake_near_value = self.stake_near_value_rounded_down(stake);
-            // the unstaked remainder is credited back to the account storage balance
-            account.incr_near_balance(near - stake_near_value);
+            let (stake, remainder) = self.convert_near_to_stake(near);
+            account.incr_near_balance(remainder);
             account.save();
 
-            (stake_near_value, stake)
+            (near - remainder, stake)
         };
 
         State::add_liquidity(near_amount);
@@ -390,10 +387,8 @@ impl StakingPool for StakingPoolComponent {
             Some(mut account) => {
                 let (near_amount, stake_token_amount) = {
                     let near = amount.unwrap_or_else(|| account.total());
-                    let stake = self.near_stake_value_rounded_down(near);
-                    // because of rounding down we need to convert the STAKE value back to NEAR, which ensures
-                    // that the account will not be short changed when they unstake
-                    let stake_near_value = self.stake_near_value_rounded_down(stake);
+                    let (stake, remainder) = self.convert_near_to_stake(near);
+                    let stake_near_value = near - remainder;
                     account.debit_for_restaking(stake_near_value);
                     account.save();
                     State::decr_total_unstaked_balance(stake_near_value);
@@ -571,6 +566,8 @@ impl StakingPoolOwner for StakingPoolComponent {
             }
         }
 
+        todo!();
+
         self.ops_stake_balance(to_valid_account_id(&owner_account_id))
             .unwrap()
     }
@@ -640,8 +637,13 @@ impl StakeActionCallbacks for StakingPoolComponent {
 }
 
 impl Treasury for StakingPoolComponent {
-    fn ops_stake_treasury_deposit(&mut self) {
-        todo!()
+    fn ops_stake_treasury_deposit(&mut self) -> PromiseOrValue<StakeAccountBalances> {
+        let deposit = YoctoNear::from(env::attached_deposit());
+        ERR_NEAR_DEPOSIT_REQUIRED.assert(|| deposit > YoctoNear::ZERO);
+
+        State::add_liquidity(deposit);
+        let stake = self.near_stake_value_rounded_down(deposit);
+        self.stake(&env::current_account_id(), deposit, stake)
     }
 
     fn ops_stake_treasury_transfer_to_owner(&mut self, amount: Option<YoctoNear>) {
@@ -699,7 +701,14 @@ impl StakingPoolComponent {
         };
 
         // apply staking fee
-        let staking_fee = self.near_stake_value_rounded_down(amount * state.staking_fee);
+        let staking_fee = if account_id == &env::current_account_id()
+            || account_id == &ContractOwnershipComponent.ops_owner()
+        {
+            // treasury and owner accounts do not get charged staking fees
+            TokenAmount::ZERO
+        } else {
+            self.near_stake_value_rounded_down(amount * state.staking_fee)
+        };
         if staking_fee > TokenAmount::ZERO {
             self.stake_token.ft_burn(&account_id, staking_fee);
             let treasury_stake_balance = self
@@ -862,6 +871,18 @@ impl StakingPoolComponent {
         (U256::from(*total_staked_near_balance) * U256::from(*stake) / U256::from(ft_total_supply))
             .as_u128()
             .into()
+    }
+
+    /// converts the specified NEAR amount to STAKE and returns the STAKE equivalent and any NEAR
+    /// remainder that could not be converted into STAKE because of rounding
+    ///
+    /// ## Notes
+    /// because of rounding down we need to convert the STAKE value back to NEAR, which ensures that
+    /// the account will not be short changed when they unstake
+    fn convert_near_to_stake(&self, amount: YoctoNear) -> (TokenAmount, YoctoNear) {
+        let stake = self.near_stake_value_rounded_down(amount);
+        let stake_near_value = self.stake_near_value_rounded_down(stake);
+        (stake, amount - stake_near_value)
     }
 
     fn near_stake_value_rounded_down(&self, amount: YoctoNear) -> TokenAmount {
