@@ -70,7 +70,7 @@ impl UnstakedBalances {
     /// If there are locked balances then try to use liquidity to unlock the funds for withdrawal.
     ///
     /// returns the amount of liquidity that was applied
-    fn apply_liquidity(&mut self) -> YoctoNear {
+    pub(crate) fn apply_liquidity(&mut self) -> YoctoNear {
         self.unlock();
         let locked_balance = self.locked_balance();
         if locked_balance == YoctoNear::ZERO {

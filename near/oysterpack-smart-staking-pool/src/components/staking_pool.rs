@@ -410,7 +410,7 @@ impl StakingPool for StakingPoolComponent {
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(&account_id));
 
         if let Some(mut unstaked_balances) = self.account_manager.load_account_data(&account_id) {
-            unstaked_balances.unlock();
+            unstaked_balances.apply_liquidity();
             let amount = amount.unwrap_or_else(|| unstaked_balances.available());
             if amount > YoctoNear::ZERO {
                 unstaked_balances.debit_available_balance(amount);
@@ -3001,7 +3001,42 @@ mod tests {
 
         #[test]
         fn all_with_locked_unstaked_funds_with_liquidity_fully_available() {
-            todo!()
+            let (ctx, mut staking_pool) = deploy_with_registered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+
+            stake_unstake(
+                ctx.clone(),
+                &mut staking_pool,
+                YOCTO.into(),
+                (YOCTO / 2).into(),
+            );
+            let mut ctx = ctx.clone();
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            testing_env!(ctx.clone());
+            State::add_liquidity((YOCTO * 3 / 4).into());
+            assert_eq!(State::liquidity(), (YOCTO / 2).into());
+            let starting_balances = staking_pool
+                .ops_stake_balance(to_valid_account_id(ACCOUNT))
+                .unwrap();
+            assert_eq!(
+                starting_balances.unstaked.as_ref().unwrap().available,
+                YoctoNear::ZERO
+            );
+            let balances = staking_pool.ops_stake_withdraw(None);
+            println!("{:#?}", balances);
+            assert!(balances.unstaked.is_none());
+
+            let receipts = deserialize_receipts();
+            assert_eq!(receipts.len(), 1);
+            let receipt = &receipts[0];
+            assert_eq!(receipt.receiver_id, ACCOUNT.to_string());
+            assert_eq!(receipt.actions.len(), 1);
+            let action = &receipt.actions[0];
+            if let Action::Transfer(transfer) = action {
+                assert_eq!(transfer.deposit, YOCTO / 2);
+            } else {
+                panic!("expected transfer action");
+            }
         }
 
         #[test]
