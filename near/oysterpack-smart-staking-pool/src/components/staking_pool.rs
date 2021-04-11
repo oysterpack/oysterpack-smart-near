@@ -3909,83 +3909,153 @@ mod tests {
             let (ctx, mut staking_pool) = deploy_with_unregistered_account();
             bring_pool_online(ctx.clone(), &mut staking_pool);
 
-            {
-                let mut ctx = ctx.clone();
-                ctx.predecessor_account_id = OWNER.to_string();
-                testing_env!(ctx);
+            let mut ctx = ctx.clone();
+            ctx.predecessor_account_id = OWNER.to_string();
+            testing_env!(ctx);
 
-                let initial_owner_balance = ContractOwnershipComponent.ops_owner_balance();
-                println!("initial {:?}", initial_owner_balance);
+            let initial_owner_balance = ContractOwnershipComponent.ops_owner_balance();
+            println!("initial {:?}", initial_owner_balance);
 
-                let initial_staking_pool_balances = staking_pool.ops_stake_pool_balances();
-                println!(
-                    "initial_staking_pool_balances {:#?}",
-                    initial_staking_pool_balances
-                );
+            let initial_staking_pool_balances = staking_pool.ops_stake_pool_balances();
+            println!(
+                "initial_staking_pool_balances {:#?}",
+                initial_staking_pool_balances
+            );
 
-                let state = staking_pool.ops_stake_state();
-                println!(
-                    "initial state: {}",
-                    serde_json::to_string_pretty(&state).unwrap()
-                );
+            let state = staking_pool.ops_stake_state();
+            println!(
+                "initial state: {}",
+                serde_json::to_string_pretty(&state).unwrap()
+            );
 
-                // Act
-                if let PromiseOrValue::Value(_) = staking_pool.ops_stake_owner_balance(None) {
-                    panic!("expected Promise");
-                }
+            // Act
+            if let PromiseOrValue::Value(_) = staking_pool.ops_stake_owner_balance(None) {
+                panic!("expected Promise");
+            }
 
-                let owner_balance = ContractOwnershipComponent.ops_owner_balance();
-                println!("after staking {:#?}", owner_balance);
-                println!("{:#?}", StakingPoolBalances::load());
-                assert_eq!(owner_balance.available, YoctoNear::ZERO);
+            let owner_balance = ContractOwnershipComponent.ops_owner_balance();
+            println!("after staking {:#?}", owner_balance);
+            println!("{:#?}", StakingPoolBalances::load());
+            assert_eq!(owner_balance.available, YoctoNear::ZERO);
 
-                // Assert
-                let logs = test_utils::get_logs();
-                println!("{:#?}", logs);
+            // Assert
+            let logs = test_utils::get_logs();
+            println!("{:#?}", logs);
 
-                let receipts = deserialize_receipts();
-                let action = &receipts[0].actions[0];
-                if let Action::Stake(stake) = action {
-                    assert_eq!(stake.stake, *State::staked_balance());
-                } else {
-                    panic!("expected stake action")
-                }
+            let receipts = deserialize_receipts();
+            let action = &receipts[0].actions[0];
+            if let Action::Stake(stake) = action {
+                assert_eq!(stake.stake, *State::staked_balance());
+            } else {
+                panic!("expected stake action")
+            }
 
-                let action = &receipts[1].actions[0];
-                if let Action::FunctionCall(function_call) = action {
-                    assert_eq!(function_call.method_name, "ops_stake_finalize");
-                    let args: StakeActionCallbackArgs =
-                        serde_json::from_str(function_call.args.as_str()).unwrap();
-                    assert_eq!(args.account_id, ContractOwnershipComponent.ops_owner());
-                    assert_eq!(args.total_staked_balance, State::staked_balance());
-                } else {
-                    panic!("expected stake action")
-                }
+            let action = &receipts[1].actions[0];
+            if let Action::FunctionCall(function_call) = action {
+                assert_eq!(function_call.method_name, "ops_stake_finalize");
+                let args: StakeActionCallbackArgs =
+                    serde_json::from_str(function_call.args.as_str()).unwrap();
+                assert_eq!(args.account_id, ContractOwnershipComponent.ops_owner());
+                assert_eq!(args.total_staked_balance, State::staked_balance());
+            } else {
+                panic!("expected stake action")
             }
         }
 
         #[test]
-        #[ignore]
-        fn stake_all_available_balance_with_liquidity_needed() {
-            todo!()
-        }
-
-        #[test]
-        #[ignore]
         fn stake_partial_available_balance() {
-            todo!()
+            let (ctx, mut staking_pool) = deploy_with_unregistered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+
+            let mut ctx = ctx.clone();
+            ctx.predecessor_account_id = OWNER.to_string();
+            testing_env!(ctx);
+
+            let initial_owner_balance = ContractOwnershipComponent.ops_owner_balance();
+            println!("initial {:?}", initial_owner_balance);
+
+            let initial_staking_pool_balances = staking_pool.ops_stake_pool_balances();
+            println!(
+                "initial_staking_pool_balances {:#?}",
+                initial_staking_pool_balances
+            );
+
+            let state = staking_pool.ops_stake_state();
+            println!(
+                "initial state: {}",
+                serde_json::to_string_pretty(&state).unwrap()
+            );
+
+            // Act
+            if let PromiseOrValue::Value(_) =
+                staking_pool.ops_stake_owner_balance(Some(YOCTO.into()))
+            {
+                panic!("expected Promise");
+            }
+
+            let owner_balance = ContractOwnershipComponent.ops_owner_balance();
+            println!("after staking {:#?}", owner_balance);
+            println!("{:#?}", StakingPoolBalances::load());
+            assert!(
+                owner_balance.available
+                    < initial_owner_balance.available
+                        - YOCTO
+                        - account_manager()
+                            .storage_balance_of(to_valid_account_id(
+                                ContractOwnershipComponent.ops_owner().as_str()
+                            ))
+                            .unwrap()
+                            .total
+            );
+
+            // Assert
+            let logs = test_utils::get_logs();
+            println!("{:#?}", logs);
+
+            let receipts = deserialize_receipts();
+            let action = &receipts[0].actions[0];
+            if let Action::Stake(stake) = action {
+                assert_eq!(stake.stake, *State::staked_balance());
+            } else {
+                panic!("expected stake action")
+            }
+
+            let action = &receipts[1].actions[0];
+            if let Action::FunctionCall(function_call) = action {
+                assert_eq!(function_call.method_name, "ops_stake_finalize");
+                let args: StakeActionCallbackArgs =
+                    serde_json::from_str(function_call.args.as_str()).unwrap();
+                assert_eq!(args.account_id, ContractOwnershipComponent.ops_owner());
+                assert_eq!(args.total_staked_balance, State::staked_balance());
+            } else {
+                panic!("expected stake action")
+            }
         }
 
         #[test]
-        #[ignore]
+        #[should_panic(expected = "[ERR] [INSUFFICIENT_FUNDS]")]
         fn insufficient_funds() {
-            todo!()
+            let (ctx, mut staking_pool) = deploy_with_unregistered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+
+            let initial_owner_balance = ContractOwnershipComponent.ops_owner_balance();
+
+            let mut ctx = ctx.clone();
+            ctx.predecessor_account_id = OWNER.to_string();
+            testing_env!(ctx);
+            staking_pool.ops_stake_owner_balance(Some(initial_owner_balance.total));
         }
 
         #[test]
-        #[ignore]
+        #[should_panic(expected = "[ERR] [OWNER_ACCESS_REQUIRED]")]
         fn not_owner() {
-            todo!()
+            let (ctx, mut staking_pool) = deploy_with_registered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+
+            let mut ctx = ctx.clone();
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            testing_env!(ctx);
+            staking_pool.ops_stake_owner_balance(None);
         }
     }
 }
