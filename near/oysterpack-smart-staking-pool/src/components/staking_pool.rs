@@ -4425,6 +4425,86 @@ mod tests {
         }
 
         #[test]
+        fn ops_stake_treasury_transfer_to_owner_partial_as_admin() {
+            let (ctx, mut staking_pool) = deploy_with_registered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+
+            let state = staking_pool.ops_stake_state();
+            assert_eq!(state.treasury_balance, YoctoNear::ZERO);
+
+            const TREASURY_DEPOSIT: YoctoNear = YoctoNear(3 * YOCTO);
+            {
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = *TREASURY_DEPOSIT;
+                testing_env!(ctx);
+                if let PromiseOrValue::Value(_) = staking_pool.ops_stake_treasury_deposit() {
+                    panic!("expected Promise")
+                }
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                let staking_pool_balances = staking_pool.ops_stake_pool_balances();
+                println!("{:#?}", staking_pool_balances);
+                assert_eq!(staking_pool_balances.staked, TREASURY_DEPOSIT);
+                let state = staking_pool.ops_stake_state();
+                println!("{}", serde_json::to_string_pretty(&state).unwrap());
+                assert_eq!(state.treasury_balance, YoctoNear::ZERO);
+
+                let treasury_stake_balance =
+                    ft_stake().ft_balance_of(to_valid_account_id(&env::current_account_id()));
+                assert_eq!(treasury_stake_balance, TokenAmount::ZERO);
+
+                deserialize_receipts();
+            }
+            {
+                let staking_pool_balances = staking_pool.ops_stake_pool_balances();
+
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = 0;
+                ctx.account_locked_balance = *staking_pool_balances.staked;
+                testing_env_with_promise_result_success(ctx);
+                let balances = staking_pool.ops_stake_finalize(
+                    env::current_account_id(),
+                    staking_pool_balances.staked,
+                    (*staking_pool_balances.staked).into(),
+                    staking_pool_balances.staked,
+                );
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+
+                println!("{:#?}", balances);
+                assert_eq!(balances.staked.unwrap().near_value, TREASURY_DEPOSIT);
+
+                let treasury_stake_balance =
+                    ft_stake().ft_balance_of(to_valid_account_id(&env::current_account_id()));
+                assert_eq!(treasury_stake_balance, (*TREASURY_DEPOSIT).into());
+
+                assert_eq!(
+                    staking_pool.ops_stake_state().treasury_balance,
+                    TREASURY_DEPOSIT
+                );
+            }
+
+            // Act
+            {
+                let mut ctx = ctx.clone();
+                ctx.predecessor_account_id = ADMIN.to_string();
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_treasury_transfer_to_owner(Some(YOCTO.into()));
+
+                let treasury_stake_balance =
+                    ft_stake().ft_balance_of(to_valid_account_id(&env::current_account_id()));
+                assert_eq!(treasury_stake_balance, (2 * YOCTO).into());
+
+                let owner_stake_balance = ft_stake()
+                    .ft_balance_of(to_valid_account_id(&ContractOwnershipComponent.ops_owner()));
+                assert_eq!(owner_stake_balance, YOCTO.into());
+
+                let state = staking_pool.ops_stake_state();
+                assert_eq!(state.treasury_balance, (2 * YOCTO).into());
+            }
+        }
+
+        #[test]
         #[should_panic(expected = "[ERR] [NOT_AUTHORIZED]")]
         fn ops_stake_treasury_transfer_to_owner_not_authorized() {
             let (ctx, mut staking_pool) = deploy_with_registered_account();
