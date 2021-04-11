@@ -1,5 +1,5 @@
-use crate::components::staking_pool::{StakingPoolBalances, Status};
-use crate::StakeAccountBalances;
+use crate::components::staking_pool::Status;
+use crate::{StakeAccountBalances, StakingPoolBalances};
 use oysterpack_smart_near::domain::YoctoNear;
 use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
 use oysterpack_smart_near::near_sdk::PromiseOrValue;

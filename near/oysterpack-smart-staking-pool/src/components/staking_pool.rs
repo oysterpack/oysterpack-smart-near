@@ -1,6 +1,6 @@
 use crate::{
-    StakeAccountBalances, StakeActionCallbacks, StakedBalance, StakingPool, StakingPoolOperator,
-    StakingPoolOperatorCommand, StakingPoolOwner, Treasury, UnstakedBalances,
+    StakeAccountBalances, StakeActionCallbacks, StakedBalance, StakingPool, StakingPoolBalances,
+    StakingPoolOperator, StakingPoolOperatorCommand, StakingPoolOwner, Treasury, UnstakedBalances,
     ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE, ERR_STAKE_ACTION_FAILED, LOG_EVENT_LIQUIDITY,
     LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE,
     LOG_EVENT_STATUS_ONLINE, LOG_EVENT_TREASURY_DIVIDEND, LOG_EVENT_UNSTAKE, PERMISSION_TREASURER,
@@ -237,29 +237,6 @@ impl State {
 
     fn decr_unstaked_balance(amount: YoctoNear) {
         ContractNearBalances::decr_balance(Self::UNSTAKED_BALANCE, amount);
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq)]
-#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
-pub struct StakingPoolBalances {
-    total_staked: YoctoNear,
-    staked: YoctoNear,
-    unstaked: YoctoNear,
-
-    total_unstaked: YoctoNear,
-    unstaked_liquidity: YoctoNear,
-}
-
-impl StakingPoolBalances {
-    pub fn load() -> Self {
-        Self {
-            total_staked: ContractNearBalances::near_balance(State::TOTAL_STAKED_BALANCE),
-            staked: ContractNearBalances::near_balance(State::STAKED_BALANCE),
-            unstaked: ContractNearBalances::near_balance(State::UNSTAKED_BALANCE),
-            total_unstaked: ContractNearBalances::near_balance(State::TOTAL_UNSTAKED_BALANCE),
-            unstaked_liquidity: ContractNearBalances::near_balance(State::UNSTAKED_LIQUIDITY_POOL),
-        }
     }
 }
 
