@@ -1,4 +1,4 @@
-use crate::components::staking_pool::Status;
+use crate::components::staking_pool::{StakingPoolBalances, Status};
 use crate::StakeAccountBalances;
 use oysterpack_smart_near::domain::YoctoNear;
 use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
@@ -115,6 +115,8 @@ pub trait StakingPool {
     fn ops_stake_token_value(&self) -> YoctoNear;
 
     fn ops_stake_status(&self) -> Status;
+
+    fn ops_stake_pool_balances(&self) -> StakingPoolBalances;
 }
 
 pub const LOG_EVENT_STATUS_ONLINE: LogEvent = LogEvent(Level::INFO, "STATUS_ONLINE");

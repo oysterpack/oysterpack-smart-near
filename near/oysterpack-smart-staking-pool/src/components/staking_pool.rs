@@ -79,13 +79,6 @@ pub struct State {
 
     pub status: Status,
 
-    // tracks how funds have been staked and unstaked and pending the stake action
-    // - applies only when the status is online - when offline, the values will be zero
-    pub staked: YoctoNear,
-    pub unstaked: YoctoNear,
-    // updated each time a stake action succeeds
-    pub total_staked_balance: YoctoNear,
-
     // used to override the built in computed gas amount
     pub callback_gas: Option<Gas>,
     pub staking_fee: BasisPoints,
@@ -108,6 +101,9 @@ impl State {
     /// while the staking pool is offline. Once the staking pool goes back on line, then the balance is
     /// staked and this balance is cleared.
     pub const TOTAL_STAKED_BALANCE: BalanceId = BalanceId(1955270816453372906764299513102112489);
+    // tracks how funds have been staked and unstaked and pending the stake action
+    pub const STAKED_BALANCE: BalanceId = BalanceId(1956222035569770585105442079419123289);
+    pub const UNSTAKED_BALANCE: BalanceId = BalanceId(1956222069432890001326139573174433605);
 
     /// unstaked funds are locked for 4 epochs
     /// - we need to track unstaked funds that is owned by accounts separate from the account NEAR balances
@@ -135,15 +131,20 @@ impl State {
         }
     }
 
-    fn total_staked_balance(&mut self) -> YoctoNear {
+    fn total_staked_balance(self) -> YoctoNear {
         match self.status {
             Status::Online => {
                 // if there are no stake actions in flight, then resync the total staked balance
                 // to ensure any staking rewards are captured
-                if self.staked == YoctoNear::ZERO && self.unstaked == YoctoNear::ZERO {
-                    self.total_staked_balance = env::account_locked_balance().into();
+                let staked = ContractNearBalances::near_balance(Self::STAKED_BALANCE);
+                let unstaked = ContractNearBalances::near_balance(Self::UNSTAKED_BALANCE);
+                if staked == YoctoNear::ZERO && unstaked == YoctoNear::ZERO {
+                    ContractNearBalances::set_balance(
+                        Self::TOTAL_STAKED_BALANCE,
+                        env::account_locked_balance().into(),
+                    );
                 }
-                self.total_staked_balance + self.staked - self.unstaked
+                ContractNearBalances::near_balance(Self::TOTAL_STAKED_BALANCE) + staked - unstaked
             }
             Status::Offline(_) => ContractNearBalances::near_balance(Self::TOTAL_STAKED_BALANCE),
         }
@@ -213,6 +214,53 @@ impl State {
     pub fn total_unstaked_balance() -> YoctoNear {
         ContractNearBalances::near_balance(Self::TOTAL_UNSTAKED_BALANCE)
     }
+
+    pub fn staked_balance() -> YoctoNear {
+        ContractNearBalances::near_balance(Self::STAKED_BALANCE)
+    }
+
+    fn incr_staked_balance(amount: YoctoNear) {
+        ContractNearBalances::incr_balance(Self::STAKED_BALANCE, amount);
+    }
+
+    fn decr_staked_balance(amount: YoctoNear) {
+        ContractNearBalances::decr_balance(Self::STAKED_BALANCE, amount);
+    }
+
+    pub fn unstaked_balance() -> YoctoNear {
+        ContractNearBalances::near_balance(Self::UNSTAKED_BALANCE)
+    }
+
+    fn incr_unstaked_balance(amount: YoctoNear) {
+        ContractNearBalances::incr_balance(Self::UNSTAKED_BALANCE, amount);
+    }
+
+    fn decr_unstaked_balance(amount: YoctoNear) {
+        ContractNearBalances::decr_balance(Self::UNSTAKED_BALANCE, amount);
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq)]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
+pub struct StakingPoolBalances {
+    total_staked: YoctoNear,
+    staked: YoctoNear,
+    unstaked: YoctoNear,
+
+    total_unstaked: YoctoNear,
+    unstaked_liquidity: YoctoNear,
+}
+
+impl StakingPoolBalances {
+    pub fn load() -> Self {
+        Self {
+            total_staked: ContractNearBalances::near_balance(State::TOTAL_STAKED_BALANCE),
+            staked: ContractNearBalances::near_balance(State::STAKED_BALANCE),
+            unstaked: ContractNearBalances::near_balance(State::UNSTAKED_BALANCE),
+            total_unstaked: ContractNearBalances::near_balance(State::TOTAL_UNSTAKED_BALANCE),
+            unstaked_liquidity: ContractNearBalances::near_balance(State::UNSTAKED_LIQUIDITY_POOL),
+        }
+    }
 }
 
 #[derive(
@@ -253,9 +301,6 @@ impl Deploy for StakingPoolComponent {
         let state = State {
             stake_public_key: config.stake_public_key,
             status: Status::Offline(OfflineReason::Paused),
-            staked: YoctoNear::ZERO,
-            unstaked: YoctoNear::ZERO,
-            total_staked_balance: YoctoNear::ZERO,
             callback_gas: None,
             staking_fee: 80.into(),
             treasury_balance: YoctoNear::ZERO,
@@ -334,11 +379,10 @@ impl StakingPool for StakingPoolComponent {
             "near_amount={}, stake_token_amount={}",
             near_amount, stake_token_amount
         ));
-        let mut state = Self::state();
+        let state = Self::state();
         match state.status {
             Status::Online => {
-                state.unstaked += near_amount;
-                state.save();
+                State::incr_unstaked_balance(near_amount);
                 self.stake_token.ft_lock(&account_id, stake_token_amount);
                 PromiseOrValue::Promise(Self::unstake_funds(
                     *state,
@@ -449,6 +493,10 @@ impl StakingPool for StakingPoolComponent {
     fn ops_stake_status(&self) -> Status {
         Self::state().status
     }
+
+    fn ops_stake_pool_balances(&self) -> StakingPoolBalances {
+        StakingPoolBalances::load()
+    }
 }
 
 impl StakingPoolOperator for StakingPoolComponent {
@@ -480,7 +528,6 @@ impl StakingPoolOperator for StakingPoolComponent {
                     // update the status
                     {
                         state.status = Status::Offline(OfflineReason::Paused);
-                        state.total_staked_balance = YoctoNear::ZERO;
                         state.save();
                     }
                     LOG_EVENT_STATUS_OFFLINE.log("");
@@ -494,7 +541,6 @@ impl StakingPoolOperator for StakingPoolComponent {
                     // update status
                     {
                         state.status = Status::Online;
-                        state.total_staked_balance = total_staked_balance;
                         state.save();
                     }
                     LOG_EVENT_STATUS_ONLINE.log("");
@@ -554,11 +600,7 @@ impl StakingPoolOperator for StakingPoolComponent {
     }
 
     fn ops_stake_state(&self) -> State {
-        let mut state = *Self::state();
-        if !state.status.is_online() {
-            state.total_staked_balance = state.total_staked_balance();
-        }
-        state
+        *Self::state()
     }
 }
 
@@ -590,7 +632,7 @@ impl StakeActionCallbacks for StakingPoolComponent {
         total_staked_balance: YoctoNear,
     ) -> StakeAccountBalances {
         let mut state = Self::state();
-        state.staked -= amount;
+        State::decr_staked_balance(amount);
         Self::handle_stake_action_result(&mut state, total_staked_balance);
         self.pay_dividend_and_apply_staking_fees(&account_id, state, amount, stake_token_amount);
 
@@ -608,7 +650,7 @@ impl StakeActionCallbacks for StakingPoolComponent {
         // update state
         {
             let mut state = Self::state();
-            state.unstaked -= amount;
+            State::decr_unstaked_balance(amount);
             Self::handle_stake_action_result(&mut state, total_staked_balance);
             state.save();
             State::incr_total_unstaked_balance(amount);
@@ -624,9 +666,10 @@ impl StakeActionCallbacks for StakingPoolComponent {
 
     fn ops_stake_resume_finalize(&mut self, total_staked_balance: YoctoNear) {
         if is_promise_success() {
-            let mut state = Self::state();
-            state.total_staked_balance = env::account_locked_balance().into();
-            state.save();
+            ContractNearBalances::set_balance(
+                State::TOTAL_STAKED_BALANCE,
+                env::account_locked_balance().into(),
+            );
         } else {
             Self::handle_stake_action_failure(total_staked_balance);
         }
@@ -634,9 +677,6 @@ impl StakeActionCallbacks for StakingPoolComponent {
 
     fn ops_stake_pause_finalize(&mut self) {
         if is_promise_success() {
-            let mut state = Self::state();
-            state.total_staked_balance = env::account_locked_balance().into();
-            state.save();
             LOG_EVENT_STATUS_OFFLINE.log("all NEAR has been unstaked");
         } else {
             ERR_STAKE_ACTION_FAILED.log("failed to go offline");
@@ -767,7 +807,10 @@ impl StakingPoolComponent {
 
     fn handle_stake_action_result(state: &mut State, total_staked_balance: YoctoNear) {
         if is_promise_success() {
-            state.total_staked_balance = env::account_locked_balance().into();
+            ContractNearBalances::set_balance(
+                State::TOTAL_STAKED_BALANCE,
+                env::account_locked_balance().into(),
+            );
         } else {
             state.status = Status::Offline(OfflineReason::StakeActionFailed);
             Self::handle_stake_action_failure(total_staked_balance);
@@ -835,15 +878,14 @@ impl StakingPoolComponent {
             return self.registered_stake_account_balance(account_id);
         }
 
-        let mut state = Self::state();
+        let state = Self::state();
         LOG_EVENT_STAKE.log(format!(
             "near_amount={}, stake_token_amount={}",
             near_amount, stake_token_amount
         ));
         match state.status {
             Status::Online => {
-                state.staked += near_amount;
-                state.save();
+                State::incr_staked_balance(near_amount);
 
                 PromiseOrValue::Promise(Self::stake_funds(
                     *state,
@@ -897,7 +939,7 @@ impl StakingPoolComponent {
     }
 
     fn create_stake_workflow(
-        mut state: State,
+        state: State,
         account_id: &str,
         amount: YoctoNear,
         stake_token_amount: TokenAmount,
@@ -1207,9 +1249,8 @@ mod tests {
             // Arrange
             bring_pool_online(ctx.clone(), &mut staking_pool);
 
-            let state = staking_pool.ops_stake_state();
-            assert_eq!(state.staked, 0.into());
-            assert_eq!(state.unstaked, 0.into());
+            assert_eq!(State::staked_balance(), 0.into());
+            assert_eq!(State::unstaked_balance(), 0.into());
             {
                 let mut ctx = ctx.clone();
                 ctx.predecessor_account_id = ACCOUNT.to_string();
@@ -1226,7 +1267,7 @@ mod tests {
                     "staked 1000 {}",
                     serde_json::to_string_pretty(&state).unwrap()
                 );
-                assert_eq!(state.staked, 1000.into());
+                assert_eq!(State::staked_balance(), 1000.into());
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
@@ -1284,7 +1325,7 @@ mod tests {
                     "staked 1000 {}",
                     serde_json::to_string_pretty(&state).unwrap()
                 );
-                assert_eq!(state.staked, 2000.into());
+                assert_eq!(State::staked_balance(), 2000.into());
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
 
@@ -1363,7 +1404,7 @@ mod tests {
                     "staked 1000 {}",
                     serde_json::to_string_pretty(&state).unwrap()
                 );
-                assert_eq!(state.staked, (YOCTO + 1000).into());
+                assert_eq!(State::staked_balance(), (YOCTO + 1000).into());
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
@@ -1425,9 +1466,7 @@ mod tests {
                 ft_stake.ft_mint(ACCOUNT, total_supply);
                 assert_eq!(ft_stake.ft_total_supply(), total_supply);
 
-                let mut state = StakingPoolComponent::state();
-                state.staked = total_staked_balance;
-                state.save();
+                ContractNearBalances::set_balance(State::STAKED_BALANCE, total_staked_balance);
             }
             let mut ctx = ctx.clone();
             ctx.predecessor_account_id = ACCOUNT.to_string();
@@ -1525,9 +1564,7 @@ mod tests {
                 ft_stake.ft_mint(ACCOUNT, total_supply);
                 assert_eq!(ft_stake.ft_total_supply(), total_supply);
 
-                let mut state = StakingPoolComponent::state();
-                state.staked = total_staked_balance;
-                state.save();
+                ContractNearBalances::set_balance(State::STAKED_BALANCE, total_staked_balance);
             }
             let mut ctx = ctx.clone();
             ctx.predecessor_account_id = ACCOUNT.to_string();
@@ -1628,9 +1665,8 @@ mod tests {
             let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
 
             // Arrange
-            let state = staking_pool.ops_stake_state();
-            assert_eq!(state.staked, 0.into());
-            assert_eq!(state.unstaked, 0.into());
+            assert_eq!(State::staked_balance(), 0.into());
+            assert_eq!(State::unstaked_balance(), 0.into());
             {
                 let mut ctx = ctx.clone();
                 ctx.predecessor_account_id = ACCOUNT.to_string();
@@ -1659,7 +1695,7 @@ mod tests {
                     "staked 1000 {}",
                     serde_json::to_string_pretty(&state).unwrap()
                 );
-                assert_eq!(state.staked, 0.into());
+                assert_eq!(State::staked_balance(), 0.into());
                 assert_eq!(state.treasury_balance, state.staking_fee * 1000.into());
 
                 let logs = test_utils::get_logs();
@@ -1696,7 +1732,7 @@ mod tests {
                     "staked another 1000 {}",
                     serde_json::to_string_pretty(&state).unwrap()
                 );
-                assert_eq!(state.staked, 0.into());
+                assert_eq!(State::staked_balance(), 0.into());
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
 
@@ -1760,7 +1796,7 @@ mod tests {
                     "staked 1000 {}",
                     serde_json::to_string_pretty(&state).unwrap()
                 );
-                assert_eq!(state.staked, 0.into());
+                assert_eq!(State::staked_balance(), 0.into());
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
@@ -2026,7 +2062,7 @@ mod tests {
 
             // Act
             {
-                let mut state = StakingPoolComponent::state();
+                let state = StakingPoolComponent::state();
                 let mut ctx = ctx.clone();
                 ctx.attached_deposit = 0;
                 ctx.predecessor_account_id = ACCOUNT.to_string();
@@ -2051,8 +2087,8 @@ mod tests {
                 assert!(balances.unstaked.is_none());
                 let state = staking_pool.ops_stake_state();
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
-                assert_eq!(state.staked, YoctoNear::ZERO);
-                assert_eq!(state.total_staked_balance, YOCTO.into());
+                assert_eq!(State::staked_balance(), YoctoNear::ZERO);
+                assert_eq!(state.total_staked_balance(), YOCTO.into());
             }
         }
 
@@ -2075,7 +2111,7 @@ mod tests {
             }
             // finalize stake
             {
-                let mut state = StakingPoolComponent::state();
+                let state = StakingPoolComponent::state();
                 let mut ctx = ctx.clone();
                 ctx.attached_deposit = 0;
                 ctx.predecessor_account_id = ACCOUNT.to_string();
@@ -2087,7 +2123,7 @@ mod tests {
                     YOCTO.into(),
                     state.total_staked_balance(),
                 );
-                println!("ops_stake_finalize: {:#?}", test_utils::get_logs());
+                println!("{:#?}", test_utils::get_logs());
             }
 
             let state = staking_pool.ops_stake_state();
@@ -2097,22 +2133,26 @@ mod tests {
             );
             assert_eq!(
                 state.treasury_balance,
-                state.staking_fee * state.total_staked_balance
+                state.staking_fee * state.total_staked_balance()
             );
+            println!("finalized stake {:#?}", StakingPoolBalances::load());
 
             // stake - with staking rewards issued - 50 yoctoNEAR staking rewards
-            const STAKING_REWARDS: u128 = 50;
+            const STAKING_REWARDS: u128 = 500;
             {
                 let mut ctx = ctx.clone();
                 ctx.attached_deposit = YOCTO;
-                ctx.account_locked_balance = *state.total_staked_balance + STAKING_REWARDS;
+                ctx.account_locked_balance = *state.total_staked_balance() + STAKING_REWARDS;
                 ctx.predecessor_account_id = ACCOUNT.to_string();
                 testing_env!(ctx.clone());
                 if let PromiseOrValue::Value(_) = staking_pool.ops_stake() {
                     panic!("expected Promise")
                 }
-                println!("{:#?}", test_utils::get_logs());
+                println!("with staking rewards {:#?}", test_utils::get_logs());
+                deserialize_receipts();
             }
+
+            println!("stake with rewards {:#?}", StakingPoolBalances::load());
 
             let state = staking_pool.ops_stake_state();
             println!(
@@ -2121,20 +2161,38 @@ mod tests {
             );
             // Act - finalize stake
             {
-                let mut state = StakingPoolComponent::state();
+                let staking_pool_balances = StakingPoolBalances::load();
+                println!(
+                    "staked with earned staking rewards {:#?}",
+                    staking_pool_balances
+                );
+                let state = StakingPoolComponent::state();
                 let mut ctx = ctx.clone();
                 ctx.attached_deposit = 0;
-                ctx.account_locked_balance = YOCTO - 1 + *state.total_staked_balance + 50;
+                ctx.account_locked_balance = *state.total_staked_balance();
                 ctx.predecessor_account_id = ACCOUNT.to_string();
                 ctx.account_locked_balance = *state.total_staked_balance();
                 testing_env_with_promise_result_success(ctx.clone());
                 staking_pool.ops_stake_finalize(
                     ACCOUNT.to_string(),
-                    state.staked,
-                    999999999999999999999950.into(),
+                    State::staked_balance(),
+                    999999999999999999999500.into(),
                     state.total_staked_balance(),
                 );
-                println!("ops_stake_finalize: {:#?}", test_utils::get_logs());
+                let staking_pool_balances = StakingPoolBalances::load();
+                println!("ops_stake_finalize {:#?}", staking_pool_balances);
+                let logs = test_utils::get_logs();
+                println!("ops_stake_finalize: {:#?}", logs);
+                assert_eq!(
+                    logs,
+                    vec![
+                        "[INFO] [FT_MINT] account: bob, amount: 999999999999999999999500",
+                        "[INFO] [FT_BURN] account: contract.near, amount: 2",
+                        "[INFO] [TREASURY_DIVIDEND] 3 NEAR / 2 STAKE",
+                        "[INFO] [FT_BURN] account: bob, amount: 7999999999999999999994",
+                        "[INFO] [FT_MINT] account: contract.near, amount: 7999999999999999999994",
+                    ]
+                );
                 let state = staking_pool.ops_stake_state();
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
             }
@@ -2145,7 +2203,7 @@ mod tests {
             );
             assert_eq!(
                 state_after_stake_finalized.treasury_balance,
-                15999999999999999999998.into()
+                state.staking_fee * (2 * YOCTO).into()
             )
         }
 
@@ -2170,7 +2228,7 @@ mod tests {
 
             // Act
             {
-                let mut state = StakingPoolComponent::state();
+                let state = StakingPoolComponent::state();
                 let mut ctx = ctx.clone();
                 ctx.attached_deposit = YOCTO;
                 ctx.predecessor_account_id = ACCOUNT.to_string();
@@ -2212,8 +2270,8 @@ mod tests {
 
                 let state = staking_pool.ops_stake_state();
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
-                assert_eq!(state.staked, YoctoNear::ZERO);
-                assert_eq!(state.total_staked_balance, YOCTO.into());
+                assert_eq!(State::staked_balance(), YoctoNear::ZERO);
+                assert_eq!(state.total_staked_balance(), YOCTO.into());
 
                 let receipts = deserialize_receipts();
                 assert_eq!(receipts.len(), 1);
@@ -2251,10 +2309,11 @@ mod tests {
                 if let PromiseOrValue::Value(_) = staking_pool.ops_stake() {
                     panic!("expected Promise")
                 }
+                println!("staked {:#?}", StakingPoolBalances::load());
             }
             // finalize stake
             {
-                let mut state = StakingPoolComponent::state();
+                let state = StakingPoolComponent::state();
                 let mut ctx = ctx.clone();
                 ctx.attached_deposit = 0;
                 ctx.predecessor_account_id = ACCOUNT.to_string();
@@ -2267,6 +2326,7 @@ mod tests {
                     state.total_staked_balance(),
                 );
                 println!("{:#?}", balances);
+                println!("ops_stake_finalize {:#?}", StakingPoolBalances::load());
             }
             let state = staking_pool.ops_stake_state();
             println!(
@@ -2275,10 +2335,13 @@ mod tests {
             );
             // Act
             {
-                testing_env!(ctx.clone());
+                let mut ctx = ctx.clone();
+                ctx.account_locked_balance = *StakingPoolBalances::load().total_staked;
+                testing_env!(ctx);
                 if let PromiseOrValue::Value(_) = staking_pool.ops_unstake(Some(1000.into())) {
                     panic!("expected Promise");
                 }
+                println!("ops_unstake {:#?}", StakingPoolBalances::load());
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
                 assert_eq!(
@@ -2296,8 +2359,8 @@ mod tests {
                 );
                 let state = staking_pool.ops_stake_state();
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
-                assert_eq!(state.total_staked_balance, YOCTO.into());
-                assert_eq!(state.unstaked, 1000.into());
+                assert_eq!(state.total_staked_balance(), (YOCTO - 1000).into());
+                assert_eq!(State::unstaked_balance(), 1000.into());
 
                 let receipts = deserialize_receipts();
                 assert_eq!(receipts.len(), 2);
@@ -2353,7 +2416,7 @@ mod tests {
             }
             // finalize stake
             {
-                let mut state = StakingPoolComponent::state();
+                let state = StakingPoolComponent::state();
                 let mut ctx = ctx.clone();
                 ctx.attached_deposit = 0;
                 ctx.predecessor_account_id = ACCOUNT.to_string();
@@ -2374,7 +2437,9 @@ mod tests {
             );
             // Act
             {
-                testing_env!(ctx.clone());
+                let mut ctx = ctx.clone();
+                ctx.account_locked_balance = *StakingPoolBalances::load().total_staked;
+                testing_env!(ctx);
                 if let PromiseOrValue::Value(_) = staking_pool.ops_unstake(None) {
                     panic!("expected Promise");
                 }
@@ -2398,8 +2463,8 @@ mod tests {
                 );
                 let state = staking_pool.ops_stake_state();
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
-                assert_eq!(state.total_staked_balance, YOCTO.into());
-                assert_eq!(state.unstaked, expected_locked_balance.into());
+                assert_eq!(state.total_staked_balance(), state.treasury_balance);
+                assert_eq!(State::unstaked_balance(), expected_locked_balance.into());
 
                 let receipts = deserialize_receipts();
                 assert_eq!(receipts.len(), 2);
@@ -2469,12 +2534,16 @@ mod tests {
             {
                 let mut ctx = ctx.clone();
                 ctx.attached_deposit = YOCTO;
+                ctx.account_locked_balance = 0;
                 testing_env!(ctx);
+                println!("before staking {:#?}", StakingPoolBalances::load());
                 staking_pool.ops_stake();
+                println!("staked {:#?}", StakingPoolBalances::load());
             }
+
             // finalize stake
             {
-                let mut state = staking_pool.ops_stake_state();
+                let state = staking_pool.ops_stake_state();
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
                 let mut ctx = ctx.clone();
                 ctx.attached_deposit = 0;
@@ -2482,24 +2551,28 @@ mod tests {
                 testing_env_with_promise_result_success(ctx.clone());
                 staking_pool.ops_stake_finalize(
                     ctx.predecessor_account_id,
-                    state.staked,
-                    staking_pool.near_stake_value_rounded_down(state.staked),
+                    State::staked_balance(),
+                    staking_pool.near_stake_value_rounded_down(State::staked_balance()),
                     state.total_staked_balance(),
                 );
+                println!("finalize stake {:#?}", StakingPoolBalances::load());
                 let logs = test_utils::get_logs();
                 println!("finalized stake: {:#?}", logs);
             }
+
             // unstake all
             {
-                let mut state = staking_pool.ops_stake_state();
+                let state = staking_pool.ops_stake_state();
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
                 let mut ctx = ctx.clone();
                 ctx.account_locked_balance = *state.total_staked_balance();
                 testing_env!(ctx);
                 staking_pool.ops_unstake(None);
+                println!("unstaked {:#?}", StakingPoolBalances::load());
                 let logs = test_utils::get_logs();
                 println!("unstake: {:#?}", logs);
             }
+
             // finalize unstaking
             {
                 let state = staking_pool.ops_stake_state();
@@ -2509,15 +2582,17 @@ mod tests {
                 testing_env_with_promise_result_success(ctx.clone());
                 staking_pool.ops_unstake_finalize(
                     ctx.predecessor_account_id,
-                    state.unstaked,
-                    (*state.unstaked).into(),
+                    State::unstaked_balance(),
+                    (*State::unstaked_balance()).into(),
                     state.treasury_balance,
                 );
+                println!("finalized unstaking {:#?}", StakingPoolBalances::load());
                 let logs = test_utils::get_logs();
                 println!("finalized unstake {:#?}", logs);
                 let state = staking_pool.ops_stake_state();
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
             }
+
             assert_eq!(
                 ft_stake().ft_balance_of(to_valid_account_id(ACCOUNT)),
                 TokenAmount::ZERO
@@ -2531,11 +2606,12 @@ mod tests {
                 let account = account_manager().registered_account_data(ACCOUNT);
                 assert!(account.locked().is_some());
                 staking_pool.ops_restake(None);
+                println!("restaked {:#?}", StakingPoolBalances::load());
                 let logs = test_utils::get_logs();
                 println!("restaked all: {:#?}", logs);
                 assert_eq!(logs, vec![
                     "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-24)", // storage for unstaked balances was freed up
-                    "[INFO] [STAKE] near_amount=992000000000000000000000, stake_token_amount=992000000000000000000000", 
+                    "[INFO] [STAKE] near_amount=992000000000000000000000, stake_token_amount=992000000000000000000000",
                 ]);
                 let account = account_manager().registered_account_data(ACCOUNT);
                 assert!(account.locked().is_none());
@@ -2556,7 +2632,7 @@ mod tests {
             }
             // finalize stake
             let balances = {
-                let mut state = staking_pool.ops_stake_state();
+                let state = staking_pool.ops_stake_state();
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
                 let mut ctx = ctx.clone();
                 ctx.attached_deposit = 0;
@@ -2564,8 +2640,8 @@ mod tests {
                 testing_env_with_promise_result_success(ctx.clone());
                 let balances = staking_pool.ops_stake_finalize(
                     ctx.predecessor_account_id,
-                    state.staked,
-                    staking_pool.near_stake_value_rounded_down(state.staked),
+                    State::staked_balance(),
+                    staking_pool.near_stake_value_rounded_down(State::staked_balance()),
                     state.total_staked_balance(),
                 );
                 let logs = test_utils::get_logs();
@@ -2614,7 +2690,7 @@ mod tests {
             }
             // finalize stake
             {
-                let mut state = staking_pool.ops_stake_state();
+                let state = staking_pool.ops_stake_state();
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
                 let mut ctx = ctx.clone();
                 ctx.attached_deposit = 0;
@@ -2622,8 +2698,8 @@ mod tests {
                 testing_env_with_promise_result_success(ctx.clone());
                 staking_pool.ops_stake_finalize(
                     ctx.predecessor_account_id,
-                    state.staked,
-                    staking_pool.near_stake_value_rounded_down(state.staked),
+                    State::staked_balance(),
+                    staking_pool.near_stake_value_rounded_down(State::staked_balance()),
                     state.total_staked_balance(),
                 );
                 let logs = test_utils::get_logs();
@@ -2631,7 +2707,7 @@ mod tests {
             }
             // unstake all
             {
-                let mut state = staking_pool.ops_stake_state();
+                let state = staking_pool.ops_stake_state();
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
                 let mut ctx = ctx.clone();
                 ctx.account_locked_balance = *state.total_staked_balance();
@@ -2649,8 +2725,8 @@ mod tests {
                 testing_env_with_promise_result_success(ctx.clone());
                 staking_pool.ops_unstake_finalize(
                     ctx.predecessor_account_id,
-                    state.unstaked,
-                    (*state.unstaked).into(),
+                    State::unstaked_balance(),
+                    (*State::unstaked_balance()).into(),
                     state.treasury_balance,
                 );
                 let logs = test_utils::get_logs();
@@ -2735,7 +2811,7 @@ mod tests {
             }
             // unstake all
             {
-                let mut state = staking_pool.ops_stake_state();
+                let state = staking_pool.ops_stake_state();
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
                 let mut ctx = ctx.clone();
                 ctx.account_locked_balance = *state.total_staked_balance();
@@ -2825,7 +2901,7 @@ mod tests {
             }
             // unstake all
             {
-                let mut state = staking_pool.ops_stake_state();
+                let state = staking_pool.ops_stake_state();
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
                 let mut ctx = ctx.clone();
                 ctx.account_locked_balance = *state.total_staked_balance();
@@ -2923,7 +2999,7 @@ mod tests {
             }
             // finalize stake
             {
-                let mut state = staking_pool.ops_stake_state();
+                let state = staking_pool.ops_stake_state();
                 println!("{}", serde_json::to_string_pretty(&state).unwrap());
                 let mut ctx = ctx.clone();
                 ctx.attached_deposit = 0;
@@ -2931,8 +3007,8 @@ mod tests {
                 testing_env_with_promise_result_success(ctx.clone());
                 staking_pool.ops_stake_finalize(
                     ctx.predecessor_account_id,
-                    state.staked,
-                    staking_pool.near_stake_value_rounded_down(state.staked),
+                    State::staked_balance(),
+                    staking_pool.near_stake_value_rounded_down(State::staked_balance()),
                     state.total_staked_balance(),
                 );
                 let logs = test_utils::get_logs();
@@ -2941,7 +3017,7 @@ mod tests {
             if unstake_amount > 0 {
                 // unstake
                 {
-                    let mut state = staking_pool.ops_stake_state();
+                    let state = staking_pool.ops_stake_state();
                     println!("{}", serde_json::to_string_pretty(&state).unwrap());
                     let mut ctx = ctx.clone();
                     ctx.account_locked_balance = *state.total_staked_balance();
@@ -2961,8 +3037,8 @@ mod tests {
                     testing_env_with_promise_result_success(ctx.clone());
                     staking_pool.ops_unstake_finalize(
                         ctx.predecessor_account_id,
-                        state.unstaked,
-                        (*state.unstaked).into(),
+                        State::unstaked_balance(),
+                        (*State::unstaked_balance()).into(),
                         total_staked_balance,
                     );
                     let logs = test_utils::get_logs();
@@ -3412,7 +3488,7 @@ mod tests {
             if unstake_amount > 0 {
                 // unstake
                 {
-                    let mut state = staking_pool.ops_stake_state();
+                    let state = staking_pool.ops_stake_state();
                     println!("{}", serde_json::to_string_pretty(&state).unwrap());
                     let mut ctx = ctx.clone();
                     ctx.account_locked_balance = *state.total_staked_balance();
@@ -3828,7 +3904,6 @@ mod tests {
         use super::*;
 
         #[test]
-        #[ignore]
         fn stake_all_available_balance() {
             let (ctx, mut staking_pool) = deploy_with_unregistered_account();
             bring_pool_online(ctx.clone(), &mut staking_pool);
@@ -3840,6 +3915,12 @@ mod tests {
 
                 let initial_owner_balance = ContractOwnershipComponent.ops_owner_balance();
                 println!("initial {:?}", initial_owner_balance);
+
+                let initial_staking_pool_balances = staking_pool.ops_stake_pool_balances();
+                println!(
+                    "initial_staking_pool_balances {:#?}",
+                    initial_staking_pool_balances
+                );
 
                 let state = staking_pool.ops_stake_state();
                 println!(
@@ -3853,15 +3934,15 @@ mod tests {
                 }
 
                 // Assert
-                let owner_balance = ContractOwnershipComponent.ops_owner_balance();
-                println!("after staking {:?}", owner_balance);
-
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
 
                 let _receipts = deserialize_receipts();
 
-                todo!()
+                let owner_balance = ContractOwnershipComponent.ops_owner_balance();
+                println!("after staking {:#?}", owner_balance);
+                println!("{:#?}", StakingPoolBalances::load());
+                assert_eq!(owner_balance.available, YoctoNear::ZERO);
             }
         }
 
