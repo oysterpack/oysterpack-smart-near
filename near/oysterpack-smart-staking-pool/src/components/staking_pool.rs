@@ -4184,7 +4184,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn deposit_funds() {
+        fn ops_stake_treasury_deposit() {
             let (ctx, mut staking_pool) = deploy_with_unregistered_account();
             bring_pool_online(ctx.clone(), &mut staking_pool);
 
@@ -4241,6 +4241,18 @@ mod tests {
                     YOCTO.into()
                 );
             }
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [NEAR_DEPOSIT_REQUIRED]")]
+        fn ops_stake_treasury_deposit_with_zero_deposit_attached() {
+            let (ctx, mut staking_pool) = deploy_with_unregistered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+
+            let mut ctx = ctx.clone();
+            ctx.attached_deposit = 0;
+            testing_env!(ctx);
+            staking_pool.ops_stake_treasury_deposit();
         }
 
         #[test]
@@ -4323,7 +4335,7 @@ mod tests {
         }
 
         #[test]
-        fn ops_stake_treasury_transfer_to_owner_all_as_treasure() {
+        fn ops_stake_treasury_transfer_to_owner_all_as_treasurer() {
             let (ctx, mut staking_pool) = deploy_with_registered_account();
             bring_pool_online(ctx.clone(), &mut staking_pool);
 
@@ -4410,6 +4422,18 @@ mod tests {
                 let state = staking_pool.ops_stake_state();
                 assert_eq!(state.treasury_balance, YoctoNear::ZERO);
             }
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [NOT_AUTHORIZED]")]
+        fn ops_stake_treasury_transfer_to_owner_not_authorized() {
+            let (ctx, mut staking_pool) = deploy_with_registered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+
+            let mut ctx = ctx.clone();
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            testing_env!(ctx.clone());
+            staking_pool.ops_stake_treasury_transfer_to_owner(None);
         }
     }
 }
