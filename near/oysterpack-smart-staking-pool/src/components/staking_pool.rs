@@ -687,24 +687,31 @@ impl Treasury for StakingPoolComponent {
         self.pay_dividend(state.treasury_balance);
 
         let treasury_account = env::current_account_id();
-        let treasury_balance = self
-            .stake_token
-            .ft_balance_of(to_valid_account_id(&treasury_account));
-        if treasury_balance == TokenAmount::ZERO {
-            return;
-        }
+        let amount = {
+            let treasury_balance = self
+                .stake_token
+                .ft_balance_of(to_valid_account_id(&treasury_account));
+            if treasury_balance == TokenAmount::ZERO {
+                return;
+            }
 
-        let treasury_near_balance = self.stake_near_value_rounded_down(treasury_balance);
-        let amount = match amount {
-            None => treasury_near_balance,
-            Some(amount) => {
-                ERR_INSUFFICIENT_FUNDS.assert(|| treasury_near_balance >= amount);
-                amount
+            let treasury_near_balance = self.stake_near_value_rounded_down(treasury_balance);
+            match amount {
+                None => treasury_near_balance,
+                Some(amount) => {
+                    ERR_INSUFFICIENT_FUNDS.assert(|| treasury_near_balance >= amount);
+                    amount
+                }
             }
         };
         let stake = self.near_stake_value_rounded_down(amount);
-        self.stake_token.ft_burn(&treasury_account, stake);
-        self.stake_token.ft_mint(&owner_account_id, stake);
+
+        // transfer STAKE from treasury to owner account
+        {
+            self.stake_token.ft_burn(&treasury_account, stake);
+            self.stake_token.ft_mint(&owner_account_id, stake);
+        }
+
         // debit from the treasury balance
         {
             state.treasury_balance -= amount;
@@ -4195,6 +4202,7 @@ mod tests {
                 let state = staking_pool.ops_stake_state();
                 assert_eq!(state.treasury_balance, YoctoNear::ZERO);
 
+                // Act
                 {
                     let mut ctx = ctx.clone();
                     ctx.attached_deposit = YOCTO;
@@ -4217,6 +4225,7 @@ mod tests {
 
                     deserialize_receipts();
                 }
+                // finalize the staked treasury deposit
                 {
                     let staking_pool_balances = staking_pool.ops_stake_pool_balances();
 
@@ -4436,7 +4445,7 @@ mod tests {
             }
 
             #[test]
-            fn transfer__partial_as_admin() {
+            fn transfer_partial_as_admin() {
                 let (ctx, mut staking_pool) = deploy_with_registered_account();
                 bring_pool_online(ctx.clone(), &mut staking_pool);
 
