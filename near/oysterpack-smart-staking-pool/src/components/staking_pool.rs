@@ -1036,10 +1036,12 @@ mod tests {
     use std::collections::HashMap;
     use std::convert::*;
 
+    const TREASURER_PERMISSION_BIT: u8 = 0;
+
     fn account_manager() -> AccountManager {
         StakeFungibleToken::register_storage_management_event_handler();
         let mut permissions = HashMap::new();
-        permissions.insert(0, PERMISSION_TREASURER);
+        permissions.insert(TREASURER_PERMISSION_BIT, PERMISSION_TREASURER);
         let contract_permissions = ContractPermissions(Some(permissions));
         AccountManager::new(&contract_permissions)
     }
@@ -4304,6 +4306,96 @@ mod tests {
             {
                 let mut ctx = ctx.clone();
                 ctx.predecessor_account_id = ADMIN.to_string();
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_treasury_transfer_to_owner(None);
+
+                let treasury_stake_balance =
+                    ft_stake().ft_balance_of(to_valid_account_id(&env::current_account_id()));
+                assert_eq!(treasury_stake_balance, TokenAmount::ZERO);
+
+                let owner_stake_balance = ft_stake()
+                    .ft_balance_of(to_valid_account_id(&ContractOwnershipComponent.ops_owner()));
+                assert_eq!(owner_stake_balance, YOCTO.into());
+
+                let state = staking_pool.ops_stake_state();
+                assert_eq!(state.treasury_balance, YoctoNear::ZERO);
+            }
+        }
+
+        #[test]
+        fn ops_stake_treasury_transfer_to_owner_all_as_treasure() {
+            let (ctx, mut staking_pool) = deploy_with_registered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+
+            let state = staking_pool.ops_stake_state();
+            assert_eq!(state.treasury_balance, YoctoNear::ZERO);
+
+            {
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx);
+                if let PromiseOrValue::Value(_) = staking_pool.ops_stake_treasury_deposit() {
+                    panic!("expected Promise")
+                }
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                let staking_pool_balances = staking_pool.ops_stake_pool_balances();
+                println!("{:#?}", staking_pool_balances);
+                assert_eq!(staking_pool_balances.staked, YOCTO.into());
+                let state = staking_pool.ops_stake_state();
+                println!("{}", serde_json::to_string_pretty(&state).unwrap());
+                assert_eq!(state.treasury_balance, YoctoNear::ZERO);
+
+                let treasury_stake_balance =
+                    ft_stake().ft_balance_of(to_valid_account_id(&env::current_account_id()));
+                assert_eq!(treasury_stake_balance, TokenAmount::ZERO);
+
+                deserialize_receipts();
+            }
+            {
+                let staking_pool_balances = staking_pool.ops_stake_pool_balances();
+
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = 0;
+                ctx.account_locked_balance = *staking_pool_balances.staked;
+                testing_env_with_promise_result_success(ctx);
+                let balances = staking_pool.ops_stake_finalize(
+                    env::current_account_id(),
+                    staking_pool_balances.staked,
+                    (*staking_pool_balances.staked).into(),
+                    staking_pool_balances.staked,
+                );
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+
+                println!("{:#?}", balances);
+                assert_eq!(balances.staked.unwrap().near_value, YOCTO.into());
+
+                let treasury_stake_balance =
+                    ft_stake().ft_balance_of(to_valid_account_id(&env::current_account_id()));
+                assert_eq!(treasury_stake_balance, YOCTO.into());
+
+                assert_eq!(
+                    staking_pool.ops_stake_state().treasury_balance,
+                    YOCTO.into()
+                );
+            }
+
+            // Arrange - grant account treasurer
+            {
+                let mut ctx = ctx.clone();
+                ctx.predecessor_account_id = ADMIN.to_string();
+                testing_env!(ctx.clone());
+                account_manager().ops_permissions_grant(
+                    to_valid_account_id(ACCOUNT),
+                    (1 << TREASURER_PERMISSION_BIT).into(),
+                );
+            }
+
+            // Act
+            {
+                let mut ctx = ctx.clone();
+                ctx.predecessor_account_id = ACCOUNT.to_string();
                 testing_env!(ctx.clone());
                 staking_pool.ops_stake_treasury_transfer_to_owner(None);
 
