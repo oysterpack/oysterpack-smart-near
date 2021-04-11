@@ -616,6 +616,7 @@ impl StakingPoolOwner for StakingPoolComponent {
         let balance = self.contract_ownership.ops_owner_balance();
         let amount = amount.unwrap_or_else(|| balance.available);
         ERR_INSUFFICIENT_FUNDS.assert(|| balance.available >= amount);
+        // transfer owner balance to owner account's storage balance
         owner.incr_near_balance(amount);
         owner.save();
 
@@ -3933,16 +3934,33 @@ mod tests {
                     panic!("expected Promise");
                 }
 
-                // Assert
-                let logs = test_utils::get_logs();
-                println!("{:#?}", logs);
-
-                let _receipts = deserialize_receipts();
-
                 let owner_balance = ContractOwnershipComponent.ops_owner_balance();
                 println!("after staking {:#?}", owner_balance);
                 println!("{:#?}", StakingPoolBalances::load());
                 assert_eq!(owner_balance.available, YoctoNear::ZERO);
+
+                // Assert
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+
+                let receipts = deserialize_receipts();
+                let action = &receipts[0].actions[0];
+                if let Action::Stake(stake) = action {
+                    assert_eq!(stake.stake, *State::staked_balance());
+                } else {
+                    panic!("expected stake action")
+                }
+
+                let action = &receipts[1].actions[0];
+                if let Action::FunctionCall(function_call) = action {
+                    assert_eq!(function_call.method_name, "ops_stake_finalize");
+                    let args: StakeActionCallbackArgs =
+                        serde_json::from_str(function_call.args.as_str()).unwrap();
+                    assert_eq!(args.account_id, ContractOwnershipComponent.ops_owner());
+                    assert_eq!(args.total_staked_balance, State::staked_balance());
+                } else {
+                    panic!("expected stake action")
+                }
             }
         }
 
