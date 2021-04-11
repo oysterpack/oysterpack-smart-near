@@ -5,6 +5,9 @@ use std::collections::HashMap;
 
 /// # **Contract Interface**: Permissions Management API
 ///
+/// # TODO
+/// - track set of permissioned accounts in `LookupMap<Permission, OrderedSet<AccountId>>`
+///
 /// ## Notes
 /// - admins have full access
 pub trait PermissionsManagement {
