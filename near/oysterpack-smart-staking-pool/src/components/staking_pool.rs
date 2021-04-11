@@ -305,28 +305,10 @@ impl StakingPool for StakingPoolComponent {
     }
 
     fn ops_stake(&mut self) -> PromiseOrValue<StakeAccountBalances> {
-        let account_id = env::predecessor_account_id();
-        let mut account = self
-            .account_manager
-            .registered_account_near_data(&account_id);
-
-        // all of the account's storage available balance will be staked
-        let (near_amount, stake_token_amount) = {
-            let account_storage_available_balance = account
-                .storage_balance(self.account_manager.storage_balance_bounds().min)
-                .available;
-            account.dec_near_balance(account_storage_available_balance);
-
-            let near = account_storage_available_balance + env::attached_deposit();
-            let (stake, remainder) = self.convert_near_to_stake(near);
-            account.incr_near_balance(remainder);
-            account.save();
-
-            (near - remainder, stake)
-        };
-
-        State::add_liquidity(near_amount);
-        self.stake(&account_id, near_amount, stake_token_amount)
+        self.stake_account_funds(
+            &env::predecessor_account_id(),
+            env::attached_deposit().into(),
+        )
     }
 
     fn ops_unstake(&mut self, amount: Option<YoctoNear>) -> PromiseOrValue<StakeAccountBalances> {
@@ -586,17 +568,16 @@ impl StakingPoolOwner for StakingPoolComponent {
         amount: Option<YoctoNear>,
     ) -> PromiseOrValue<StakeAccountBalances> {
         ContractOwnerObject::assert_owner_access();
+        let owner_account_id = env::predecessor_account_id();
+        let mut owner = AccountManager::get_or_register_account(&owner_account_id);
+
         let balance = self.contract_ownership.ops_owner_balance();
         let amount = amount.unwrap_or_else(|| balance.available);
         ERR_INSUFFICIENT_FUNDS.assert(|| balance.available >= amount);
+        owner.incr_near_balance(amount);
+        owner.save();
 
-        let owner_account_id = env::predecessor_account_id();
-        AccountManager::register_account_if_not_exists(&owner_account_id);
-
-        let (stake, remainder) = self.convert_near_to_stake(amount);
-        let deposit = amount - remainder;
-        State::add_liquidity(deposit);
-        self.stake(&env::current_account_id(), deposit, stake)
+        self.stake_account_funds(&owner_account_id, YoctoNear::ZERO)
     }
 }
 
@@ -811,6 +792,34 @@ impl StakingPoolComponent {
         let mut account = self.account_manager.registered_account_data(&account_id);
         account.credit_unstaked(amount);
         account.save();
+    }
+
+    fn stake_account_funds(
+        &mut self,
+        account_id: &str,
+        deposit: YoctoNear,
+    ) -> PromiseOrValue<StakeAccountBalances> {
+        let mut account = self
+            .account_manager
+            .registered_account_near_data(&account_id);
+
+        // all of the account's storage available balance will be staked
+        let (near_amount, stake_token_amount) = {
+            let account_storage_available_balance = account
+                .storage_balance(self.account_manager.storage_balance_bounds().min)
+                .available;
+            account.dec_near_balance(account_storage_available_balance);
+
+            let near = account_storage_available_balance + deposit;
+            let (stake, remainder) = self.convert_near_to_stake(near);
+            account.incr_near_balance(remainder);
+            account.save();
+
+            (near - remainder, stake)
+        };
+
+        State::add_liquidity(near_amount);
+        self.stake(account_id, near_amount, stake_token_amount)
     }
 
     fn stake(
@@ -3811,6 +3820,73 @@ mod tests {
             ctx.predecessor_account_id = ACCOUNT.to_string();
             testing_env!(ctx.clone());
             staking_pool.ops_stake_withdraw(Some((YOCTO / 8).into()));
+        }
+    }
+
+    #[cfg(test)]
+    mod tests_owner_online {
+        use super::*;
+
+        #[test]
+        #[ignore]
+        fn stake_all_available_balance() {
+            let (ctx, mut staking_pool) = deploy_with_unregistered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+
+            {
+                let mut ctx = ctx.clone();
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx);
+
+                let initial_owner_balance = ContractOwnershipComponent.ops_owner_balance();
+                println!("initial {:?}", initial_owner_balance);
+
+                let state = staking_pool.ops_stake_state();
+                println!(
+                    "initial state: {}",
+                    serde_json::to_string_pretty(&state).unwrap()
+                );
+
+                // Act
+                if let PromiseOrValue::Value(_) = staking_pool.ops_stake_owner_balance(None) {
+                    panic!("expected Promise");
+                }
+
+                // Assert
+                let owner_balance = ContractOwnershipComponent.ops_owner_balance();
+                println!("after staking {:?}", owner_balance);
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+
+                let _receipts = deserialize_receipts();
+
+                todo!()
+            }
+        }
+
+        #[test]
+        #[ignore]
+        fn stake_all_available_balance_with_liquidity_needed() {
+            todo!()
+        }
+
+        #[test]
+        #[ignore]
+        fn stake_partial_available_balance() {
+            todo!()
+        }
+
+        #[test]
+        #[ignore]
+        fn insufficient_funds() {
+            todo!()
+        }
+
+        #[test]
+        #[ignore]
+        fn not_owner() {
+            todo!()
         }
     }
 }

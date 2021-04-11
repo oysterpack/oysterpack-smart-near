@@ -8,7 +8,8 @@ pub trait StakingPoolOwner {
     /// - if amount is None, then the owner's entire balance is staked
     ///
     /// ## Notes
-    /// If the owner does not have a registered account then an account will automatically be registered
+    /// - if the owner does not have a registered account then an account will automatically be registered
+    /// - owner's balance is first transferred to his storage balance, and then staked like any other account
     ///
     /// ## Panics
     /// - if predecessor account is not the owner
