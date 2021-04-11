@@ -5,6 +5,7 @@ use oysterpack_smart_near::{
     near_sdk::serde::{Deserialize, Serialize},
 };
 
+/// Staking Pool Contract NEAR Balances
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq)]
 #[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct StakingPoolBalances {
