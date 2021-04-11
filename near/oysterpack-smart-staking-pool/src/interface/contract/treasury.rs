@@ -24,6 +24,9 @@ pub trait Treasury {
     /// Transfers the specified amount from the treasury to the contract owners account
     /// - if no amount is specified, then the total treasury balance is transferred to the owner's account
     ///
+    /// ## Notes
+    /// - dividend is paid out before transfer
+    ///
     /// ## Panics
     /// - requires [`PERMISSION_TREASURER`] permission
     /// - if there are insufficient funds   
