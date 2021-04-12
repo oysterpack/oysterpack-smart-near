@@ -481,7 +481,7 @@ impl StakingPoolOperator for StakingPoolComponent {
         self.account_manager.assert_operator();
 
         match command {
-            StakingPoolOperatorCommand::Pause => {
+            StakingPoolOperatorCommand::StopStaking => {
                 let mut state = Self::state();
                 if let Status::Online = state.status {
                     // unstake all
@@ -510,7 +510,7 @@ impl StakingPoolOperator for StakingPoolComponent {
                     LOG_EVENT_STATUS_OFFLINE.log("");
                 }
             }
-            StakingPoolOperatorCommand::Resume => {
+            StakingPoolOperatorCommand::StartStaking => {
                 let mut state = Self::state();
                 if let Status::Offline(_) = state.status {
                     let total_staked_balance =
@@ -1128,7 +1128,7 @@ mod tests {
     fn bring_pool_online(mut ctx: VMContext, staking_pool: &mut StakingPoolComponent) {
         ctx.predecessor_account_id = ADMIN.to_string();
         testing_env!(ctx.clone());
-        staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::Resume);
+        staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
         assert!(staking_pool.ops_stake_status().is_online());
     }
 
@@ -1190,7 +1190,7 @@ mod tests {
             let mut ctx = ctx.clone();
             ctx.predecessor_account_id = ADMIN.to_string();
             testing_env!(ctx);
-            staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::Resume);
+            staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
             assert!(staking_pool.ops_stake_status().is_online());
             let state = staking_pool.ops_stake_state();
             println!(
@@ -4732,6 +4732,19 @@ mod tests {
                 testing_env!(ctx.clone());
                 staking_pool.ops_stake_treasury_transfer_to_owner(None);
             }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests_operator {
+        use super::*;
+
+        #[cfg(test)]
+        mod pause_resume {
+            use super::*;
+
+            #[test]
+            fn pause_then_resume() {}
         }
     }
 }

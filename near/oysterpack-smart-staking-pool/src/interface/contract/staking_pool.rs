@@ -11,7 +11,7 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 /// this staking pool are:
 /// 1. STAKE fungible token is provided for staked NEAR. This enables staked NEAR value to be transferred
 ///    while still being staked.
-/// 2. unstaked NEAR is locked for 4 epochs before it becomes available to be withdrawn, but is tracked
+/// 2. Unstaked NEAR is locked for 4 epochs before it becomes available to be withdrawn, but is tracked
 ///    per epoch. Thus, more funds can be unstaked without affecting funds that were unstaked in previous
 ///    epochs. Compare this to the NEAR provided staking pool, where each time you unstake, it resets
 ///    the lockup period to 4 epochs for the total unstaked NEAR balance. For example, if 100 NEAR is

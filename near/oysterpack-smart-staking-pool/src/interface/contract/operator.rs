@@ -20,10 +20,12 @@ pub trait StakingPoolOperator {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub enum StakingPoolOperatorCommand {
-    Pause,
-    Resume,
+    StopStaking,
+    StartStaking,
+
     SetStakeCallbackGas(Gas),
     ClearStakeCallbackGas,
+
     /// the staking pool public key can only be changed while the staking pool is paused
     UpdatePublicKey(PublicKey),
     UpdateStakingFee(BasisPoints),
