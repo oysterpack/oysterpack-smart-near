@@ -4707,11 +4707,118 @@ mod tests {
         use super::*;
 
         #[cfg(test)]
-        mod pause_resume {
+        mod start_and_stop_staking_commands {
             use super::*;
 
             #[test]
-            fn pause_then_resume() {}
+            fn starting_stopping_staking_with_nothing_staked() {
+                let (ctx, mut staking_pool) = deploy_with_registered_account();
+
+                assert_eq!(
+                    staking_pool.ops_stake_status(),
+                    Status::Offline(OfflineReason::Stopped)
+                );
+
+                // Act - start staking
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ADMIN.to_string();
+                    testing_env!(ctx);
+                    staking_pool
+                        .ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+                    assert_eq!(logs, vec!["[INFO] [STATUS_ONLINE] ",]);
+                    // Assert
+                    assert_eq!(staking_pool.ops_stake_status(), Status::Online);
+                    assert_eq!(
+                        staking_pool.ops_stake_pool_balances().total_unstaked,
+                        YoctoNear::ZERO
+                    );
+                    // since there is nothing staked, then we expect no stake actions
+                    assert!(deserialize_receipts().is_empty());
+                }
+                // Act - start staking while already staking
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ADMIN.to_string();
+                    testing_env!(ctx);
+                    staking_pool
+                        .ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                    assert!(test_utils::get_logs().is_empty());
+                    // Assert
+                    assert_eq!(staking_pool.ops_stake_status(), Status::Online);
+                    assert!(deserialize_receipts().is_empty());
+                }
+                // Act - stop staking
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ADMIN.to_string();
+                    testing_env!(ctx);
+                    staking_pool
+                        .ops_stake_operator_command(StakingPoolOperatorCommand::StopStaking);
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+                    assert_eq!(logs, vec!["[WARN] [STATUS_OFFLINE] Stopped",]);
+                    // Assert
+                    assert_eq!(
+                        staking_pool.ops_stake_status(),
+                        Status::Offline(OfflineReason::Stopped)
+                    );
+                    assert_eq!(
+                        staking_pool.ops_stake_pool_balances().total_unstaked,
+                        YoctoNear::ZERO
+                    );
+                    // since there is nothing staked, then we expect no stake actions
+                    assert!(deserialize_receipts().is_empty());
+                }
+                // Act - stop staking - when already stopped
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ADMIN.to_string();
+                    testing_env!(ctx);
+                    staking_pool
+                        .ops_stake_operator_command(StakingPoolOperatorCommand::StopStaking);
+                    assert!(test_utils::get_logs().is_empty());
+                    // Assert
+                    assert_eq!(
+                        staking_pool.ops_stake_status(),
+                        Status::Offline(OfflineReason::Stopped)
+                    );
+                    assert_eq!(
+                        staking_pool.ops_stake_pool_balances().total_unstaked,
+                        YoctoNear::ZERO
+                    );
+                    // since there is nothing staked, then we expect no stake actions
+                    assert!(deserialize_receipts().is_empty());
+                }
+                // Act - start staking after being stopped by operator
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ADMIN.to_string();
+                    testing_env!(ctx);
+                    staking_pool
+                        .ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+                    assert_eq!(logs, vec!["[INFO] [STATUS_ONLINE] ",]);
+                    // Assert
+                    assert_eq!(staking_pool.ops_stake_status(), Status::Online);
+                    assert_eq!(
+                        staking_pool.ops_stake_pool_balances().total_unstaked,
+                        YoctoNear::ZERO
+                    );
+                    // since there is nothing staked, then we expect no stake actions
+                    assert!(deserialize_receipts().is_empty());
+                }
+            }
+
+            #[test]
+            #[should_panic(expected = "[ERR] [NOT_AUTHORIZED]")]
+            fn not_authorized() {
+                let (_ctx, mut staking_pool) = deploy_with_registered_account();
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+            }
         }
     }
 }
