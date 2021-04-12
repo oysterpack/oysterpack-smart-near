@@ -1,8 +1,8 @@
 use crate::{
-    StakeAccountBalances, StakeActionCallbacks, StakedBalance, StakingPool, StakingPoolBalances,
-    StakingPoolOperator, StakingPoolOperatorCommand, StakingPoolOwner, Treasury, UnstakedBalances,
-    ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE, ERR_STAKE_ACTION_FAILED, LOG_EVENT_LIQUIDITY,
-    LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE,
+    OfflineReason, StakeAccountBalances, StakeActionCallbacks, StakedBalance, StakingPool,
+    StakingPoolBalances, StakingPoolOperator, StakingPoolOperatorCommand, StakingPoolOwner, Status,
+    Treasury, UnstakedBalances, ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE, ERR_STAKE_ACTION_FAILED,
+    LOG_EVENT_LIQUIDITY, LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE,
     LOG_EVENT_STATUS_ONLINE, LOG_EVENT_TREASURY_DIVIDEND, LOG_EVENT_UNSTAKE, PERMISSION_TREASURER,
 };
 use oysterpack_smart_account_management::{
@@ -240,37 +240,6 @@ impl State {
     }
 }
 
-#[derive(
-    BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug,
-)]
-#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
-pub enum Status {
-    /// While offline, accounts can still stake, but the funds are held until are held until the
-    /// staking pool goes online
-    /// - when the pool goes back online, then the staked funds are staked
-    Offline(OfflineReason),
-    /// the pool is actively staking
-    Online,
-}
-
-impl Status {
-    pub fn is_online(&self) -> bool {
-        match self {
-            Status::Offline(_) => false,
-            Status::Online => true,
-        }
-    }
-}
-
-#[derive(
-    BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug,
-)]
-#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
-pub enum OfflineReason {
-    Paused,
-    StakeActionFailed,
-}
-
 impl Deploy for StakingPoolComponent {
     type Config = StakingPoolComponentConfig;
 
@@ -481,65 +450,8 @@ impl StakingPoolOperator for StakingPoolComponent {
         self.account_manager.assert_operator();
 
         match command {
-            StakingPoolOperatorCommand::StopStaking => {
-                let mut state = Self::state();
-                if let Status::Online = state.status {
-                    // unstake all
-                    {
-                        let staked_balance = state.total_staked_balance();
-                        if *staked_balance > 0 {
-                            ContractNearBalances::set_balance(
-                                State::TOTAL_STAKED_BALANCE,
-                                staked_balance,
-                            );
-                            Promise::new(env::current_account_id())
-                                .stake(0, state.stake_public_key.into())
-                                .then(json_function_callback(
-                                    "ops_stake_pause_finalize",
-                                    Option::<()>::None,
-                                    YoctoNear::ZERO,
-                                    state.callback_gas(),
-                                ));
-                        }
-                    }
-                    // update the status
-                    {
-                        state.status = Status::Offline(OfflineReason::Paused);
-                        state.save();
-                    }
-                    LOG_EVENT_STATUS_OFFLINE.log("");
-                }
-            }
-            StakingPoolOperatorCommand::StartStaking => {
-                let mut state = Self::state();
-                if let Status::Offline(_) = state.status {
-                    let total_staked_balance =
-                        ContractNearBalances::near_balance(State::TOTAL_STAKED_BALANCE);
-                    // update status
-                    {
-                        state.status = Status::Online;
-                        state.save();
-                    }
-                    LOG_EVENT_STATUS_ONLINE.log("");
-
-                    // stake
-                    {
-                        if total_staked_balance > YoctoNear::ZERO {
-                            State::clear_total_staked_balance();
-                            Promise::new(env::current_account_id())
-                                .stake(*total_staked_balance, state.stake_public_key.into())
-                                .then(json_function_callback(
-                                    "ops_stake_resume_finalize",
-                                    Some(ResumeFinalizeCallbackArgs {
-                                        total_staked_balance,
-                                    }),
-                                    YoctoNear::ZERO,
-                                    state.callback_gas(),
-                                ));
-                        }
-                    }
-                }
-            }
+            StakingPoolOperatorCommand::StopStaking => Self::stop_staking(),
+            StakingPoolOperatorCommand::StartStaking => Self::start_staking(),
             StakingPoolOperatorCommand::SetStakeCallbackGas(gas) => {
                 let min_callback_gas = State::min_callback_gas();
                 ERR_INVALID.assert(
@@ -581,6 +493,65 @@ impl StakingPoolOperator for StakingPoolComponent {
     }
 }
 
+impl StakingPoolComponent {
+    fn stop_staking() {
+        let mut state = Self::state();
+        if let Status::Online = state.status {
+            // unstake all
+            {
+                let staked_balance = state.total_staked_balance();
+                if *staked_balance > 0 {
+                    Promise::new(env::current_account_id())
+                        .stake(0, state.stake_public_key.into())
+                        .then(json_function_callback(
+                            "ops_stake_stop_finalize",
+                            Option::<()>::None,
+                            YoctoNear::ZERO,
+                            state.callback_gas(),
+                        ));
+                }
+            }
+            // update the status
+            {
+                state.status = Status::Offline(OfflineReason::Paused);
+                state.save();
+            }
+            LOG_EVENT_STATUS_OFFLINE.log("");
+        }
+    }
+
+    fn start_staking() {
+        let mut state = Self::state();
+        if let Status::Offline(_) = state.status {
+            let total_staked_balance =
+                ContractNearBalances::near_balance(State::TOTAL_STAKED_BALANCE);
+            // update status
+            {
+                state.status = Status::Online;
+                state.save();
+            }
+            LOG_EVENT_STATUS_ONLINE.log("");
+
+            // stake
+            {
+                if total_staked_balance > YoctoNear::ZERO {
+                    State::clear_total_staked_balance();
+                    Promise::new(env::current_account_id())
+                        .stake(*total_staked_balance, state.stake_public_key.into())
+                        .then(json_function_callback(
+                            "ops_stake_start_finalize",
+                            Some(ResumeFinalizeCallbackArgs {
+                                total_staked_balance,
+                            }),
+                            YoctoNear::ZERO,
+                            state.callback_gas(),
+                        ));
+                }
+            }
+        }
+    }
+}
+
 impl StakingPoolOwner for StakingPoolComponent {
     fn ops_stake_owner_balance(
         &mut self,
@@ -613,7 +584,6 @@ impl StakeActionCallbacks for StakingPoolComponent {
         State::decr_staked_balance(amount);
         Self::handle_stake_action_result(&mut state, total_staked_balance);
         self.pay_dividend_and_apply_staking_fees(&account_id, state, amount, stake_token_amount);
-
         self.ops_stake_balance(to_valid_account_id(&account_id))
             .unwrap()
     }
@@ -642,7 +612,7 @@ impl StakeActionCallbacks for StakingPoolComponent {
             .unwrap()
     }
 
-    fn ops_stake_resume_finalize(&mut self, total_staked_balance: YoctoNear) {
+    fn ops_stake_start_finalize(&mut self, total_staked_balance: YoctoNear) {
         if is_promise_success() {
             ContractNearBalances::set_balance(
                 State::TOTAL_STAKED_BALANCE,
@@ -653,7 +623,7 @@ impl StakeActionCallbacks for StakingPoolComponent {
         }
     }
 
-    fn ops_stake_pause_finalize(&mut self) {
+    fn ops_stake_stop_finalize(&mut self) {
         if is_promise_success() {
             LOG_EVENT_STATUS_OFFLINE.log("all NEAR has been unstaked");
         } else {
@@ -1228,7 +1198,7 @@ mod tests {
 
                 match action {
                     Action::FunctionCall(action) => {
-                        assert_eq!(action.method_name, "ops_stake_resume_finalize");
+                        assert_eq!(action.method_name, "ops_stake_start_finalize");
                         let args: ResumeFinalizeCallbackArgs =
                             serde_json::from_str(&action.args).unwrap();
                         assert_eq!(args.total_staked_balance, YOCTO.into());

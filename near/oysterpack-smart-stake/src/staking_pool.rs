@@ -75,13 +75,13 @@ impl StakeActionCallbacks for Contract {
     }
 
     #[private]
-    fn ops_stake_resume_finalize(&mut self, total_staked_balance: YoctoNear) {
-        Self::staking_pool().ops_stake_resume_finalize(total_staked_balance);
+    fn ops_stake_start_finalize(&mut self, total_staked_balance: YoctoNear) {
+        Self::staking_pool().ops_stake_start_finalize(total_staked_balance);
     }
 
     #[private]
-    fn ops_stake_pause_finalize(&mut self) {
-        Self::staking_pool().ops_stake_pause_finalize()
+    fn ops_stake_stop_finalize(&mut self) {
+        Self::staking_pool().ops_stake_stop_finalize()
     }
 }
 

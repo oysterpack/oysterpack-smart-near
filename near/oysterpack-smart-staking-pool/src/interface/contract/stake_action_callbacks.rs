@@ -36,13 +36,13 @@ pub trait StakeActionCallbacks {
     /// - the callback ensures that the retaking succeeded
     ///
     /// `#[private]`
-    fn ops_stake_resume_finalize(&mut self, total_staked_balance: YoctoNear);
+    fn ops_stake_start_finalize(&mut self, total_staked_balance: YoctoNear);
 
     /// invoked when the staking pool is taken offline and all NEAR is unstaked
     /// - the callback ensures that the unstaking succeeded
     ///
     /// `#[private]`
-    fn ops_stake_pause_finalize(&mut self);
+    fn ops_stake_stop_finalize(&mut self);
 }
 
 pub const ERR_STAKE_ACTION_FAILED: ErrCode = ErrCode("STAKE_ACTION_FAILED");
