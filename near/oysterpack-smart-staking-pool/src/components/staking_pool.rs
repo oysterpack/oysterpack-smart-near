@@ -603,7 +603,7 @@ impl StakeActionCallbacks for StakingPoolComponent {
         stake_token_amount: TokenAmount,
     ) -> StakeAccountBalances {
         if let Status::Online = Self::state().status {
-            if Self::handle_stake_action_result() {
+            if Self::handle_stake_action_result() && Self::state().status.is_online() {
                 State::decr_staked_balance(amount);
             }
         }
@@ -620,7 +620,7 @@ impl StakeActionCallbacks for StakingPoolComponent {
     ) -> StakeAccountBalances {
         // update state
         {
-            if Self::handle_stake_action_result() {
+            if Self::handle_stake_action_result() && Self::state().status.is_online() {
                 State::decr_unstaked_balance(amount);
             }
             State::incr_total_unstaked_balance(amount);
@@ -5210,7 +5210,80 @@ mod tests {
             ///   - treasury balance should contain staking fees for total staked balance
             #[test]
             fn stop_staking_pool_while_unstake_action_in_flight() {
-                todo!()
+                let (ctx, mut staking_pool) = deploy_with_registered_account();
+
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ADMIN.to_string();
+                    ctx.attached_deposit = 2 * YOCTO;
+                    testing_env!(ctx);
+                    if let PromiseOrValue::Promise(_balances) = staking_pool.ops_stake() {
+                        panic!("expected value")
+                    }
+                }
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ADMIN.to_string();
+                    ctx.attached_deposit = 0;
+                    testing_env!(ctx);
+                    staking_pool
+                        .ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                }
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ADMIN.to_string();
+                    ctx.attached_deposit = 0;
+                    ctx.account_locked_balance = 2 * YOCTO;
+                    testing_env!(ctx);
+                    if let PromiseOrValue::Value(_) = staking_pool.ops_unstake(Some(YOCTO.into())) {
+                        panic!("expected Promise")
+                    }
+                }
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ADMIN.to_string();
+                    ctx.attached_deposit = 0;
+                    ctx.account_locked_balance = 2 * YOCTO;
+                    testing_env!(ctx);
+                    staking_pool
+                        .ops_stake_operator_command(StakingPoolOperatorCommand::StopStaking);
+                }
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ADMIN.to_string();
+                    ctx.attached_deposit = 0;
+                    ctx.account_locked_balance = YOCTO;
+                    testing_env_with_promise_result_success(ctx);
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&staking_pool.ops_stake_state()).unwrap()
+                    );
+                    println!("{:#?}", staking_pool.ops_stake_pool_balances());
+                    let stake_account_balances = staking_pool.ops_unstake_finalize(
+                        ADMIN.to_string(),
+                        YOCTO.into(),
+                        YOCTO.into(),
+                    );
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+                    assert_eq!(
+                        logs,
+                        vec![
+                            "[INFO] [FT_BURN] account: admin, amount: 1000000000000000000000000",
+                            "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(116)",
+                        ]
+                    );
+                    assert_eq!(
+                        stake_account_balances.staked.as_ref().unwrap().near_value,
+                        (YOCTO
+                            - *(staking_pool.ops_stake_state().staking_fee * (2 * YOCTO).into()))
+                        .into()
+                    );
+                    assert_eq!(
+                        stake_account_balances.unstaked.as_ref().unwrap().total,
+                        YOCTO.into()
+                    );
+                }
             }
         }
     }
