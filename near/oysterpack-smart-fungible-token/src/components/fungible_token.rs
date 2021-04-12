@@ -515,7 +515,7 @@ where
         };
 
         if *refund_amount == 0 {
-            return refund_amount;
+            return amount;
         }
 
         // try to refund the refund amount from the receiver back to the sender
@@ -578,7 +578,7 @@ where
             0.into()
         };
 
-        refund_amount
+        amount - refund_amount
     }
 }
 
@@ -1381,12 +1381,12 @@ mod tests_fungible_token {
                     ctx,
                     vec![PromiseResult::Successful(refund_amount_bytes)],
                 );
-                let actual_refund_amount = stake.ft_resolve_transfer_call(
+                let actual_used_amount = stake.ft_resolve_transfer_call(
                     to_valid_account_id(SENDER),
                     to_valid_account_id(RECEIVER),
                     refund_amount,
                 );
-                assert_eq!(actual_refund_amount, refund_amount);
+                assert_eq!(actual_used_amount, 0.into());
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
@@ -1416,12 +1416,12 @@ mod tests_fungible_token {
                     ctx,
                     vec![PromiseResult::Successful(refund_amount_bytes)],
                 );
-                let actual_refund_amount = stake.ft_resolve_transfer_call(
+                let actual_used_amount = stake.ft_resolve_transfer_call(
                     to_valid_account_id(SENDER),
                     to_valid_account_id(RECEIVER),
                     refund_amount,
                 );
-                assert_eq!(actual_refund_amount, refund_amount);
+                assert_eq!(actual_used_amount, 0.into());
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
@@ -1448,12 +1448,12 @@ mod tests_fungible_token {
                     ctx,
                     vec![PromiseResult::Successful(refund_amount_bytes)],
                 );
-                let actual_refund_amount = stake.ft_resolve_transfer_call(
+                let actual_used_amount = stake.ft_resolve_transfer_call(
                     to_valid_account_id(SENDER),
                     to_valid_account_id(RECEIVER),
                     transfer_amount,
                 );
-                assert_eq!(actual_refund_amount, refund_amount);
+                assert_eq!(actual_used_amount, transfer_amount - refund_amount);
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
@@ -1484,12 +1484,12 @@ mod tests_fungible_token {
                     ctx,
                     vec![PromiseResult::Successful(refund_amount_bytes)],
                 );
-                let actual_refund_amount = stake.ft_resolve_transfer_call(
+                let actual_used_amount = stake.ft_resolve_transfer_call(
                     to_valid_account_id(SENDER),
                     to_valid_account_id(RECEIVER),
                     transfer_amount,
                 );
-                assert_eq!(actual_refund_amount, transfer_amount);
+                assert_eq!(actual_used_amount, 0.into());
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
@@ -1517,7 +1517,7 @@ mod tests_fungible_token {
                     to_valid_account_id(RECEIVER),
                     transfer_amount,
                 );
-                assert_eq!(actual_refund_amount, 0.into());
+                assert_eq!(actual_refund_amount, 500.into());
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
@@ -1538,12 +1538,12 @@ mod tests_fungible_token {
                 ctx.predecessor_account_id = ctx.current_account_id.clone();
                 let transfer_amount = TokenAmount(500.into());
                 testing_env_with_promise_results(ctx, vec![PromiseResult::Failed]);
-                let actual_refund_amount = stake.ft_resolve_transfer_call(
+                let actual_used_amount = stake.ft_resolve_transfer_call(
                     to_valid_account_id(SENDER),
                     to_valid_account_id(RECEIVER),
                     transfer_amount,
                 );
-                assert_eq!(actual_refund_amount, transfer_amount);
+                assert_eq!(actual_used_amount, 0.into());
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
@@ -1569,12 +1569,12 @@ mod tests_fungible_token {
                 ctx.predecessor_account_id = ctx.current_account_id.clone();
                 let transfer_amount = TokenAmount(500.into());
                 testing_env_with_promise_results(ctx, vec![PromiseResult::Failed]);
-                let actual_refund_amount = stake.ft_resolve_transfer_call(
+                let actual_used_amount = stake.ft_resolve_transfer_call(
                     to_valid_account_id(SENDER),
                     to_valid_account_id(RECEIVER),
                     transfer_amount,
                 );
-                assert_eq!(actual_refund_amount, 0.into());
+                assert_eq!(actual_used_amount, transfer_amount);
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
@@ -1604,12 +1604,12 @@ mod tests_fungible_token {
                     ctx,
                     vec![PromiseResult::Successful(refund_amount_bytes)],
                 );
-                let actual_refund_amount = stake.ft_resolve_transfer_call(
+                let actual_transfer_amount = stake.ft_resolve_transfer_call(
                     to_valid_account_id(SENDER),
                     to_valid_account_id(RECEIVER),
                     transfer_amount,
                 );
-                assert_eq!(actual_refund_amount, 0.into());
+                assert_eq!(actual_transfer_amount, transfer_amount);
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
@@ -1635,12 +1635,12 @@ mod tests_fungible_token {
                     ctx,
                     vec![PromiseResult::Successful(refund_amount_bytes)],
                 );
-                let actual_refund_amount = stake.ft_resolve_transfer_call(
+                let actual_used_amount = stake.ft_resolve_transfer_call(
                     to_valid_account_id(SENDER),
                     to_valid_account_id(RECEIVER),
                     transfer_amount,
                 );
-                assert_eq!(actual_refund_amount, 100.into());
+                assert_eq!(actual_used_amount, 400.into());
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
@@ -1672,12 +1672,12 @@ mod tests_fungible_token {
                     ctx,
                     vec![PromiseResult::Successful(refund_amount_bytes)],
                 );
-                let actual_refund_amount = stake.ft_resolve_transfer_call(
+                let actual_used_amount = stake.ft_resolve_transfer_call(
                     to_valid_account_id(SENDER),
                     to_valid_account_id(RECEIVER),
                     transfer_amount,
                 );
-                assert_eq!(actual_refund_amount, 0.into());
+                assert_eq!(actual_used_amount, transfer_amount);
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
@@ -1704,12 +1704,12 @@ mod tests_fungible_token {
                     vec![PromiseResult::Successful(refund_amount_bytes)],
                 );
                 let initial_token_supply = stake.ft_total_supply();
-                let actual_refund_amount = stake.ft_resolve_transfer_call(
+                let actual_used_amount = stake.ft_resolve_transfer_call(
                     to_valid_account_id(SENDER),
                     to_valid_account_id(RECEIVER),
                     transfer_amount,
                 );
-                assert_eq!(actual_refund_amount, 200.into());
+                assert_eq!(actual_used_amount, transfer_amount - refund_amount);
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
