@@ -16,7 +16,6 @@ pub trait StakeActionCallbacks {
         account_id: AccountId,
         amount: YoctoNear,
         stake_token_amount: TokenAmount,
-        total_staked_balance: YoctoNear,
     ) -> StakeAccountBalances;
 
     /// Finalizes the stake action when funds are unstaked
@@ -29,14 +28,13 @@ pub trait StakeActionCallbacks {
         account_id: AccountId,
         amount: YoctoNear,
         stake_token_amount: TokenAmount,
-        total_staked_balance: YoctoNear,
     ) -> StakeAccountBalances;
 
     /// invoked when the staking pool is brought back online and staking is resumed
     /// - the callback ensures that the retaking succeeded
     ///
     /// `#[private]`
-    fn ops_stake_start_finalize(&mut self, total_staked_balance: YoctoNear);
+    fn ops_stake_start_finalize(&mut self);
 
     /// invoked when the staking pool is taken offline and all NEAR is unstaked
     /// - the callback ensures that the unstaking succeeded

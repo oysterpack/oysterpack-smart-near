@@ -162,10 +162,6 @@ impl State {
         ContractNearBalances::set_balance(State::TOTAL_STAKED_BALANCE, amount);
     }
 
-    fn clear_total_staked_balance() {
-        ContractNearBalances::clear_balance(Self::TOTAL_STAKED_BALANCE);
-    }
-
     fn incr_total_unstaked_balance(amount: YoctoNear) {
         ContractNearBalances::incr_balance(Self::TOTAL_UNSTAKED_BALANCE, amount);
     }
@@ -227,6 +223,10 @@ impl State {
         ContractNearBalances::decr_balance(Self::STAKED_BALANCE, amount);
     }
 
+    fn clear_staked_balance() {
+        ContractNearBalances::clear_balance(Self::STAKED_BALANCE);
+    }
+
     pub fn unstaked_balance() -> YoctoNear {
         ContractNearBalances::near_balance(Self::UNSTAKED_BALANCE)
     }
@@ -238,6 +238,10 @@ impl State {
     fn decr_unstaked_balance(amount: YoctoNear) {
         ContractNearBalances::decr_balance(Self::UNSTAKED_BALANCE, amount);
     }
+
+    fn clear_unstaked_balance() {
+        ContractNearBalances::clear_balance(Self::UNSTAKED_BALANCE);
+    }
 }
 
 impl Deploy for StakingPoolComponent {
@@ -246,7 +250,7 @@ impl Deploy for StakingPoolComponent {
     fn deploy(config: Self::Config) {
         let state = State {
             stake_public_key: config.stake_public_key,
-            status: Status::Offline(OfflineReason::Paused),
+            status: Status::Offline(OfflineReason::Stopped),
             callback_gas: None,
             staking_fee: 80.into(),
             treasury_balance: YoctoNear::ZERO,
@@ -450,7 +454,7 @@ impl StakingPoolOperator for StakingPoolComponent {
         self.account_manager.assert_operator();
 
         match command {
-            StakingPoolOperatorCommand::StopStaking => Self::stop_staking(),
+            StakingPoolOperatorCommand::StopStaking => Self::stop_staking(OfflineReason::Stopped),
             StakingPoolOperatorCommand::StartStaking => Self::start_staking(),
             StakingPoolOperatorCommand::SetStakeCallbackGas(gas) => {
                 let min_callback_gas = State::min_callback_gas();
@@ -494,13 +498,25 @@ impl StakingPoolOperator for StakingPoolComponent {
 }
 
 impl StakingPoolComponent {
-    fn stop_staking() {
+    fn stop_staking(reason: OfflineReason) {
         let mut state = Self::state();
         if let Status::Online = state.status {
+            // update the status
+            {
+                state.status = Status::Offline(reason);
+                state.save();
+            }
+
             // unstake all
             {
-                let staked_balance = state.total_staked_balance();
-                if *staked_balance > 0 {
+                let total_staked_balance =
+                    ContractNearBalances::near_balance(State::TOTAL_STAKED_BALANCE)
+                        + State::staked_balance()
+                        - State::unstaked_balance();
+                State::set_total_staked_balance(total_staked_balance);
+                State::clear_staked_balance();
+                State::clear_unstaked_balance();
+                if env::account_locked_balance() > 0 {
                     Promise::new(env::current_account_id())
                         .stake(0, state.stake_public_key.into())
                         .then(json_function_callback(
@@ -511,12 +527,10 @@ impl StakingPoolComponent {
                         ));
                 }
             }
-            // update the status
-            {
-                state.status = Status::Offline(OfflineReason::Paused);
-                state.save();
+            if let OfflineReason::StakeActionFailed = reason {
+                ERR_STAKE_ACTION_FAILED.log("");
             }
-            LOG_EVENT_STATUS_OFFLINE.log("");
+            LOG_EVENT_STATUS_OFFLINE.log(reason);
         }
     }
 
@@ -535,14 +549,11 @@ impl StakingPoolComponent {
             // stake
             {
                 if total_staked_balance > YoctoNear::ZERO {
-                    State::clear_total_staked_balance();
                     Promise::new(env::current_account_id())
                         .stake(*total_staked_balance, state.stake_public_key.into())
                         .then(json_function_callback(
                             "ops_stake_start_finalize",
-                            Some(ResumeFinalizeCallbackArgs {
-                                total_staked_balance,
-                            }),
+                            Option::<()>::None,
                             YoctoNear::ZERO,
                             state.callback_gas(),
                         ));
@@ -578,12 +589,13 @@ impl StakeActionCallbacks for StakingPoolComponent {
         account_id: AccountId,
         amount: YoctoNear,
         stake_token_amount: TokenAmount,
-        total_staked_balance: YoctoNear,
     ) -> StakeAccountBalances {
-        let mut state = Self::state();
-        State::decr_staked_balance(amount);
-        Self::handle_stake_action_result(&mut state, total_staked_balance);
-        self.pay_dividend_and_apply_staking_fees(&account_id, state, amount, stake_token_amount);
+        if let Status::Online = Self::state().status {
+            if Self::handle_stake_action_result() {
+                State::decr_staked_balance(amount);
+            }
+        }
+        self.pay_dividend_and_apply_staking_fees(&account_id, amount, stake_token_amount);
         self.ops_stake_balance(to_valid_account_id(&account_id))
             .unwrap()
     }
@@ -593,14 +605,12 @@ impl StakeActionCallbacks for StakingPoolComponent {
         account_id: AccountId,
         amount: YoctoNear,
         stake_token_amount: TokenAmount,
-        total_staked_balance: YoctoNear,
     ) -> StakeAccountBalances {
         // update state
         {
-            let mut state = Self::state();
-            State::decr_unstaked_balance(amount);
-            Self::handle_stake_action_result(&mut state, total_staked_balance);
-            state.save();
+            if Self::handle_stake_action_result() {
+                State::decr_unstaked_balance(amount);
+            }
             State::incr_total_unstaked_balance(amount);
         }
         // update account balances
@@ -612,14 +622,14 @@ impl StakeActionCallbacks for StakingPoolComponent {
             .unwrap()
     }
 
-    fn ops_stake_start_finalize(&mut self, total_staked_balance: YoctoNear) {
+    fn ops_stake_start_finalize(&mut self) {
         if is_promise_success() {
             ContractNearBalances::set_balance(
                 State::TOTAL_STAKED_BALANCE,
                 env::account_locked_balance().into(),
             );
         } else {
-            Self::handle_stake_action_failure(total_staked_balance);
+            Self::stop_staking(OfflineReason::StakeActionFailed)
         }
     }
 
@@ -696,7 +706,6 @@ struct StakeActionCallbackArgs {
     account_id: AccountId,
     amount: YoctoNear,
     stake_token_amount: TokenAmount,
-    total_staked_balance: YoctoNear,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -740,10 +749,10 @@ impl StakingPoolComponent {
     fn pay_dividend_and_apply_staking_fees(
         &mut self,
         account_id: &str,
-        mut state: ComponentState<State>,
         amount: YoctoNear,
         stake_token_amount: TokenAmount,
     ) -> TokenAmount {
+        let mut state = Self::state();
         self.stake_token.ft_mint(&account_id, stake_token_amount);
 
         // if treasury received staking rewards, then pay out the dividend
@@ -772,15 +781,17 @@ impl StakingPoolComponent {
         staking_fee
     }
 
-    fn handle_stake_action_result(state: &mut State, total_staked_balance: YoctoNear) {
+    /// return true if stake action succeeded
+    fn handle_stake_action_result() -> bool {
         if is_promise_success() {
             ContractNearBalances::set_balance(
                 State::TOTAL_STAKED_BALANCE,
                 env::account_locked_balance().into(),
             );
+            true
         } else {
-            state.status = Status::Offline(OfflineReason::StakeActionFailed);
-            Self::handle_stake_action_failure(total_staked_balance);
+            Self::stop_staking(OfflineReason::StakeActionFailed);
+            false
         }
     }
 
@@ -866,7 +877,6 @@ impl StakingPoolComponent {
                 State::incr_total_staked_balance(near_amount);
                 self.pay_dividend_and_apply_staking_fees(
                     account_id,
-                    Self::state(),
                     near_amount,
                     stake_token_amount,
                 );
@@ -921,20 +931,11 @@ impl StakingPoolComponent {
                 account_id: account_id.to_string(),
                 amount,
                 stake_token_amount,
-                total_staked_balance,
             }),
             YoctoNear::ZERO,
             state.callback_gas(),
         );
         stake.then(finalize)
-    }
-
-    fn handle_stake_action_failure(total_staked_balance: YoctoNear) {
-        ERR_STAKE_ACTION_FAILED.log("");
-        State::set_total_staked_balance(total_staked_balance);
-        if env::account_locked_balance() > 0 {
-            Promise::new(env::current_account_id()).stake(0, Self::state().stake_public_key.into());
-        }
     }
 
     fn stake_near_value_rounded_down(&self, stake: TokenAmount) -> YoctoNear {
@@ -1199,9 +1200,7 @@ mod tests {
                 match action {
                     Action::FunctionCall(action) => {
                         assert_eq!(action.method_name, "ops_stake_start_finalize");
-                        let args: ResumeFinalizeCallbackArgs =
-                            serde_json::from_str(&action.args).unwrap();
-                        assert_eq!(args.total_staked_balance, YOCTO.into());
+                        assert!(action.args.is_empty());
                         assert_eq!(action.deposit, 0);
                         assert_eq!(action.gas, *staking_pool.ops_stake_callback_gas());
                     }
@@ -1276,7 +1275,6 @@ mod tests {
                             assert_eq!(args.account_id, ACCOUNT);
                             assert_eq!(args.amount, 1000.into());
                             assert_eq!(args.stake_token_amount, 1000.into());
-                            assert_eq!(args.total_staked_balance, 1000.into());
                         }
                         _ => panic!("expected FunctionCall"),
                     }
@@ -1336,7 +1334,6 @@ mod tests {
                             assert_eq!(args.account_id, ACCOUNT);
                             assert_eq!(args.amount, 1000.into());
                             assert_eq!(args.stake_token_amount, 1000.into());
-                            assert_eq!(args.total_staked_balance, 2000.into());
                         }
                         _ => panic!("expected FunctionCall"),
                     }
@@ -1416,7 +1413,6 @@ mod tests {
                             assert_eq!(args.account_id, ACCOUNT);
                             assert_eq!(args.amount, 1000000000000000000001000.into());
                             assert_eq!(args.stake_token_amount, 1000000000000000000001000.into());
-                            assert_eq!(args.total_staked_balance, 1000000000000000000001000.into());
                         }
                         _ => panic!("expected FunctionCall"),
                     }
@@ -1496,7 +1492,6 @@ mod tests {
                         assert_eq!(args.account_id, ACCOUNT);
                         assert_eq!(args.amount, 99.into());
                         assert_eq!(args.stake_token_amount, 99.into());
-                        assert_eq!(args.total_staked_balance, total_staked_balance + 99);
                     }
                     _ => panic!("expected FunctionCall"),
                 }
@@ -2045,7 +2040,6 @@ mod tests {
                     ACCOUNT.to_string(),
                     YOCTO.into(),
                     YOCTO.into(),
-                    state.total_staked_balance(),
                 );
                 // Assert
                 let logs = test_utils::get_logs();
@@ -2090,12 +2084,7 @@ mod tests {
                 ctx.predecessor_account_id = ACCOUNT.to_string();
                 ctx.account_locked_balance = *state.total_staked_balance();
                 testing_env_with_promise_result_success(ctx.clone());
-                staking_pool.ops_stake_finalize(
-                    ACCOUNT.to_string(),
-                    YOCTO.into(),
-                    YOCTO.into(),
-                    state.total_staked_balance(),
-                );
+                staking_pool.ops_stake_finalize(ACCOUNT.to_string(), YOCTO.into(), YOCTO.into());
                 println!("{:#?}", test_utils::get_logs());
             }
 
@@ -2150,7 +2139,6 @@ mod tests {
                     ACCOUNT.to_string(),
                     State::staked_balance(),
                     999999999999999999999500.into(),
-                    state.total_staked_balance(),
                 );
                 let staking_pool_balances = StakingPoolBalances::load();
                 println!("ops_stake_finalize {:#?}", staking_pool_balances);
@@ -2211,7 +2199,6 @@ mod tests {
                     ACCOUNT.to_string(),
                     YOCTO.into(),
                     YOCTO.into(),
-                    state.total_staked_balance(),
                 );
                 // Assert
                 let logs = test_utils::get_logs();
@@ -2220,6 +2207,7 @@ mod tests {
                     logs,
                     vec![
                         "[ERR] [STAKE_ACTION_FAILED] ",
+                        "[WARN] [STATUS_OFFLINE] StakeActionFailed",
                         "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
                         "[INFO] [FT_MINT] account: bob, amount: 1000000000000000000000000",
                         "[INFO] [FT_BURN] account: bob, amount: 8000000000000000000000",
@@ -2247,17 +2235,31 @@ mod tests {
                 assert_eq!(state.total_staked_balance(), YOCTO.into());
 
                 let receipts = deserialize_receipts();
-                assert_eq!(receipts.len(), 1);
-                let receipt = &receipts[0];
-                assert_eq!(receipt.receiver_id, env::current_account_id());
-                assert_eq!(receipt.actions.len(), 1);
-                let action = &receipt.actions[0];
-                match action {
-                    Action::Stake(action) => {
-                        assert_eq!(action.stake, 0);
-                    }
-                    _ => panic!("expected stake action"),
-                };
+                assert_eq!(receipts.len(), 2);
+                {
+                    let receipt = &receipts[0];
+                    assert_eq!(receipt.receiver_id, env::current_account_id());
+                    assert_eq!(receipt.actions.len(), 1);
+                    let action = &receipt.actions[0];
+                    match action {
+                        Action::Stake(action) => {
+                            assert_eq!(action.stake, 0);
+                        }
+                        _ => panic!("expected stake action"),
+                    };
+                }
+                {
+                    let receipt = &receipts[1];
+                    assert_eq!(receipt.receiver_id, env::current_account_id());
+                    assert_eq!(receipt.actions.len(), 1);
+                    let action = &receipt.actions[0];
+                    match action {
+                        Action::FunctionCall(function_call) => {
+                            assert_eq!(function_call.method_name, "ops_stake_stop_finalize");
+                        }
+                        _ => panic!("expected FunctionCallAction"),
+                    };
+                }
             }
         }
     }
@@ -2296,7 +2298,6 @@ mod tests {
                     ACCOUNT.to_string(),
                     YOCTO.into(),
                     YOCTO.into(),
-                    state.total_staked_balance(),
                 );
                 println!("{:#?}", balances);
                 println!("ops_stake_finalize {:#?}", StakingPoolBalances::load());
@@ -2362,7 +2363,6 @@ mod tests {
                             assert_eq!(args.account_id, ACCOUNT);
                             assert_eq!(args.amount, 1000.into());
                             assert_eq!(args.stake_token_amount, 1000.into());
-                            assert_eq!(args.total_staked_balance, (YOCTO - 1000).into());
                         }
                         _ => panic!("expected FunctionCall"),
                     }
@@ -2399,7 +2399,6 @@ mod tests {
                     ACCOUNT.to_string(),
                     YOCTO.into(),
                     YOCTO.into(),
-                    state.total_staked_balance(),
                 );
                 println!("{:#?}", balances);
             }
@@ -2466,7 +2465,6 @@ mod tests {
                             assert_eq!(args.account_id, ACCOUNT);
                             assert_eq!(args.amount, expected_locked_balance.into());
                             assert_eq!(args.stake_token_amount, expected_locked_balance.into());
-                            assert_eq!(args.total_staked_balance, state.staking_fee * YOCTO.into());
                         }
                         _ => panic!("expected FunctionCall"),
                     }
@@ -2526,7 +2524,6 @@ mod tests {
                     ctx.predecessor_account_id,
                     State::staked_balance(),
                     staking_pool.near_stake_value_rounded_down(State::staked_balance()),
-                    state.total_staked_balance(),
                 );
                 println!("finalize stake {:#?}", StakingPoolBalances::load());
                 let logs = test_utils::get_logs();
@@ -2557,7 +2554,6 @@ mod tests {
                     ctx.predecessor_account_id,
                     State::unstaked_balance(),
                     (*State::unstaked_balance()).into(),
-                    state.treasury_balance,
                 );
                 println!("finalized unstaking {:#?}", StakingPoolBalances::load());
                 let logs = test_utils::get_logs();
@@ -2615,7 +2611,6 @@ mod tests {
                     ctx.predecessor_account_id,
                     State::staked_balance(),
                     staking_pool.near_stake_value_rounded_down(State::staked_balance()),
-                    state.total_staked_balance(),
                 );
                 let logs = test_utils::get_logs();
                 println!("finalized stake: {:#?}", logs);
@@ -2673,7 +2668,6 @@ mod tests {
                     ctx.predecessor_account_id,
                     State::staked_balance(),
                     staking_pool.near_stake_value_rounded_down(State::staked_balance()),
-                    state.total_staked_balance(),
                 );
                 let logs = test_utils::get_logs();
                 println!("finalized stake: {:#?}", logs);
@@ -2700,7 +2694,6 @@ mod tests {
                     ctx.predecessor_account_id,
                     State::unstaked_balance(),
                     (*State::unstaked_balance()).into(),
-                    state.treasury_balance,
                 );
                 let logs = test_utils::get_logs();
                 println!("finalized unstake {:#?}", logs);
@@ -2982,7 +2975,6 @@ mod tests {
                     ctx.predecessor_account_id,
                     State::staked_balance(),
                     staking_pool.near_stake_value_rounded_down(State::staked_balance()),
-                    state.total_staked_balance(),
                 );
                 let logs = test_utils::get_logs();
                 println!("finalized stake: {:#?}", logs);
@@ -3012,7 +3004,6 @@ mod tests {
                         ctx.predecessor_account_id,
                         State::unstaked_balance(),
                         (*State::unstaked_balance()).into(),
-                        total_staked_balance,
                     );
                     let logs = test_utils::get_logs();
                     println!("finalized unstake {:#?}", logs);
@@ -3928,7 +3919,6 @@ mod tests {
                 let args: StakeActionCallbackArgs =
                     serde_json::from_str(function_call.args.as_str()).unwrap();
                 assert_eq!(args.account_id, ContractOwnershipComponent.ops_owner());
-                assert_eq!(args.total_staked_balance, State::staked_balance());
             } else {
                 panic!("expected stake action")
             }
@@ -3998,7 +3988,6 @@ mod tests {
                 let args: StakeActionCallbackArgs =
                     serde_json::from_str(function_call.args.as_str()).unwrap();
                 assert_eq!(args.account_id, ContractOwnershipComponent.ops_owner());
-                assert_eq!(args.total_staked_balance, State::staked_balance());
             } else {
                 panic!("expected stake action")
             }
@@ -4207,7 +4196,6 @@ mod tests {
                         env::current_account_id(),
                         staking_pool_balances.staked,
                         (*staking_pool_balances.staked).into(),
-                        staking_pool_balances.staked,
                     );
                     let logs = test_utils::get_logs();
                     println!("{:#?}", logs);
@@ -4284,7 +4272,6 @@ mod tests {
                         env::current_account_id(),
                         staking_pool_balances.staked,
                         (*staking_pool_balances.staked).into(),
-                        staking_pool_balances.staked,
                     );
                     let logs = test_utils::get_logs();
                     println!("{:#?}", logs);
@@ -4364,7 +4351,6 @@ mod tests {
                         env::current_account_id(),
                         staking_pool_balances.staked,
                         (*staking_pool_balances.staked).into(),
-                        staking_pool_balances.staked,
                     );
                     let logs = test_utils::get_logs();
                     println!("{:#?}", logs);
@@ -4456,7 +4442,6 @@ mod tests {
                         env::current_account_id(),
                         staking_pool_balances.staked,
                         (*staking_pool_balances.staked).into(),
-                        staking_pool_balances.staked,
                     );
                     let logs = test_utils::get_logs();
                     println!("{:#?}", logs);
