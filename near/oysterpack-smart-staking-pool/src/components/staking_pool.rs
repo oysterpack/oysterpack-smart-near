@@ -457,34 +457,13 @@ impl StakingPoolOperator for StakingPoolComponent {
             StakingPoolOperatorCommand::StopStaking => Self::stop_staking(OfflineReason::Stopped),
             StakingPoolOperatorCommand::StartStaking => Self::start_staking(),
             StakingPoolOperatorCommand::SetStakeCallbackGas(gas) => {
-                let min_callback_gas = State::min_callback_gas();
-                ERR_INVALID.assert(
-                    || gas >= min_callback_gas,
-                    || format!("minimum callback gas required is: {}", min_callback_gas),
-                );
-                let mut state = Self::state();
-                state.callback_gas = Some(gas);
-                state.save();
+                Self::set_stake_callback_gas(gas)
             }
-            StakingPoolOperatorCommand::ClearStakeCallbackGas => {
-                let mut state = Self::state();
-                state.callback_gas = None;
-                state.save();
-            }
+            StakingPoolOperatorCommand::ResetStakeCallbackGas => Self::reset_stake_callback_gas(),
             StakingPoolOperatorCommand::UpdatePublicKey(public_key) => {
-                let mut state = Self::state();
-                ERR_ILLEGAL_STATE.assert(
-                    || !state.status.is_online(),
-                    || "staking pool must be paused to update the staking public key",
-                );
-                state.stake_public_key = public_key;
-                state.save();
+                Self::update_public_key(public_key)
             }
-            StakingPoolOperatorCommand::UpdateStakingFee(fee) => {
-                let mut state = Self::state();
-                state.staking_fee = fee;
-                state.save();
-            }
+            StakingPoolOperatorCommand::UpdateStakingFee(fee) => Self::update_staking_fee(fee),
         }
     }
 
@@ -560,6 +539,39 @@ impl StakingPoolComponent {
                 }
             }
         }
+    }
+
+    fn set_stake_callback_gas(gas: Gas) {
+        let min_callback_gas = State::min_callback_gas();
+        ERR_INVALID.assert(
+            || gas >= min_callback_gas,
+            || format!("minimum callback gas required is: {}", min_callback_gas),
+        );
+        let mut state = Self::state();
+        state.callback_gas = Some(gas);
+        state.save();
+    }
+
+    fn reset_stake_callback_gas() {
+        let mut state = Self::state();
+        state.callback_gas = None;
+        state.save();
+    }
+
+    fn update_public_key(public_key: PublicKey) {
+        let mut state = Self::state();
+        ERR_ILLEGAL_STATE.assert(
+            || !state.status.is_online(),
+            || "staking pool must be paused to update the staking public key",
+        );
+        state.stake_public_key = public_key;
+        state.save();
+    }
+
+    fn update_staking_fee(fee: BasisPoints) {
+        let mut state = Self::state();
+        state.staking_fee = fee;
+        state.save();
     }
 }
 

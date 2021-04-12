@@ -24,7 +24,7 @@ pub enum StakingPoolOperatorCommand {
     StartStaking,
 
     SetStakeCallbackGas(Gas),
-    ClearStakeCallbackGas,
+    ResetStakeCallbackGas,
 
     /// the staking pool public key can only be changed while the staking pool is paused
     UpdatePublicKey(PublicKey),
