@@ -577,7 +577,7 @@ impl StakeActionCallbacks for StakingPoolComponent {
         amount: YoctoNear,
         stake_token_amount: TokenAmount,
     ) -> StakeAccountBalances {
-        if let Status::Online = Self::state().status {
+        if Self::state().status.is_online() {
             if Self::handle_stake_action_result() {
                 // NOTE: if the stake action failed, then the staking pool would have been taken
                 // offline and the staked balance would have been cleared
