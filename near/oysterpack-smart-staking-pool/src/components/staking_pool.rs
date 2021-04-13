@@ -355,6 +355,7 @@ impl StakingPool for StakingPoolComponent {
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(&account_id));
 
         match self.account_manager.load_account_data(&account_id) {
+            // account has no unstaked funds to restake
             None => match amount {
                 None => self.registered_stake_account_balance(&account_id),
                 Some(_) => {
