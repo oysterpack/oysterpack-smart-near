@@ -328,11 +328,12 @@ impl StakingPool for StakingPoolComponent {
             Status::Online => {
                 State::incr_unstaked_balance(near_amount);
                 self.stake_token.ft_lock(&account_id, stake_token_amount);
-                PromiseOrValue::Promise(Self::unstake_funds(
+                PromiseOrValue::Promise(Self::create_stake_workflow(
                     *state,
                     &account_id,
                     near_amount,
                     stake_token_amount,
+                    "ops_unstake_finalize",
                 ))
             }
             Status::Offline(_) => {
@@ -577,7 +578,9 @@ impl StakeActionCallbacks for StakingPoolComponent {
         stake_token_amount: TokenAmount,
     ) -> StakeAccountBalances {
         if let Status::Online = Self::state().status {
-            if Self::handle_stake_action_result() && Self::state().status.is_online() {
+            if Self::handle_stake_action_result() {
+                // NOTE: if the stake action failed, then the staking pool would have been taken
+                // offline and the staked balance would have been cleared
                 State::decr_staked_balance(amount);
             }
         }
@@ -844,6 +847,7 @@ impl StakingPoolComponent {
             .unwrap()
     }
 
+    /// returns the current treasury balance after paying the dividend
     fn pay_dividend(&mut self, treasury_balance: YoctoNear) -> YoctoNear {
         let treasury_stake_balance = self
             .stake_token
@@ -863,6 +867,9 @@ impl StakingPoolComponent {
                     "{} NEAR / {} STAKE",
                     treasury_staking_earnings, treasury_staking_earnings_stake_value
                 ));
+                return self.stake_near_value_rounded_down(
+                    treasury_stake_balance - treasury_staking_earnings_stake_value,
+                );
             }
         }
         current_treasury_near_value
@@ -874,34 +881,29 @@ impl StakingPoolComponent {
         account_id: &str,
         amount: YoctoNear,
         stake_token_amount: TokenAmount,
-    ) -> TokenAmount {
+    ) {
         let mut state = Self::state();
         self.stake_token.ft_mint(&account_id, stake_token_amount);
 
         // if treasury received staking rewards, then pay out the dividend
-        let current_treasury_near_value = self.pay_dividend(state.treasury_balance);
+        state.treasury_balance = self.pay_dividend(state.treasury_balance);
 
-        // apply staking fee
-        let staking_fee = if account_id == &env::current_account_id()
-            || account_id == &ContractOwnershipComponent.ops_owner()
+        // treasury and owner accounts do not get charged staking fees
+        if *state.staking_fee > 0
+            && account_id != &env::current_account_id()
+            && account_id != &ContractOwnershipComponent.ops_owner()
         {
-            // treasury and owner accounts do not get charged staking fees
-            TokenAmount::ZERO
-        } else {
-            self.near_stake_value_rounded_down(amount * state.staking_fee)
-        };
-        if staking_fee > TokenAmount::ZERO {
-            self.stake_token.ft_burn(&account_id, staking_fee);
-            let treasury_stake_balance = self
-                .stake_token
-                .ft_mint(&env::current_account_id(), staking_fee);
-            state.treasury_balance = self.stake_near_value_rounded_down(treasury_stake_balance);
-        } else {
-            state.treasury_balance = current_treasury_near_value;
+            let staking_fee = self.near_stake_value_rounded_down(amount * state.staking_fee);
+            if staking_fee > TokenAmount::ZERO {
+                self.stake_token.ft_burn(&account_id, staking_fee);
+                let treasury_stake_balance = self
+                    .stake_token
+                    .ft_mint(&env::current_account_id(), staking_fee);
+                state.treasury_balance = self.stake_near_value_rounded_down(treasury_stake_balance);
+            }
         }
 
         state.save();
-        staking_fee
     }
 
     /// return true if stake action succeeded
@@ -936,21 +938,6 @@ impl StakingPoolComponent {
         let mut account = self.account_manager.registered_account_data(&account_id);
         account.credit_unstaked(amount);
         account.save();
-    }
-
-    fn unstake_funds(
-        state: State,
-        account_id: &str,
-        amount: YoctoNear,
-        stake_token_amount: TokenAmount,
-    ) -> Promise {
-        Self::create_stake_workflow(
-            state,
-            account_id,
-            amount,
-            stake_token_amount,
-            "ops_unstake_finalize",
-        )
     }
 
     fn create_stake_workflow(
