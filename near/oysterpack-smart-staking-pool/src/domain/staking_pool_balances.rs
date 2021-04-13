@@ -1,4 +1,4 @@
-use crate::components::staking_pool::State;
+use crate::components::staking_pool::{StakingPoolComponent, State};
 use oysterpack_smart_contract::ContractNearBalances;
 use oysterpack_smart_near::{
     domain::YoctoNear,
@@ -22,6 +22,8 @@ pub struct StakingPoolBalances {
     pub total_unstaked: YoctoNear,
     /// unstaked funds that can be withdrawn from liquidity added by staking
     pub unstaked_liquidity: YoctoNear,
+
+    pub treasury_balance: YoctoNear,
 }
 
 impl StakingPoolBalances {
@@ -32,6 +34,7 @@ impl StakingPoolBalances {
             unstaked: ContractNearBalances::near_balance(State::UNSTAKED_BALANCE),
             total_unstaked: ContractNearBalances::near_balance(State::TOTAL_UNSTAKED_BALANCE),
             unstaked_liquidity: ContractNearBalances::near_balance(State::UNSTAKED_LIQUIDITY_POOL),
+            treasury_balance: StakingPoolComponent::state().treasury_balance,
         }
     }
 }

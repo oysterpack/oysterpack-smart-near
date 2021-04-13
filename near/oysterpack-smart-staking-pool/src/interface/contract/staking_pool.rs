@@ -1,7 +1,7 @@
 use crate::Status;
 use crate::{StakeAccountBalances, StakingPoolBalances};
 use oysterpack_smart_fungible_token::TokenAmount;
-use oysterpack_smart_near::domain::YoctoNear;
+use oysterpack_smart_near::domain::{BasisPoints, PublicKey, YoctoNear};
 use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
 use oysterpack_smart_near::near_sdk::PromiseOrValue;
 use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
@@ -119,6 +119,10 @@ pub trait StakingPool {
     fn ops_stake_status(&self) -> Status;
 
     fn ops_stake_pool_balances(&self) -> StakingPoolBalances;
+
+    fn ops_stake_fee(&self) -> BasisPoints;
+
+    fn ops_stake_public_key(&self) -> PublicKey;
 }
 
 pub const LOG_EVENT_STATUS_ONLINE: LogEvent = LogEvent(Level::INFO, "STATUS_ONLINE");

@@ -1,4 +1,3 @@
-use crate::components::staking_pool::State;
 use oysterpack_smart_near::domain::{BasisPoints, PublicKey};
 use oysterpack_smart_near::near_sdk::serde::{Deserialize, Serialize};
 
@@ -10,8 +9,6 @@ pub trait StakingPoolOperator {
     /// - if predecessor account is not registered
     /// - if predecessor account is not authorized - requires operator permission
     fn ops_stake_operator_command(&mut self, command: StakingPoolOperatorCommand);
-
-    fn ops_stake_state(&self) -> State;
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

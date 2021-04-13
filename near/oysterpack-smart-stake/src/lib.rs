@@ -63,7 +63,10 @@ impl Contract {
             token_supply: 0,
         });
 
-        StakingPoolComponent::deploy(StakingPoolComponentConfig { stake_public_key });
+        StakingPoolComponent::deploy(StakingPoolComponentConfig {
+            stake_public_key,
+            staking_fee: None,
+        });
 
         Self
     }

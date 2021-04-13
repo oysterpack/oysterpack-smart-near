@@ -1,8 +1,7 @@
 use crate::*;
 use near_sdk::near_bindgen;
-use oysterpack_smart_near::domain::YoctoNear;
+use oysterpack_smart_near::domain::{BasisPoints, YoctoNear};
 use oysterpack_smart_near::near_sdk::{AccountId, PromiseOrValue};
-use oysterpack_smart_staking_pool::components::staking_pool::State;
 use oysterpack_smart_staking_pool::{
     StakeAccountBalances, StakeActionCallbacks, StakingPool, StakingPoolBalances,
     StakingPoolOperator, StakingPoolOperatorCommand, StakingPoolOwner, Status, Treasury,
@@ -31,8 +30,8 @@ impl StakingPool for Contract {
         Self::staking_pool().ops_stake_withdraw(amount)
     }
 
-    fn ops_stake_token_value(&self) -> YoctoNear {
-        Self::staking_pool().ops_stake_token_value()
+    fn ops_stake_token_value(&self, amount: Option<TokenAmount>) -> YoctoNear {
+        Self::staking_pool().ops_stake_token_value(amount)
     }
 
     fn ops_stake_status(&self) -> Status {
@@ -41,6 +40,14 @@ impl StakingPool for Contract {
 
     fn ops_stake_pool_balances(&self) -> StakingPoolBalances {
         Self::staking_pool().ops_stake_pool_balances()
+    }
+
+    fn ops_stake_fee(&self) -> BasisPoints {
+        Self::staking_pool().ops_stake_fee()
+    }
+
+    fn ops_stake_public_key(&self) -> PublicKey {
+        Self::staking_pool().ops_stake_public_key()
     }
 }
 
@@ -81,10 +88,6 @@ impl StakeActionCallbacks for Contract {
 impl StakingPoolOperator for Contract {
     fn ops_stake_operator_command(&mut self, command: StakingPoolOperatorCommand) {
         Self::staking_pool().ops_stake_operator_command(command);
-    }
-
-    fn ops_stake_state(&self) -> State {
-        Self::staking_pool().ops_stake_state()
     }
 }
 
