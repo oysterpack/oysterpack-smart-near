@@ -20,7 +20,7 @@ pub enum StakingPoolOperatorCommand {
     StopStaking,
     StartStaking,
 
-    /// the staking pool public key can only be changed while the staking pool is paused
+    /// the staking pool public key can only be changed while the staking pool is offline
     UpdatePublicKey(PublicKey),
     UpdateStakingFee(BasisPoints),
 }

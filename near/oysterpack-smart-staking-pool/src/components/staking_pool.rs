@@ -5372,5 +5372,78 @@ mod tests {
                 }
             }
         }
+
+        #[cfg(test)]
+        mod update_public_key {
+            use super::*;
+
+            #[test]
+            fn pool_is_offline_as_operator() {
+                let (ctx, mut staking_pool) = deploy_with_registered_account();
+
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ADMIN.to_string();
+                    testing_env!(ctx.clone());
+                    account_manager().ops_permissions_grant_operator(to_valid_account_id(ACCOUNT));
+                }
+
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    testing_env!(ctx);
+                    let key = [1_u8; 65];
+                    let key: PublicKey = key[..].try_into().unwrap();
+                    staking_pool.ops_stake_operator_command(
+                        StakingPoolOperatorCommand::UpdatePublicKey(key),
+                    );
+                    assert_eq!(staking_pool.ops_stake_state().stake_public_key, key);
+                }
+            }
+
+            #[test]
+            #[should_panic(
+                expected = "[ERR] [ILLEGAL_STATE] staking pool must be paused to update the staking public key"
+            )]
+            fn pool_is_online_as_operator() {
+                let (ctx, mut staking_pool) = deploy_with_registered_account();
+                bring_pool_online(ctx.clone(), &mut staking_pool);
+
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ADMIN.to_string();
+                    testing_env!(ctx.clone());
+                    account_manager().ops_permissions_grant_operator(to_valid_account_id(ACCOUNT));
+                }
+
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    testing_env!(ctx);
+                    let key = [1_u8; 65];
+                    let key: PublicKey = key[..].try_into().unwrap();
+                    staking_pool.ops_stake_operator_command(
+                        StakingPoolOperatorCommand::UpdatePublicKey(key),
+                    );
+                }
+            }
+
+            #[test]
+            #[should_panic(expected = "[ERR] [NOT_AUTHORIZED]")]
+            fn not_authorized() {
+                let (ctx, mut staking_pool) = deploy_with_registered_account();
+
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    testing_env!(ctx);
+                    let key = [1_u8; 65];
+                    let key: PublicKey = key[..].try_into().unwrap();
+                    staking_pool.ops_stake_operator_command(
+                        StakingPoolOperatorCommand::UpdatePublicKey(key),
+                    );
+                }
+            }
+        }
     }
 }
