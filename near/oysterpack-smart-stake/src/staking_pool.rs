@@ -1,11 +1,11 @@
 use crate::*;
 use near_sdk::near_bindgen;
-use oysterpack_smart_near::domain::{Gas, YoctoNear};
+use oysterpack_smart_near::domain::YoctoNear;
 use oysterpack_smart_near::near_sdk::{AccountId, PromiseOrValue};
-use oysterpack_smart_staking_pool::components::staking_pool::{State, Status};
+use oysterpack_smart_staking_pool::components::staking_pool::State;
 use oysterpack_smart_staking_pool::{
-    StakeAccountBalances, StakeActionCallbacks, StakingPool, StakingPoolOperator,
-    StakingPoolOperatorCommand, StakingPoolOwner, Treasury,
+    StakeAccountBalances, StakeActionCallbacks, StakingPool, StakingPoolBalances,
+    StakingPoolOperator, StakingPoolOperatorCommand, StakingPoolOwner, Status, Treasury,
 };
 
 #[near_bindgen]
@@ -38,6 +38,10 @@ impl StakingPool for Contract {
     fn ops_stake_status(&self) -> Status {
         Self::staking_pool().ops_stake_status()
     }
+
+    fn ops_stake_pool_balances(&self) -> StakingPoolBalances {
+        Self::staking_pool().ops_stake_pool_balances()
+    }
 }
 
 #[near_bindgen]
@@ -48,14 +52,8 @@ impl StakeActionCallbacks for Contract {
         account_id: AccountId,
         amount: YoctoNear,
         stake_token_amount: TokenAmount,
-        total_staked_balance: YoctoNear,
     ) -> StakeAccountBalances {
-        Self::staking_pool().ops_stake_finalize(
-            account_id,
-            amount,
-            stake_token_amount,
-            total_staked_balance,
-        )
+        Self::staking_pool().ops_stake_finalize(account_id, amount, stake_token_amount)
     }
 
     #[private]
@@ -64,19 +62,13 @@ impl StakeActionCallbacks for Contract {
         account_id: AccountId,
         amount: YoctoNear,
         stake_token_amount: TokenAmount,
-        total_staked_balance: YoctoNear,
     ) -> StakeAccountBalances {
-        Self::staking_pool().ops_unstake_finalize(
-            account_id,
-            amount,
-            stake_token_amount,
-            total_staked_balance,
-        )
+        Self::staking_pool().ops_unstake_finalize(account_id, amount, stake_token_amount)
     }
 
     #[private]
-    fn ops_stake_start_finalize(&mut self, total_staked_balance: YoctoNear) {
-        Self::staking_pool().ops_stake_start_finalize(total_staked_balance);
+    fn ops_stake_start_finalize(&mut self) {
+        Self::staking_pool().ops_stake_start_finalize();
     }
 
     #[private]
@@ -89,10 +81,6 @@ impl StakeActionCallbacks for Contract {
 impl StakingPoolOperator for Contract {
     fn ops_stake_operator_command(&mut self, command: StakingPoolOperatorCommand) {
         Self::staking_pool().ops_stake_operator_command(command);
-    }
-
-    fn ops_stake_callback_gas(&self) -> Gas {
-        Self::staking_pool().ops_stake_callback_gas()
     }
 
     fn ops_stake_state(&self) -> State {
