@@ -35,6 +35,8 @@ use std::{
 pub struct BasisPoints(pub u16);
 
 impl BasisPoints {
+    pub const ZERO: BasisPoints = BasisPoints(0);
+
     pub fn value(&self) -> u16 {
         self.0
     }

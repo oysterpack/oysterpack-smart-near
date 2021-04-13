@@ -889,7 +889,7 @@ impl StakingPoolComponent {
         state.treasury_balance = self.pay_dividend(state.treasury_balance);
 
         // treasury and owner accounts do not get charged staking fees
-        if *state.staking_fee > 0
+        if state.staking_fee > BasisPoints::ZERO
             && account_id != &env::current_account_id()
             && account_id != &ContractOwnershipComponent.ops_owner()
         {
