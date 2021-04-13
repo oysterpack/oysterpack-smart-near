@@ -426,14 +426,7 @@ impl StakingPool for StakingPoolComponent {
     }
 
     fn ops_stake_token_value(&self) -> YoctoNear {
-        let total_staked_balance = *Self::state().total_staked_balance();
-        if total_staked_balance == 0 {
-            YOCTO.into()
-        } else {
-            let value = (total_staked_balance / *self.stake_token.ft_total_supply()).into();
-            // since we are rounding down, we need to make sure that the value of 1 STAKE is at least 1 NEAR
-            std::cmp::max(value, YOCTO.into())
-        }
+        self.stake_near_value_rounded_down(YOCTO.into())
     }
 
     fn ops_stake_status(&self) -> Status {
@@ -864,7 +857,7 @@ impl StakingPoolComponent {
                     treasury_staking_earnings_stake_value,
                 );
                 LOG_EVENT_TREASURY_DIVIDEND.log(format!(
-                    "{} NEAR / {} STAKE",
+                    "{} yoctoNEAR / {} yoctoSTAKE",
                     treasury_staking_earnings, treasury_staking_earnings_stake_value
                 ));
                 return self.stake_near_value_rounded_down(
@@ -2241,7 +2234,7 @@ mod tests {
                     vec![
                         "[INFO] [FT_MINT] account: bob, amount: 999999999999999999999500",
                         "[INFO] [FT_BURN] account: contract.near, amount: 2",
-                        "[INFO] [TREASURY_DIVIDEND] 3 NEAR / 2 STAKE",
+                        "[INFO] [TREASURY_DIVIDEND] 3 yoctoNEAR / 2 yoctoSTAKE",
                         "[INFO] [FT_BURN] account: bob, amount: 7999999999999999999994",
                         "[INFO] [FT_MINT] account: contract.near, amount: 7999999999999999999994",
                     ]
