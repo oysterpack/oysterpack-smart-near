@@ -425,8 +425,8 @@ impl StakingPool for StakingPoolComponent {
             .unwrap()
     }
 
-    fn ops_stake_token_value(&self) -> YoctoNear {
-        self.stake_near_value_rounded_down(YOCTO.into())
+    fn ops_stake_token_value(&self, amount: Option<TokenAmount>) -> YoctoNear {
+        self.stake_near_value_rounded_down(amount.unwrap_or(YOCTO.into()))
     }
 
     fn ops_stake_status(&self) -> Status {
@@ -1136,6 +1136,8 @@ mod tests {
         println!("{}", state_json);
         assert!(!state.status.is_online());
 
+        assert_eq!(staking_pool.ops_stake_token_value(None), YOCTO.into());
+
         // Assert - account has zero STAKE balance to start with
         let account_manager = account_manager();
         assert_eq!(
@@ -1173,6 +1175,7 @@ mod tests {
             } else {
                 panic!("expected value")
             }
+            assert_eq!(staking_pool.ops_stake_token_value(None), YOCTO.into());
             println!("{:#?}", test_utils::get_logs());
         }
 
@@ -1310,6 +1313,7 @@ mod tests {
                 }
 
                 // Assert
+                assert_eq!(staking_pool.ops_stake_token_value(None), YOCTO.into());
                 let state = staking_pool.ops_stake_state();
                 println!(
                     "staked 1000 {}",

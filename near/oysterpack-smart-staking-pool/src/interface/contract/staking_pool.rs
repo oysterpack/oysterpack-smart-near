@@ -1,5 +1,6 @@
 use crate::Status;
 use crate::{StakeAccountBalances, StakingPoolBalances};
+use oysterpack_smart_fungible_token::TokenAmount;
 use oysterpack_smart_near::domain::YoctoNear;
 use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
 use oysterpack_smart_near::near_sdk::PromiseOrValue;
@@ -111,8 +112,9 @@ pub trait StakingPool {
     /// - if there are insufficient funds to fulfill the request
     fn ops_stake_withdraw(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances;
 
-    /// returns the current NEAR value of 1 STAKE token
-    fn ops_stake_token_value(&self) -> YoctoNear;
+    /// returns the current NEAR value for the specified amount
+    /// - if no amount is specified, then the value for 1 STAKE token will be returned
+    fn ops_stake_token_value(&self, amount: Option<TokenAmount>) -> YoctoNear;
 
     fn ops_stake_status(&self) -> Status;
 
