@@ -310,6 +310,8 @@ impl StakingPool for StakingPoolComponent {
             None => (stake_near_value, stake_balance),
             Some(near_amount) => {
                 ERR_INSUFFICIENT_FUNDS.assert(|| stake_near_value >= near_amount);
+                // we round up the number of STAKE tokens to ensure that we never overdraw from the
+                // staked balance - this is more than compensated for by the treasury dividend
                 let stake_token_amount = self.near_stake_value_rounded_up(near_amount);
                 ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE
                     .assert(|| stake_balance >= stake_token_amount);
@@ -362,7 +364,7 @@ impl StakingPool for StakingPoolComponent {
             Some(mut account) => {
                 let (near_amount, stake_token_amount) = {
                     let near = amount.unwrap_or_else(|| account.total());
-                    let (stake, remainder) = self.convert_near_to_stake(near);
+                    let (stake, remainder) = self.near_to_stake(near);
                     let stake_near_value = near - remainder;
                     account.debit_for_restaking(stake_near_value);
                     account.save();
@@ -698,6 +700,85 @@ struct ResumeFinalizeCallbackArgs {
     pub total_staked_balance: YoctoNear,
 }
 
+// staking related methods
+impl StakingPoolComponent {
+    fn stake_account_funds(
+        &mut self,
+        account_id: &str,
+        deposit: YoctoNear, // attached deposit amount
+    ) -> PromiseOrValue<StakeAccountBalances> {
+        let mut account = self
+            .account_manager
+            .registered_account_near_data(&account_id);
+
+        // all of the account's storage available balance will be staked
+        let (near_amount, stake_token_amount) = {
+            let account_storage_available_balance = account
+                .storage_balance(self.account_manager.storage_balance_bounds().min)
+                .available;
+            account.dec_near_balance(account_storage_available_balance);
+
+            let near = account_storage_available_balance + deposit;
+            let (stake, remainder) = self.near_to_stake(near);
+            account.incr_near_balance(remainder);
+            account.save();
+
+            (near - remainder, stake)
+        };
+
+        State::add_liquidity(near_amount);
+        self.stake(account_id, near_amount, stake_token_amount)
+    }
+
+    /// ## Args
+    /// - `near_amount` - new funds that are being staked but pending until the stake action is
+    ///                   confirmed in the callback
+    /// - `stake_token_amount` - the amount of tokens that will be minted in the callback
+    fn stake(
+        &mut self,
+        account_id: &str,
+        near_amount: YoctoNear,
+        stake_token_amount: TokenAmount,
+    ) -> PromiseOrValue<StakeAccountBalances> {
+        if near_amount == YoctoNear::ZERO {
+            // INVARIANT CHECK: if `near_amount` is zero, then `stake_token_amount` should be zero
+            assert_eq!(stake_token_amount, TokenAmount::ZERO);
+            // NOTE: any attached deposit be deposited into the account's storage balance - this, there
+            // is no need to panic
+            LOG_EVENT_NOT_ENOUGH_TO_STAKE.log("");
+            return self.registered_stake_account_balance(account_id);
+        }
+
+        LOG_EVENT_STAKE.log(format!(
+            "near_amount={}, stake_token_amount={}",
+            near_amount, stake_token_amount
+        ));
+        let state = Self::state();
+        match state.status {
+            Status::Online => {
+                State::incr_staked_balance(near_amount);
+                PromiseOrValue::Promise(Self::create_stake_workflow(
+                    *state,
+                    account_id,
+                    near_amount,
+                    stake_token_amount,
+                    "ops_stake_finalize",
+                ))
+            }
+            Status::Offline(_) => {
+                LOG_EVENT_STATUS_OFFLINE.log("");
+                State::incr_total_staked_balance(near_amount);
+                self.pay_dividend_and_apply_staking_fees(
+                    account_id,
+                    near_amount,
+                    stake_token_amount,
+                );
+                self.registered_stake_account_balance(account_id)
+            }
+        }
+    }
+}
+
 impl StakingPoolComponent {
     /// compute how gas this function call requires to complete and give the remainder of the gas to
     /// the callback
@@ -857,91 +938,6 @@ impl StakingPoolComponent {
         account.save();
     }
 
-    fn stake_account_funds(
-        &mut self,
-        account_id: &str,
-        deposit: YoctoNear,
-    ) -> PromiseOrValue<StakeAccountBalances> {
-        let mut account = self
-            .account_manager
-            .registered_account_near_data(&account_id);
-
-        // all of the account's storage available balance will be staked
-        let (near_amount, stake_token_amount) = {
-            let account_storage_available_balance = account
-                .storage_balance(self.account_manager.storage_balance_bounds().min)
-                .available;
-            account.dec_near_balance(account_storage_available_balance);
-
-            let near = account_storage_available_balance + deposit;
-            let (stake, remainder) = self.convert_near_to_stake(near);
-            account.incr_near_balance(remainder);
-            account.save();
-
-            (near - remainder, stake)
-        };
-
-        State::add_liquidity(near_amount);
-        self.stake(account_id, near_amount, stake_token_amount)
-    }
-
-    fn stake(
-        &mut self,
-        account_id: &str,
-        near_amount: YoctoNear,
-        stake_token_amount: TokenAmount,
-    ) -> PromiseOrValue<StakeAccountBalances> {
-        if near_amount == YoctoNear::ZERO {
-            // INVARIANT CHECK: if `near_amount` is zero, then `stake_token_amount` should be zero
-            assert_eq!(stake_token_amount, TokenAmount::ZERO);
-            LOG_EVENT_NOT_ENOUGH_TO_STAKE.log("");
-            return self.registered_stake_account_balance(account_id);
-        }
-
-        let state = Self::state();
-        LOG_EVENT_STAKE.log(format!(
-            "near_amount={}, stake_token_amount={}",
-            near_amount, stake_token_amount
-        ));
-        match state.status {
-            Status::Online => {
-                State::incr_staked_balance(near_amount);
-
-                PromiseOrValue::Promise(Self::stake_funds(
-                    *state,
-                    account_id,
-                    near_amount,
-                    stake_token_amount,
-                ))
-            }
-            Status::Offline(_) => {
-                LOG_EVENT_STATUS_OFFLINE.log("");
-                State::incr_total_staked_balance(near_amount);
-                self.pay_dividend_and_apply_staking_fees(
-                    account_id,
-                    near_amount,
-                    stake_token_amount,
-                );
-                self.registered_stake_account_balance(account_id)
-            }
-        }
-    }
-
-    fn stake_funds(
-        state: State,
-        account_id: &str,
-        amount: YoctoNear,
-        stake_token_amount: TokenAmount,
-    ) -> Promise {
-        Self::create_stake_workflow(
-            state,
-            account_id,
-            amount,
-            stake_token_amount,
-            "ops_stake_finalize",
-        )
-    }
-
     fn unstake_funds(
         state: State,
         account_id: &str,
@@ -1001,15 +997,15 @@ impl StakingPoolComponent {
     /// ## Notes
     /// because of rounding down we need to convert the STAKE value back to NEAR, which ensures that
     /// the account will not be short changed when they unstake
-    fn convert_near_to_stake(&self, amount: YoctoNear) -> (TokenAmount, YoctoNear) {
+    fn near_to_stake(&self, amount: YoctoNear) -> (TokenAmount, YoctoNear) {
         let stake = self.near_stake_value_rounded_down(amount);
         let stake_near_value = self.stake_near_value_rounded_down(stake);
         (stake, amount - stake_near_value)
     }
 
     fn near_stake_value_rounded_down(&self, amount: YoctoNear) -> TokenAmount {
-        if *amount == 0 {
-            return 0.into();
+        if amount == YoctoNear::ZERO {
+            return TokenAmount::ZERO;
         }
 
         let total_staked_balance = *Self::state().total_staked_balance();
@@ -1024,8 +1020,8 @@ impl StakingPoolComponent {
     }
 
     fn near_stake_value_rounded_up(&self, amount: YoctoNear) -> TokenAmount {
-        if *amount == 0 {
-            return 0.into();
+        if amount == YoctoNear::ZERO {
+            return TokenAmount::ZERO;
         }
 
         let total_staked_balance = *Self::state().total_staked_balance();
@@ -1562,7 +1558,7 @@ mod tests {
 
         #[test]
         fn not_enough_to_stake() {
-            let (ctx, mut staking_pool) = deploy(OWNER, ADMIN, ACCOUNT, true);
+            let (ctx, mut staking_pool) = deploy_with_registered_account();
 
             // Arrange
             bring_pool_online(ctx.clone(), &mut staking_pool);
@@ -1577,6 +1573,7 @@ mod tests {
 
                 ContractNearBalances::set_balance(State::STAKED_BALANCE, total_staked_balance);
             }
+
             let mut ctx = ctx.clone();
             ctx.predecessor_account_id = ACCOUNT.to_string();
             ctx.attached_deposit = 1;
