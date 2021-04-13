@@ -4,7 +4,6 @@ use oysterpack_smart_near::domain::{EpochHeight, YoctoNear};
 use oysterpack_smart_near::near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
-    serde::{Deserialize, Serialize},
 };
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -13,10 +12,7 @@ use std::collections::BTreeMap;
 /// https://github.com/near/nearcore/blob/037954e087fd5c8a65598ede502495530c73f835/chain/epoch_manager/src/lib.rs#L815
 const EPOCHS_LOCKED: usize = 4;
 
-#[derive(
-    BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Default,
-)]
-#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
+#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, Copy, PartialEq, Default)]
 pub struct UnstakedBalances {
     available: YoctoNear,
     locked: [Option<(EpochHeight, YoctoNear)>; EPOCHS_LOCKED],
@@ -54,7 +50,7 @@ impl UnstakedBalances {
         }
     }
 
-    pub fn unlock(&mut self) {
+    pub(crate) fn unlock(&mut self) {
         let current_epoch: EpochHeight = env::epoch_height().into();
 
         for i in 0..EPOCHS_LOCKED {
@@ -96,7 +92,7 @@ impl UnstakedBalances {
     }
 
     /// adds the unstaked balance and locks it up for 4 epochs
-    pub fn credit_unstaked(&mut self, amount: YoctoNear) {
+    pub(crate) fn credit_unstaked(&mut self, amount: YoctoNear) {
         self.unlock();
         let available_on: EpochHeight = (env::epoch_height() + EPOCHS_LOCKED as u64).into();
         for i in 0..EPOCHS_LOCKED {
@@ -141,13 +137,13 @@ impl UnstakedBalances {
     ///
     /// ## Panics
     /// if there are insufficient funds
-    pub fn debit_available_balance(&mut self, amount: YoctoNear) {
+    pub(crate) fn debit_available_balance(&mut self, amount: YoctoNear) {
         self.apply_liquidity();
         ERR_INSUFFICIENT_FUNDS.assert(|| self.available >= amount);
         self.available -= amount;
     }
 
-    pub fn debit_for_restaking(&mut self, amount: YoctoNear) {
+    pub(crate) fn debit_for_restaking(&mut self, amount: YoctoNear) {
         let total = self.total();
         ERR_INSUFFICIENT_FUNDS.assert(|| total >= amount);
 

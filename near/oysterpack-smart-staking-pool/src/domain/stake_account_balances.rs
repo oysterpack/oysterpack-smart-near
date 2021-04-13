@@ -8,8 +8,10 @@ use std::collections::BTreeMap;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 #[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct StakeAccountBalances {
+    /// account storage available balance will be staked
     pub storage_balance: StorageBalance,
     pub staked: Option<StakedBalance>,
+    // unstaked funds that are pending withdrawal
     pub unstaked: Option<UnstakedBalance>,
 }
 

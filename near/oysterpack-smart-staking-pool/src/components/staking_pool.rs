@@ -17,13 +17,14 @@ use oysterpack_smart_contract::{
 use oysterpack_smart_fungible_token::{
     components::fungible_token::FungibleTokenComponent, FungibleToken, TokenAmount, TokenService,
 };
-use oysterpack_smart_near::asserts::ERR_NEAR_DEPOSIT_REQUIRED;
-use oysterpack_smart_near::domain::{BasisPoints, ByteLen};
 use oysterpack_smart_near::{
-    asserts::{ERR_ILLEGAL_STATE, ERR_INSUFFICIENT_FUNDS, ERR_INVALID},
+    asserts::{ERR_ILLEGAL_STATE, ERR_INSUFFICIENT_FUNDS, ERR_INVALID, ERR_NEAR_DEPOSIT_REQUIRED},
     component::{Component, ComponentState, Deploy},
     data::numbers::U256,
-    domain::{ActionType, Gas, PublicKey, SenderIsReceiver, TransactionResource, YoctoNear},
+    domain::{
+        ActionType, BasisPoints, ByteLen, Gas, PublicKey, SenderIsReceiver, TransactionResource,
+        YoctoNear,
+    },
     json_function_callback,
     near_sdk::{
         borsh::{self, BorshDeserialize, BorshSerialize},
@@ -37,7 +38,6 @@ use oysterpack_smart_near::{
 use std::cmp::min;
 
 pub type StakeAccountData = UnstakedBalances;
-
 pub type AccountManager = AccountManagementComponent<StakeAccountData>;
 pub type StakeFungibleToken = FungibleTokenComponent<StakeAccountData>;
 
@@ -76,9 +76,7 @@ impl Component for StakingPoolComponent {
 pub struct State {
     /// validator public key used for staking
     pub stake_public_key: PublicKey,
-
     pub status: Status,
-
     pub staking_fee: BasisPoints,
 
     /// NEAR deposited into the treasury is staked and stake earnings are used to boost the
@@ -90,27 +88,30 @@ pub struct State {
 }
 
 impl State {
-    /// used to temporarily store the staked NEAR balance under the following circumstances:
-    /// - when the stake action fails, the contract will unstake all and move the locked balance to
-    ///   this balance
-    /// - when the staking pool is paused by the operator
-    ///
-    /// This is needed to compute the STAKE token NEAR value. It basically locks in the STAKE NEAR value
-    /// while the staking pool is offline. Once the staking pool goes back on line, then the balance is
-    /// staked and this balance is cleared.
     pub const TOTAL_STAKED_BALANCE: BalanceId = BalanceId(1955270816453372906764299513102112489);
-    // tracks how funds have been staked and unstaked and pending the stake action
+    /// tracks pending staked funds - if the balance is > 0, it means the stake action has been
+    /// but has not yet been finalized by the callback
     pub const STAKED_BALANCE: BalanceId = BalanceId(1956222035569770585105442079419123289);
+    /// tracks pending unstaked funds - if the balance is > 0, it means the stake action has been
+    /// but has not yet been finalized by the callback
     pub const UNSTAKED_BALANCE: BalanceId = BalanceId(1956222069432890001326139573174433605);
 
     /// unstaked funds are locked for 4 epochs
     /// - we need to track unstaked funds that is owned by accounts separate from the account NEAR balances
-    /// - accounts will need to withdraw unstaked balances against this balance
+    /// - accounts will need to withdraw unstaked balances against this balance in combination with
+    /// [`Self::UNSTAKED_LIQUIDITY_POOL`]
     pub const TOTAL_UNSTAKED_BALANCE: BalanceId = BalanceId(1955705469859818043123742456310621056);
-
+    /// provides liquidity for withdrawing unstaked funds that are still locked
+    /// - liquidity is added automatically when funds are staked and there are unstaked funds pending
+    ///   withdrawal
+    /// - when liquidity is added, funds are debited from [`Self::TOTAL_UNSTAKED_BALANCE`] and credited
+    ///   to this balance
     pub const UNSTAKED_LIQUIDITY_POOL: BalanceId = BalanceId(1955784487678443851622222785149485288);
 
-    fn total_staked_balance(self) -> YoctoNear {
+    /// when online, the total staked balance will automatically update, i.e., sync up with the
+    /// account's locked balance, when all pending stake actions have been finalized - this will
+    /// pick up any staking rewards
+    fn total_staked_balance(&self) -> YoctoNear {
         match self.status {
             Status::Online => {
                 // if there are no stake actions in flight, then resync the total staked balance
@@ -141,10 +142,16 @@ impl State {
         ContractNearBalances::set_balance(State::TOTAL_STAKED_BALANCE, amount);
     }
 
+    pub fn total_unstaked_balance() -> YoctoNear {
+        ContractNearBalances::near_balance(Self::TOTAL_UNSTAKED_BALANCE)
+    }
+
     fn incr_total_unstaked_balance(amount: YoctoNear) {
         ContractNearBalances::incr_balance(Self::TOTAL_UNSTAKED_BALANCE, amount);
     }
 
+    /// first tries to apply the debit against [`Self::UNSTAKED_LIQUIDITY_POOL`] and then against
+    /// [`Self::TOTAL_UNSTAKED_BALANCE`]
     fn decr_total_unstaked_balance(mut amount: YoctoNear) {
         let liquidity = Self::liquidity();
         if liquidity > YoctoNear::ZERO {
@@ -166,7 +173,8 @@ impl State {
         }
     }
 
-    /// If there are unstaked balances, then transfer the specified amount to the liquidity pool
+    /// If there are unstaked funds awaiting withdrawal, then transfer the specified amount to the
+    /// liquidity pool
     fn add_liquidity(amount: YoctoNear) {
         if amount == YoctoNear::ZERO {
             return;
@@ -184,10 +192,6 @@ impl State {
 
     pub fn liquidity() -> YoctoNear {
         ContractNearBalances::near_balance(Self::UNSTAKED_LIQUIDITY_POOL)
-    }
-
-    pub fn total_unstaked_balance() -> YoctoNear {
-        ContractNearBalances::near_balance(Self::TOTAL_UNSTAKED_BALANCE)
     }
 
     pub fn staked_balance() -> YoctoNear {
@@ -226,11 +230,15 @@ impl State {
 impl Deploy for StakingPoolComponent {
     type Config = StakingPoolComponentConfig;
 
+    /// default settings:
+    /// - staking fee = 80 BPS (0.8%)
+    /// - the staking pool is deployed as stopped, i.e., in order to start staking, the pool will
+    ///   need to be explicitly started after deployment
     fn deploy(config: Self::Config) {
         let state = State {
             stake_public_key: config.stake_public_key,
             status: Status::Offline(OfflineReason::Stopped),
-            staking_fee: 80.into(),
+            staking_fee: config.staking_fee.unwrap_or(80.into()),
             treasury_balance: YoctoNear::ZERO,
         };
         let state = Self::new_state(state);
@@ -244,8 +252,13 @@ impl Deploy for StakingPoolComponent {
     }
 }
 
+#[derive(
+    BorshSerialize, BorshDeserialize, Serialize, Deserialize, Debug, Clone, Copy, PartialEq,
+)]
+#[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct StakingPoolComponentConfig {
     pub stake_public_key: PublicKey,
+    pub staking_fee: Option<BasisPoints>,
 }
 
 impl StakingPool for StakingPoolComponent {
@@ -253,9 +266,9 @@ impl StakingPool for StakingPoolComponent {
         self.account_manager
             .storage_balance_of(account_id.clone())
             .map(|storage_balance| {
-                let stake_token_balance = {
+                let staked = {
                     let token_balance = self.stake_token.ft_balance_of(account_id.clone());
-                    if *token_balance == 0 {
+                    if token_balance == TokenAmount::ZERO {
                         None
                     } else {
                         Some(StakedBalance {
@@ -265,14 +278,15 @@ impl StakingPool for StakingPoolComponent {
                     }
                 };
 
-                let data = self
+                let unstaked = self
                     .account_manager
                     .load_account_data(account_id.as_ref())
                     .map(|data| (**data).into());
+
                 StakeAccountBalances {
                     storage_balance,
-                    staked: stake_token_balance,
-                    unstaked: data,
+                    staked,
+                    unstaked,
                 }
             })
     }
@@ -1107,6 +1121,7 @@ mod tests {
 
         StakingPoolComponent::deploy(StakingPoolComponentConfig {
             stake_public_key: staking_public_key(),
+            staking_fee: None,
         });
         assert!(AccountNearDataObject::exists(env::current_account_id().as_str()),
                 "staking pool deployment should have registered an account for itself to serve as the treasury");
