@@ -397,6 +397,7 @@ impl StakingPool for StakingPoolComponent {
         }
 
         match amount {
+            // withdraw all available
             None => {
                 if let Some(mut unstaked_balances) =
                     self.account_manager.load_account_data(&account_id)
@@ -410,13 +411,12 @@ impl StakingPool for StakingPoolComponent {
             }
             Some(amount) => {
                 ERR_INVALID.assert(|| amount > YoctoNear::ZERO, || "amount must be > 0");
-                if let Some(mut unstaked_balances) =
-                    self.account_manager.load_account_data(&account_id)
-                {
-                    unstaked_balances.apply_liquidity();
-                    debit_available_balance(unstaked_balances, amount);
-                } else {
-                    ERR_INSUFFICIENT_FUNDS.panic();
+                match self.account_manager.load_account_data(&account_id) {
+                    Some(mut unstaked_balances) => {
+                        unstaked_balances.apply_liquidity();
+                        debit_available_balance(unstaked_balances, amount);
+                    }
+                    None => ERR_INSUFFICIENT_FUNDS.panic(),
                 }
             }
         }
