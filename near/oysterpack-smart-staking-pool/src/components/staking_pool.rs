@@ -475,13 +475,17 @@ impl StakingPoolComponent {
 
             // unstake all
             {
-                let total_staked_balance =
+                let unstaked_balance = State::unstaked_balance();
+                State::set_total_staked_balance(
                     ContractNearBalances::near_balance(State::TOTAL_STAKED_BALANCE)
                         + State::staked_balance()
-                        - State::unstaked_balance();
-                State::set_total_staked_balance(total_staked_balance);
+                        - unstaked_balance,
+                );
+                State::incr_total_unstaked_balance(unstaked_balance);
+
                 State::clear_staked_balance();
                 State::clear_unstaked_balance();
+
                 if env::account_locked_balance() > 0 {
                     Promise::new(env::current_account_id())
                         .stake(0, state.stake_public_key.into())
@@ -577,13 +581,10 @@ impl StakeActionCallbacks for StakingPoolComponent {
         amount: YoctoNear,
         stake_token_amount: TokenAmount,
     ) -> StakeAccountBalances {
-        if Self::state().status.is_online() {
-            if Self::handle_stake_action_result() {
-                // NOTE: if the stake action failed, then the staking pool would have been taken
-                // offline and the staked balance would have been cleared
-                State::decr_staked_balance(amount);
-            }
+        if Self::state().status.is_online() && Self::handle_stake_action_result() {
+            State::decr_staked_balance(amount);
         }
+
         self.pay_dividend_and_apply_staking_fees(&account_id, amount, stake_token_amount);
         self.ops_stake_balance(to_valid_account_id(&account_id))
             .unwrap()
@@ -596,10 +597,8 @@ impl StakeActionCallbacks for StakingPoolComponent {
         stake_token_amount: TokenAmount,
     ) -> StakeAccountBalances {
         // update state
-        {
-            if Self::handle_stake_action_result() && Self::state().status.is_online() {
-                State::decr_unstaked_balance(amount);
-            }
+        if Self::state().status.is_online() && Self::handle_stake_action_result() {
+            State::decr_unstaked_balance(amount);
             State::incr_total_unstaked_balance(amount);
         }
         // update account balances
