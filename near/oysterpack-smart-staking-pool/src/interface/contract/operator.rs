@@ -1,5 +1,5 @@
 use crate::components::staking_pool::State;
-use oysterpack_smart_near::domain::{BasisPoints, Gas, PublicKey};
+use oysterpack_smart_near::domain::{BasisPoints, PublicKey};
 use oysterpack_smart_near::near_sdk::serde::{Deserialize, Serialize};
 
 /// # **Contract Interface**: Staking Pool Operator API
@@ -11,9 +11,6 @@ pub trait StakingPoolOperator {
     /// - if predecessor account is not authorized - requires operator permission
     fn ops_stake_operator_command(&mut self, command: StakingPoolOperatorCommand);
 
-    /// returns the amount of gas that will be allotted for the stake callbacks
-    fn ops_stake_callback_gas(&self) -> Gas;
-
     fn ops_stake_state(&self) -> State;
 }
 
@@ -22,9 +19,6 @@ pub trait StakingPoolOperator {
 pub enum StakingPoolOperatorCommand {
     StopStaking,
     StartStaking,
-
-    SetStakeCallbackGas(Gas),
-    ResetStakeCallbackGas,
 
     /// the staking pool public key can only be changed while the staking pool is paused
     UpdatePublicKey(PublicKey),

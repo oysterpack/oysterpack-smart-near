@@ -18,7 +18,7 @@ use oysterpack_smart_fungible_token::{
     components::fungible_token::FungibleTokenComponent, FungibleToken, TokenAmount, TokenService,
 };
 use oysterpack_smart_near::asserts::ERR_NEAR_DEPOSIT_REQUIRED;
-use oysterpack_smart_near::domain::BasisPoints;
+use oysterpack_smart_near::domain::{BasisPoints, ByteLen};
 use oysterpack_smart_near::{
     asserts::{ERR_ILLEGAL_STATE, ERR_INSUFFICIENT_FUNDS, ERR_INVALID},
     component::{Component, ComponentState, Deploy},
@@ -79,8 +79,6 @@ pub struct State {
 
     pub status: Status,
 
-    // used to override the built in computed gas amount
-    pub callback_gas: Option<Gas>,
     pub staking_fee: BasisPoints,
 
     /// NEAR deposited into the treasury is staked and stake earnings are used to boost the
@@ -111,25 +109,6 @@ impl State {
     pub const TOTAL_UNSTAKED_BALANCE: BalanceId = BalanceId(1955705469859818043123742456310621056);
 
     pub const UNSTAKED_LIQUIDITY_POOL: BalanceId = BalanceId(1955784487678443851622222785149485288);
-
-    pub fn callback_gas(&self) -> Gas {
-        self.callback_gas.unwrap_or_else(Self::min_callback_gas)
-    }
-
-    fn min_callback_gas() -> Gas {
-        {
-            Gas::compute(vec![
-                (
-                    TransactionResource::ActionReceipt(SenderIsReceiver(false)),
-                    1,
-                ),
-                (
-                    TransactionResource::Action(ActionType::Stake(SenderIsReceiver(false))),
-                    1,
-                ),
-            ]) + TERA.into()
-        }
-    }
 
     fn total_staked_balance(self) -> YoctoNear {
         match self.status {
@@ -251,7 +230,6 @@ impl Deploy for StakingPoolComponent {
         let state = State {
             stake_public_key: config.stake_public_key,
             status: Status::Offline(OfflineReason::Stopped),
-            callback_gas: None,
             staking_fee: 80.into(),
             treasury_balance: YoctoNear::ZERO,
         };
@@ -456,19 +434,11 @@ impl StakingPoolOperator for StakingPoolComponent {
         match command {
             StakingPoolOperatorCommand::StopStaking => Self::stop_staking(OfflineReason::Stopped),
             StakingPoolOperatorCommand::StartStaking => Self::start_staking(),
-            StakingPoolOperatorCommand::SetStakeCallbackGas(gas) => {
-                Self::set_stake_callback_gas(gas)
-            }
-            StakingPoolOperatorCommand::ResetStakeCallbackGas => Self::reset_stake_callback_gas(),
             StakingPoolOperatorCommand::UpdatePublicKey(public_key) => {
                 Self::update_public_key(public_key)
             }
             StakingPoolOperatorCommand::UpdateStakingFee(fee) => Self::update_staking_fee(fee),
         }
-    }
-
-    fn ops_stake_callback_gas(&self) -> Gas {
-        Self::state().callback_gas()
     }
 
     fn ops_stake_state(&self) -> State {
@@ -502,7 +472,7 @@ impl StakingPoolComponent {
                             "ops_stake_stop_finalize",
                             Option::<()>::None,
                             YoctoNear::ZERO,
-                            state.callback_gas(),
+                            Self::callback_gas(),
                         ));
                 }
             }
@@ -534,28 +504,11 @@ impl StakingPoolComponent {
                             "ops_stake_start_finalize",
                             Option::<()>::None,
                             YoctoNear::ZERO,
-                            state.callback_gas(),
+                            Self::callback_gas(),
                         ));
                 }
             }
         }
-    }
-
-    fn set_stake_callback_gas(gas: Gas) {
-        let min_callback_gas = State::min_callback_gas();
-        ERR_INVALID.assert(
-            || gas >= min_callback_gas,
-            || format!("minimum callback gas required is: {}", min_callback_gas),
-        );
-        let mut state = Self::state();
-        state.callback_gas = Some(gas);
-        state.save();
-    }
-
-    fn reset_stake_callback_gas() {
-        let mut state = Self::state();
-        state.callback_gas = None;
-        state.save();
     }
 
     fn update_public_key(public_key: PublicKey) {
@@ -727,6 +680,62 @@ struct ResumeFinalizeCallbackArgs {
 }
 
 impl StakingPoolComponent {
+    /// compute how gas this function call requires to complete and give the remainder of the gas to
+    /// the callback
+    fn callback_gas() -> Gas {
+        let transaction_gas_fees = Gas::compute(vec![
+            (
+                TransactionResource::ActionReceipt(SenderIsReceiver(true)),
+                2, // stake + callback
+            ),
+            (
+                TransactionResource::Action(ActionType::Stake(SenderIsReceiver(true))),
+                1,
+            ),
+            (
+                TransactionResource::Action(ActionType::FunctionCall(
+                    SenderIsReceiver(true),
+                    ByteLen(512),
+                )),
+                1,
+            ),
+            (
+                TransactionResource::DataReceipt(SenderIsReceiver(true), ByteLen(0)),
+                1,
+            ),
+        ]);
+
+        const GAS_REQUIRED_TO_COMPLETE_THIS_CALL: u64 = 5 * TERA;
+        let gas = (env::prepaid_gas()
+            - env::used_gas()
+            - *transaction_gas_fees
+            - GAS_REQUIRED_TO_COMPLETE_THIS_CALL)
+            .into();
+
+        let min_callback_gas = Self::min_callback_gas();
+        ERR_INVALID.assert(
+            || gas >= min_callback_gas,
+            || {
+                let shortfall = gas - min_callback_gas;
+                format!(
+                    "not enough gas was attached - {} more gas is needed for callback",
+                    shortfall
+                )
+            },
+        );
+        gas
+    }
+
+    // TODO: check actual gas usage on deployed contract
+    fn min_callback_gas() -> Gas {
+        const COMPUTE: Gas = Gas(5 * TERA);
+        const RECEIPT: TransactionResource =
+            TransactionResource::ActionReceipt(SenderIsReceiver(true));
+        const STAKE_ACTION: TransactionResource =
+            TransactionResource::Action(ActionType::Stake(SenderIsReceiver(true)));
+        Gas::compute(vec![(RECEIPT, 1), (STAKE_ACTION, 1)]) + COMPUTE
+    }
+
     fn treasurer_permission(&self) -> Permission {
         self.account_manager
             .permission_by_name(PERMISSION_TREASURER)
@@ -945,7 +954,7 @@ impl StakingPoolComponent {
                 stake_token_amount,
             }),
             YoctoNear::ZERO,
-            state.callback_gas(),
+            Self::callback_gas(),
         );
         stake.then(finalize)
     }
@@ -1166,6 +1175,7 @@ mod tests {
             } else {
                 panic!("expected value")
             }
+            println!("{:#?}", test_utils::get_logs());
         }
 
         // Act - bring the pool online
@@ -1214,7 +1224,6 @@ mod tests {
                         assert_eq!(action.method_name, "ops_stake_start_finalize");
                         assert!(action.args.is_empty());
                         assert_eq!(action.deposit, 0);
-                        assert_eq!(action.gas, *staking_pool.ops_stake_callback_gas());
                     }
                     _ => panic!("expected FunctionCall"),
                 }
@@ -2207,6 +2216,7 @@ mod tests {
                 ctx.predecessor_account_id = ACCOUNT.to_string();
                 ctx.account_locked_balance = *state.total_staked_balance();
                 testing_env_with_promise_result_failure(ctx);
+                println!("**** finalizing ...");
                 let balances = staking_pool.ops_stake_finalize(
                     ACCOUNT.to_string(),
                     YOCTO.into(),
@@ -4139,12 +4149,8 @@ mod tests {
             let (ctx, mut staking_pool) = deploy_with_unregistered_account();
             bring_pool_online(ctx.clone(), &mut staking_pool);
 
-            let mut ctx = ctx.clone();
-            ctx.predecessor_account_id = OWNER.to_string();
-            testing_env!(ctx);
-
             let initial_owner_balance = ContractOwnershipComponent.ops_owner_balance();
-            println!("initial {:?}", initial_owner_balance);
+            println!("initial {:#?}", initial_owner_balance);
 
             let initial_staking_pool_balances = staking_pool.ops_stake_pool_balances();
             println!(
@@ -4158,48 +4164,61 @@ mod tests {
                 serde_json::to_string_pretty(&state).unwrap()
             );
 
-            // Act
-            if let PromiseOrValue::Value(_) =
-                staking_pool.ops_stake_owner_balance(Some(YOCTO.into()))
+            let owner_balance = {
+                let mut ctx = ctx.clone();
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                // Act
+                if let PromiseOrValue::Value(_) =
+                    staking_pool.ops_stake_owner_balance(Some(YOCTO.into()))
+                {
+                    panic!("expected Promise");
+                }
+
+                let owner_balance = ContractOwnershipComponent.ops_owner_balance();
+                println!("after staking {:#?}", owner_balance);
+                println!("{:#?}", StakingPoolBalances::load());
+
+                // Assert
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+
+                let receipts = deserialize_receipts();
+                let action = &receipts[0].actions[0];
+                if let Action::Stake(stake) = action {
+                    assert_eq!(stake.stake, *State::staked_balance());
+                } else {
+                    panic!("expected stake action")
+                }
+
+                let action = &receipts[1].actions[0];
+                if let Action::FunctionCall(function_call) = action {
+                    assert_eq!(function_call.method_name, "ops_stake_finalize");
+                    let args: StakeActionCallbackArgs =
+                        serde_json::from_str(function_call.args.as_str()).unwrap();
+                    assert_eq!(args.account_id, ContractOwnershipComponent.ops_owner());
+                } else {
+                    panic!("expected stake action")
+                }
+                owner_balance
+            };
+
             {
-                panic!("expected Promise");
-            }
+                let mut ctx = ctx.clone();
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
 
-            let owner_balance = ContractOwnershipComponent.ops_owner_balance();
-            println!("after staking {:#?}", owner_balance);
-            println!("{:#?}", StakingPoolBalances::load());
-            assert!(
-                owner_balance.available
-                    < initial_owner_balance.available
-                        - YOCTO
-                        - account_manager()
-                            .storage_balance_of(to_valid_account_id(
-                                ContractOwnershipComponent.ops_owner().as_str()
-                            ))
-                            .unwrap()
-                            .total
-            );
-
-            // Assert
-            let logs = test_utils::get_logs();
-            println!("{:#?}", logs);
-
-            let receipts = deserialize_receipts();
-            let action = &receipts[0].actions[0];
-            if let Action::Stake(stake) = action {
-                assert_eq!(stake.stake, *State::staked_balance());
-            } else {
-                panic!("expected stake action")
-            }
-
-            let action = &receipts[1].actions[0];
-            if let Action::FunctionCall(function_call) = action {
-                assert_eq!(function_call.method_name, "ops_stake_finalize");
-                let args: StakeActionCallbackArgs =
-                    serde_json::from_str(function_call.args.as_str()).unwrap();
-                assert_eq!(args.account_id, ContractOwnershipComponent.ops_owner());
-            } else {
-                panic!("expected stake action")
+                let expected_lower_than = initial_owner_balance.available
+                    - YOCTO
+                    - account_manager()
+                        .storage_balance_of(to_valid_account_id(
+                            ContractOwnershipComponent.ops_owner().as_str(),
+                        ))
+                        .unwrap()
+                        .total;
+                println!("*** expected_lower_than = {}", expected_lower_than);
+                assert!(owner_balance.available < expected_lower_than);
             }
         }
 
@@ -5286,5 +5305,29 @@ mod tests {
                 }
             }
         }
+
+        //     #[cfg(test)]
+        //     mod callback_gas_commands {
+        //         use super::*;
+        //
+        //         #[test]
+        //         fn set_callback_gas() {
+        //             let (ctx, mut staking_pool) = deploy_with_registered_account();
+        //
+        //             // grant account operator permission
+        //             {
+        //                 let mut ctx = ctx.clone();
+        //                 ctx.predecessor_account_id = ADMIN.to_string();
+        //                 testing_env!(ctx);
+        //                 account_manager().ops_permissions_grant_operator(to_valid_account_id(ACCOUNT));
+        //             }
+        //
+        //             // {
+        //             //     let mut ctx = ctx.clone();
+        //             //     ctx.predecessor_account_id = ADMIN.to_string();
+        //             //     testing_env!(ctx);
+        //             // }
+        //         }
+        //     }
     }
 }

@@ -124,12 +124,6 @@ impl Gas {
     }
 }
 
-impl From<TGas> for Gas {
-    fn from(gas: TGas) -> Self {
-        Self(gas.value() * TERA)
-    }
-}
-
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum TransactionResource {
     ActionReceipt(SenderIsReceiver),
@@ -159,6 +153,12 @@ pub struct ByteLen(pub u64);
 pub enum AccessKeyType {
     FullAccess,
     FunctionCall,
+}
+
+impl From<TGas> for Gas {
+    fn from(gas: TGas) -> Self {
+        Self(gas.0 * TERA)
+    }
 }
 
 impl From<u64> for Gas {
@@ -209,6 +209,34 @@ impl SubAssign<Gas> for Gas {
     }
 }
 
+impl Add<TGas> for Gas {
+    type Output = Self;
+
+    fn add(self, rhs: TGas) -> Self::Output {
+        self + Gas::from(rhs)
+    }
+}
+
+impl AddAssign<TGas> for Gas {
+    fn add_assign(&mut self, rhs: TGas) {
+        *self += Gas::from(rhs)
+    }
+}
+
+impl Sub<TGas> for Gas {
+    type Output = Self;
+
+    fn sub(self, rhs: TGas) -> Self::Output {
+        self - Gas::from(rhs)
+    }
+}
+
+impl SubAssign<TGas> for Gas {
+    fn sub_assign(&mut self, rhs: TGas) {
+        *self -= Gas::from(rhs)
+    }
+}
+
 impl Display for Gas {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
@@ -230,13 +258,13 @@ impl<'de> Deserialize<'de> for Gas {
     where
         D: Deserializer<'de>,
     {
-        deserializer.deserialize_str(YoctoNearVisitor)
+        deserializer.deserialize_str(GasVisitor)
     }
 }
 
-struct YoctoNearVisitor;
+struct GasVisitor;
 
-impl<'de> Visitor<'de> for YoctoNearVisitor {
+impl<'de> Visitor<'de> for GasVisitor {
     type Value = Gas;
 
     fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
