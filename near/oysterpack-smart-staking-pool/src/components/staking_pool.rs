@@ -706,20 +706,22 @@ impl StakingPoolComponent {
         ]);
 
         const GAS_REQUIRED_TO_COMPLETE_THIS_CALL: u64 = 5 * TERA;
-        let gas = (env::prepaid_gas()
-            - env::used_gas()
-            - *transaction_gas_fees
-            - GAS_REQUIRED_TO_COMPLETE_THIS_CALL)
+        let gas = (env::prepaid_gas() - env::used_gas())
+            .saturating_sub(*transaction_gas_fees)
+            .saturating_sub(GAS_REQUIRED_TO_COMPLETE_THIS_CALL)
             .into();
 
         let min_callback_gas = Self::min_callback_gas();
         ERR_INVALID.assert(
             || gas >= min_callback_gas,
             || {
-                let shortfall = gas - min_callback_gas;
+                let min_required_gas = *min_callback_gas
+                    + env::used_gas()
+                    + *transaction_gas_fees
+                    + GAS_REQUIRED_TO_COMPLETE_THIS_CALL;
                 format!(
-                    "not enough gas was attached - {} more gas is needed for callback",
-                    shortfall
+                    "not enough gas was attached - min required gas is {} TGas",
+                    min_required_gas / TERA + 1
                 )
             },
         );
@@ -1642,6 +1644,71 @@ mod tests {
 
             assert_eq!(State::liquidity(), (2 * YOCTO).into());
             assert_eq!(State::total_unstaked_balance(), (8 * YOCTO).into());
+        }
+
+        #[test]
+        #[should_panic(
+            expected = "[ERR] [INVALID] not enough gas was attached - min required gas is 27 TGas"
+        )]
+        fn not_enough_gas_attached_to_cover_callback() {
+            let (mut ctx, mut staking_pool) = deploy_with_registered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+
+            let min_callback_gas = StakingPoolComponent::min_callback_gas();
+            println!(
+                "min_callback_gas = {} | {} TGas",
+                min_callback_gas,
+                *min_callback_gas / TERA
+            );
+
+            ctx.prepaid_gas = 300 * TERA;
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx.clone());
+            staking_pool.ops_stake();
+            println!("used gas: {}", env::used_gas());
+            println!("{:#?}", test_utils::get_logs());
+            let receipts = deserialize_receipts();
+            let callback = &receipts[1].actions[0];
+            let callback_gas = {
+                if let Action::FunctionCall(action) = callback {
+                    action.gas
+                } else {
+                    panic!("expected FunctionCall")
+                }
+            };
+
+            let prepaid_gas = (300 * TERA) - callback_gas;
+            println!("prepaid_gas = {}", prepaid_gas);
+            ctx.prepaid_gas = prepaid_gas;
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx);
+            staking_pool.ops_stake();
+        }
+
+        #[test]
+        fn stake_with_min_gas() {
+            let (ctx, mut staking_pool) = deploy_with_registered_account();
+            bring_pool_online(ctx.clone(), &mut staking_pool);
+
+            // very first stake requires an extra TGas to cover for storage allocation
+            let mut ctx = ctx.clone();
+            ctx.prepaid_gas = 28 * TERA;
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx.clone());
+            staking_pool.ops_stake();
+            println!("used gas: {}", env::used_gas());
+            println!("{:#?}", test_utils::get_logs());
+            deserialize_receipts();
+
+            // subsequent stake requires 1 TGas less
+            let mut ctx = ctx.clone();
+            ctx.prepaid_gas = 27 * TERA;
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx.clone());
+            staking_pool.ops_stake();
+            println!("used gas: {}", env::used_gas());
+            println!("{:#?}", test_utils::get_logs());
+            deserialize_receipts();
         }
     }
 
@@ -5305,29 +5372,5 @@ mod tests {
                 }
             }
         }
-
-        //     #[cfg(test)]
-        //     mod callback_gas_commands {
-        //         use super::*;
-        //
-        //         #[test]
-        //         fn set_callback_gas() {
-        //             let (ctx, mut staking_pool) = deploy_with_registered_account();
-        //
-        //             // grant account operator permission
-        //             {
-        //                 let mut ctx = ctx.clone();
-        //                 ctx.predecessor_account_id = ADMIN.to_string();
-        //                 testing_env!(ctx);
-        //                 account_manager().ops_permissions_grant_operator(to_valid_account_id(ACCOUNT));
-        //             }
-        //
-        //             // {
-        //             //     let mut ctx = ctx.clone();
-        //             //     ctx.predecessor_account_id = ADMIN.to_string();
-        //             //     testing_env!(ctx);
-        //             // }
-        //         }
-        //     }
     }
 }
