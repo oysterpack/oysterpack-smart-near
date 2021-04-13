@@ -22,5 +22,6 @@ pub enum StakingPoolOperatorCommand {
 
     /// the staking pool public key can only be changed while the staking pool is offline
     UpdatePublicKey(PublicKey),
+    /// max fee is 1000 BPS (10%)
     UpdateStakingFee(BasisPoints),
 }

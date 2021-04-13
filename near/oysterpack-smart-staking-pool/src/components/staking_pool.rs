@@ -522,6 +522,11 @@ impl StakingPoolComponent {
     }
 
     fn update_staking_fee(fee: BasisPoints) {
+        const MAX_STAKING_FEE: BasisPoints = BasisPoints(1000); // 10%
+        ERR_INVALID.assert(
+            || fee <= MAX_STAKING_FEE,
+            || "max staking fee is 1000 BPS (10%)",
+        );
         let mut state = Self::state();
         state.staking_fee = fee;
         state.save();
@@ -5441,6 +5446,70 @@ mod tests {
                     let key: PublicKey = key[..].try_into().unwrap();
                     staking_pool.ops_stake_operator_command(
                         StakingPoolOperatorCommand::UpdatePublicKey(key),
+                    );
+                }
+            }
+        }
+
+        #[cfg(test)]
+        mod update_staking_fee {
+            use super::*;
+
+            #[test]
+            fn as_operator() {
+                let (ctx, mut staking_pool) = deploy_with_registered_account();
+
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ADMIN.to_string();
+                    testing_env!(ctx.clone());
+                    account_manager().ops_permissions_grant_operator(to_valid_account_id(ACCOUNT));
+                }
+
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    testing_env!(ctx);
+                    staking_pool.ops_stake_operator_command(
+                        StakingPoolOperatorCommand::UpdateStakingFee(100.into()),
+                    );
+                    assert_eq!(staking_pool.ops_stake_state().staking_fee, 100.into());
+                }
+            }
+
+            #[test]
+            #[should_panic(expected = "[ERR] [INVALID] max staking fee is 1000 BPS (10%)")]
+            fn as_operator_above_max() {
+                let (ctx, mut staking_pool) = deploy_with_registered_account();
+
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ADMIN.to_string();
+                    testing_env!(ctx.clone());
+                    account_manager().ops_permissions_grant_operator(to_valid_account_id(ACCOUNT));
+                }
+
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    testing_env!(ctx);
+                    staking_pool.ops_stake_operator_command(
+                        StakingPoolOperatorCommand::UpdateStakingFee(1001.into()),
+                    );
+                }
+            }
+
+            #[test]
+            #[should_panic(expected = "[ERR] [NOT_AUTHORIZED]")]
+            fn not_authorized() {
+                let (ctx, mut staking_pool) = deploy_with_registered_account();
+
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    testing_env!(ctx);
+                    staking_pool.ops_stake_operator_command(
+                        StakingPoolOperatorCommand::UpdateStakingFee(100.into()),
                     );
                 }
             }
