@@ -653,7 +653,7 @@ impl Treasury for StakingPoolComponent {
         self.pay_dividend(state.treasury_balance);
 
         let treasury_account = env::current_account_id();
-        let amount = {
+        let (amount, stake) = {
             let treasury_balance = self
                 .stake_token
                 .ft_balance_of(to_valid_account_id(&treasury_account));
@@ -662,15 +662,16 @@ impl Treasury for StakingPoolComponent {
             }
 
             let treasury_near_balance = self.stake_near_value_rounded_down(treasury_balance);
-            match amount {
+            let amount = match amount {
                 None => treasury_near_balance,
                 Some(amount) => {
                     ERR_INSUFFICIENT_FUNDS.assert(|| treasury_near_balance >= amount);
                     amount
                 }
-            }
+            };
+            let stake = self.near_stake_value_rounded_up(amount);
+            (amount, min(treasury_balance, stake))
         };
-        let stake = self.near_stake_value_rounded_down(amount);
 
         // transfer STAKE from treasury to owner account
         {
