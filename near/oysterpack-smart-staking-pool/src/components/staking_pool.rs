@@ -642,6 +642,13 @@ impl Treasury for StakingPoolComponent {
         self.stake(&env::current_account_id(), deposit, stake)
     }
 
+    fn ops_stake_treasury_distribution(&mut self) {
+        let deposit = YoctoNear::from(env::attached_deposit());
+        ERR_NEAR_DEPOSIT_REQUIRED.assert(|| deposit > YoctoNear::ZERO);
+        State::add_liquidity(deposit);
+        self.stake(&env::current_account_id(), deposit, TokenAmount::ZERO);
+    }
+
     fn ops_stake_treasury_transfer_to_owner(&mut self, amount: Option<YoctoNear>) {
         let owner_account_id = ContractOwnershipComponent.ops_owner();
         ERR_NOT_AUTHORIZED.assert(|| {
@@ -889,13 +896,18 @@ impl StakingPoolComponent {
         stake_token_amount: TokenAmount,
     ) {
         let mut state = Self::state();
-        self.stake_token.ft_mint(&account_id, stake_token_amount);
+        // stake_token_amount will be ZERO if this is a funds distribution
+        // see [`Treasury::ops_stake_treasury_distribution`]
+        if stake_token_amount > TokenAmount::ZERO {
+            self.stake_token.ft_mint(&account_id, stake_token_amount);
+        }
 
         // if treasury received staking rewards, then pay out the dividend
         state.treasury_balance = self.pay_dividend(state.treasury_balance);
 
         // treasury and owner accounts do not get charged staking fees
-        if state.staking_fee > BasisPoints::ZERO
+        if stake_token_amount > TokenAmount::ZERO
+            && state.staking_fee > BasisPoints::ZERO
             && account_id != &env::current_account_id()
             && account_id != &ContractOwnershipComponent.ops_owner()
         {
@@ -2684,7 +2696,7 @@ mod tests {
                     logs,
                     vec![
                         "[INFO] [FT_BURN] account: bob, amount: 2000000000000000000000000",
-                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(117)",
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(116)",
                     ]
                 );
                 assert_eq!(
@@ -2771,7 +2783,7 @@ mod tests {
                         "[ERR] [STAKE_ACTION_FAILED] ",
                         "[WARN] [STATUS_OFFLINE] StakeActionFailed",
                         "[INFO] [FT_BURN] account: bob, amount: 2000000000000000000000000",
-                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(117)",
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(116)",
                     ]
                 );
                 assert_eq!(
@@ -4371,7 +4383,7 @@ mod tests {
                 assert_eq!(owner_balance.available, YoctoNear::ZERO);
                 assert_eq!(
                     balances.staked.unwrap().near_value,
-                    9996920960000000000000000000.into()
+                    9996920990000000000000000000.into()
                 );
 
                 // Assert
@@ -4540,6 +4552,114 @@ mod tests {
                 ctx.attached_deposit = 0;
                 testing_env!(ctx);
                 staking_pool.ops_stake_treasury_deposit();
+            }
+        }
+
+        #[cfg(test)]
+        mod tests_ops_stake_treasury_distribution {
+            use super::*;
+
+            #[test]
+            fn with_attached_deposit() {
+                let (ctx, mut staking_pool) = deploy_with_unregistered_account();
+                bring_pool_online(ctx.clone(), &mut staking_pool);
+
+                let state = *StakingPoolComponent::state();
+                assert_eq!(state.treasury_balance, YoctoNear::ZERO);
+
+                // Act
+                {
+                    let mut ctx = ctx.clone();
+                    ctx.attached_deposit = YOCTO;
+                    testing_env!(ctx);
+                    staking_pool.ops_stake_treasury_distribution();
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+                    let staking_pool_balances = staking_pool.ops_stake_pool_balances();
+                    println!("{:#?}", staking_pool_balances);
+                    assert_eq!(staking_pool_balances.staked, YOCTO.into());
+                    let state = *StakingPoolComponent::state();
+                    println!("{}", serde_json::to_string_pretty(&state).unwrap());
+                    assert_eq!(state.treasury_balance, YoctoNear::ZERO);
+
+                    let treasury_stake_balance =
+                        ft_stake().ft_balance_of(to_valid_account_id(&env::current_account_id()));
+                    assert_eq!(treasury_stake_balance, TokenAmount::ZERO);
+
+                    let receipts = deserialize_receipts();
+                    assert_eq!(receipts.len(), 2);
+                    {
+                        let receipt = &receipts[0];
+                        assert_eq!(receipt.receiver_id, env::current_account_id());
+                        let action = &receipt.actions[0];
+                        match action {
+                            Action::Stake(action) => {
+                                assert_eq!(action.stake, *State::staked_balance());
+                            }
+                            _ => panic!("expected StakeAction"),
+                        }
+                    }
+                    {
+                        let receipt = &receipts[1];
+                        assert_eq!(receipt.receiver_id, env::current_account_id());
+                        let action = &receipt.actions[0];
+                        match action {
+                            Action::FunctionCall(action) => {
+                                let args: StakeActionCallbackArgs =
+                                    serde_json::from_str(&action.args).unwrap();
+                                assert_eq!(args.stake_token_amount, TokenAmount::ZERO);
+                                assert_eq!(args.amount, YOCTO.into());
+                                assert_eq!(args.account_id, env::current_account_id());
+                            }
+                            _ => panic!("expected FunctionCallAction"),
+                        }
+                    }
+                }
+                // finalize the staked treasury deposit
+                {
+                    let staking_pool_balances = staking_pool.ops_stake_pool_balances();
+
+                    let mut ctx = ctx.clone();
+                    ctx.attached_deposit = 0;
+                    ctx.account_locked_balance = *staking_pool_balances.staked;
+                    testing_env_with_promise_result_success(ctx);
+                    let balances = staking_pool.ops_stake_finalize(
+                        env::current_account_id(),
+                        staking_pool_balances.staked,
+                        TokenAmount::ZERO,
+                    );
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+
+                    println!("{:#?}", balances);
+                    assert!(balances.staked.is_none());
+
+                    let treasury_stake_balance =
+                        ft_stake().ft_balance_of(to_valid_account_id(&env::current_account_id()));
+                    assert_eq!(treasury_stake_balance, TokenAmount::ZERO);
+
+                    assert_eq!(
+                        StakingPoolComponent::state().treasury_balance,
+                        YoctoNear::ZERO
+                    );
+
+                    assert_eq!(
+                        StakingPoolComponent::state().total_staked_balance(),
+                        YOCTO.into()
+                    );
+                }
+            }
+
+            #[test]
+            #[should_panic(expected = "[ERR] [NEAR_DEPOSIT_REQUIRED]")]
+            fn with_zero_attached_deposit() {
+                let (ctx, mut staking_pool) = deploy_with_unregistered_account();
+                bring_pool_online(ctx.clone(), &mut staking_pool);
+
+                let mut ctx = ctx.clone();
+                ctx.attached_deposit = 0;
+                testing_env!(ctx);
+                staking_pool.ops_stake_treasury_distribution();
             }
         }
 
@@ -5455,7 +5575,7 @@ mod tests {
                         logs,
                         vec![
                             "[INFO] [FT_BURN] account: admin, amount: 1000000000000000000000000",
-                            "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(117)",
+                            "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(116)",
                         ]
                     );
                     assert_eq!(

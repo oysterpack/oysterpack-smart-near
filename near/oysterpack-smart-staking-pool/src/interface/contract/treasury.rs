@@ -21,6 +21,17 @@ pub trait Treasury {
     /// `#[payable]`
     fn ops_stake_treasury_deposit(&mut self) -> PromiseOrValue<StakeAccountBalances>;
 
+    /// Deposits and stakes any attached deposit, which effectively distributes the funds to all current
+    /// STAKE owners. As a side effect this will also boost the dividend yield.
+    ///
+    /// This enables external sources of revenue to be distributed to STAKE owners.
+    ///
+    /// ## Panics
+    /// if no deposit is attached
+    ///
+    /// `#[payable]`
+    fn ops_stake_treasury_distribution(&mut self);
+
     /// Transfers the specified amount from the treasury to the contract owners account
     /// - if no amount is specified, then the total treasury balance is transferred to the owner's account
     ///
