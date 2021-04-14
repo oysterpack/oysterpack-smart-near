@@ -1,9 +1,10 @@
 use crate::{
-    OfflineReason, StakeAccountBalances, StakeActionCallbacks, StakedBalance, StakingPool,
-    StakingPoolBalances, StakingPoolOperator, StakingPoolOperatorCommand, StakingPoolOwner, Status,
-    Treasury, UnstakedBalances, ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE, ERR_STAKE_ACTION_FAILED,
-    LOG_EVENT_LIQUIDITY, LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE,
-    LOG_EVENT_STATUS_ONLINE, LOG_EVENT_TREASURY_DIVIDEND, LOG_EVENT_UNSTAKE, PERMISSION_TREASURER,
+    OfflineReason, StakeAccountBalances, StakeAccountData, StakeActionCallbacks, StakedBalance,
+    StakingPool, StakingPoolBalances, StakingPoolOperator, StakingPoolOperatorCommand,
+    StakingPoolOwner, Status, Treasury, ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE,
+    ERR_STAKE_ACTION_FAILED, LOG_EVENT_LIQUIDITY, LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE,
+    LOG_EVENT_STATUS_OFFLINE, LOG_EVENT_STATUS_ONLINE, LOG_EVENT_TREASURY_DIVIDEND,
+    LOG_EVENT_UNSTAKE, PERMISSION_TREASURER,
 };
 use oysterpack_smart_account_management::{
     components::account_management::AccountManagementComponent, AccountDataObject,
@@ -37,7 +38,6 @@ use oysterpack_smart_near::{
 };
 use std::cmp::min;
 
-pub type StakeAccountData = UnstakedBalances;
 pub type AccountManager = AccountManagementComponent<StakeAccountData>;
 pub type StakeFungibleToken = FungibleTokenComponent<StakeAccountData>;
 
@@ -281,7 +281,7 @@ impl StakingPool for StakingPoolComponent {
                 let unstaked = self
                     .account_manager
                     .load_account_data(account_id.as_ref())
-                    .map(|data| (**data).into());
+                    .map(|data| data.unstaked_balances.into());
 
                 StakeAccountBalances {
                     storage_balance,
@@ -365,10 +365,12 @@ impl StakingPool for StakingPoolComponent {
             },
             Some(mut account) => {
                 let (near_amount, stake_token_amount) = {
-                    let near = amount.unwrap_or_else(|| account.total());
+                    let near = amount.unwrap_or_else(|| account.unstaked_balances.total());
                     let (stake, remainder) = self.near_to_stake(near);
                     let stake_near_value = near - remainder;
-                    account.debit_for_restaking(stake_near_value);
+                    account
+                        .unstaked_balances
+                        .debit_for_restaking(stake_near_value);
                     account.save();
                     State::decr_total_unstaked_balance(stake_near_value);
                     (stake_near_value, stake)
@@ -386,8 +388,10 @@ impl StakingPool for StakingPoolComponent {
             mut unstaked_balances: AccountDataObject<StakeAccountData>,
             amount: YoctoNear,
         ) {
-            unstaked_balances.debit_available_balance(amount);
-            if unstaked_balances.total() == YoctoNear::ZERO {
+            unstaked_balances
+                .unstaked_balances
+                .debit_available_balance(amount);
+            if unstaked_balances.unstaked_balances.total() == YoctoNear::ZERO {
                 unstaked_balances.delete();
             } else {
                 unstaked_balances.save();
@@ -399,13 +403,13 @@ impl StakingPool for StakingPoolComponent {
         match amount {
             // withdraw all available
             None => {
-                if let Some(mut unstaked_balances) =
+                if let Some(mut account_staked_data) =
                     self.account_manager.load_account_data(&account_id)
                 {
-                    unstaked_balances.apply_liquidity();
-                    let amount = unstaked_balances.available();
+                    account_staked_data.unstaked_balances.apply_liquidity();
+                    let amount = account_staked_data.unstaked_balances.available();
                     if amount > YoctoNear::ZERO {
-                        debit_available_balance(unstaked_balances, amount);
+                        debit_available_balance(account_staked_data, amount);
                     }
                 }
             }
@@ -413,7 +417,7 @@ impl StakingPool for StakingPoolComponent {
                 ERR_INVALID.assert(|| amount > YoctoNear::ZERO, || "amount must be > 0");
                 match self.account_manager.load_account_data(&account_id) {
                     Some(mut unstaked_balances) => {
-                        unstaked_balances.apply_liquidity();
+                        unstaked_balances.unstaked_balances.apply_liquidity();
                         debit_available_balance(unstaked_balances, amount);
                     }
                     None => ERR_INSUFFICIENT_FUNDS.panic(),
@@ -938,7 +942,7 @@ impl StakingPoolComponent {
 
     fn credit_unstaked_amount(&self, account_id: &str, amount: YoctoNear) {
         let mut account = self.account_manager.registered_account_data(&account_id);
-        account.credit_unstaked(amount);
+        account.unstaked_balances.credit_unstaked(amount);
         account.save();
     }
 
@@ -2680,7 +2684,7 @@ mod tests {
                     logs,
                     vec![
                         "[INFO] [FT_BURN] account: bob, amount: 2000000000000000000000000",
-                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(116)",
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(117)",
                     ]
                 );
                 assert_eq!(
@@ -2767,7 +2771,7 @@ mod tests {
                         "[ERR] [STAKE_ACTION_FAILED] ",
                         "[WARN] [STATUS_OFFLINE] StakeActionFailed",
                         "[INFO] [FT_BURN] account: bob, amount: 2000000000000000000000000",
-                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(116)",
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(117)",
                     ]
                 );
                 assert_eq!(
@@ -2870,7 +2874,7 @@ mod tests {
                 ctx.attached_deposit = YOCTO;
                 testing_env!(ctx);
                 let account = account_manager().registered_account_data(ACCOUNT);
-                assert!(account.locked().is_some());
+                assert!(account.unstaked_balances.locked().is_some());
                 staking_pool.ops_restake(None);
                 println!("restaked {:#?}", StakingPoolBalances::load());
                 let logs = test_utils::get_logs();
@@ -2880,7 +2884,7 @@ mod tests {
                     "[INFO] [STAKE] near_amount=992000000000000000000000, stake_token_amount=992000000000000000000000",
                 ]);
                 let account = account_manager().registered_account_data(ACCOUNT);
-                assert!(account.locked().is_none());
+                assert!(account.unstaked_balances.locked().is_none());
             }
         }
 
@@ -3008,7 +3012,10 @@ mod tests {
                 ctx.attached_deposit = YOCTO;
                 testing_env!(ctx);
                 let account_before_restaking = account_manager().registered_account_data(ACCOUNT);
-                assert!(account_before_restaking.locked().is_some());
+                assert!(account_before_restaking
+                    .unstaked_balances
+                    .locked()
+                    .is_some());
                 staking_pool.ops_restake(Some(10000.into()));
                 let logs = test_utils::get_logs();
                 println!("restaked: {:#?}", logs);
@@ -3018,8 +3025,8 @@ mod tests {
                 );
                 let account = account_manager().registered_account_data(ACCOUNT);
                 assert_eq!(
-                    account.locked_balance(),
-                    account_before_restaking.locked_balance() - 10000
+                    account.unstaked_balances.locked_balance(),
+                    account_before_restaking.unstaked_balances.locked_balance() - 10000
                 );
             }
         }
@@ -3090,10 +3097,10 @@ mod tests {
                 ctx.attached_deposit = YOCTO;
                 testing_env!(ctx);
                 let account = account_manager().registered_account_data(ACCOUNT);
-                assert!(account.locked().is_some());
+                assert!(account.unstaked_balances.locked().is_some());
                 staking_pool.ops_restake(None);
                 let account = account_manager().registered_account_data(ACCOUNT);
-                assert!(account.locked().is_none());
+                assert!(account.unstaked_balances.locked().is_none());
 
                 let logs = test_utils::get_logs();
                 println!("restaked all: {:#?}", logs);
@@ -3184,7 +3191,10 @@ mod tests {
                 ctx.attached_deposit = YOCTO;
                 testing_env!(ctx);
                 let account_before_restaking = account_manager().registered_account_data(ACCOUNT);
-                assert!(account_before_restaking.locked().is_some());
+                assert!(account_before_restaking
+                    .unstaked_balances
+                    .locked()
+                    .is_some());
                 staking_pool.ops_restake(Some(10000.into()));
                 let logs = test_utils::get_logs();
                 println!("restaked: {:#?}", logs);
@@ -3201,8 +3211,8 @@ mod tests {
                 );
                 let account = account_manager().registered_account_data(ACCOUNT);
                 assert_eq!(
-                    account.locked_balance(),
-                    account_before_restaking.locked_balance() - 10000
+                    account.unstaked_balances.locked_balance(),
+                    account_before_restaking.unstaked_balances.locked_balance() - 10000
                 );
             }
         }
@@ -4361,7 +4371,7 @@ mod tests {
                 assert_eq!(owner_balance.available, YoctoNear::ZERO);
                 assert_eq!(
                     balances.staked.unwrap().near_value,
-                    9996920990000000000000000000.into()
+                    9996920960000000000000000000.into()
                 );
 
                 // Assert
@@ -5445,7 +5455,7 @@ mod tests {
                         logs,
                         vec![
                             "[INFO] [FT_BURN] account: admin, amount: 1000000000000000000000000",
-                            "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(116)",
+                            "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(117)",
                         ]
                     );
                     assert_eq!(
