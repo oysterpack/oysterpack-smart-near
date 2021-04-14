@@ -103,8 +103,14 @@ impl StakingPoolOwner for Contract {
 
 #[near_bindgen]
 impl Treasury for Contract {
+    #[payable]
     fn ops_stake_treasury_deposit(&mut self) -> PromiseOrValue<StakeAccountBalances> {
         Self::staking_pool().ops_stake_treasury_deposit()
+    }
+
+    #[payable]
+    fn ops_stake_treasury_distribution(&mut self) {
+        Self::staking_pool().ops_stake_treasury_distribution();
     }
 
     fn ops_stake_treasury_transfer_to_owner(&mut self, amount: Option<YoctoNear>) {

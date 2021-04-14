@@ -1,9 +1,8 @@
 use crate::*;
 use oysterpack_smart_account_management::components::account_management::AccountManagementComponent;
 use oysterpack_smart_contract::components::contract_operator::ContractOperatorComponent;
-use oysterpack_smart_staking_pool::components::staking_pool::{
-    StakeAccountData, StakingPoolComponent,
-};
+use oysterpack_smart_staking_pool::components::staking_pool::StakingPoolComponent;
+use oysterpack_smart_staking_pool::StakeAccountData;
 
 pub type AccountData = StakeAccountData;
 
