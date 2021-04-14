@@ -1,5 +1,5 @@
 use crate::StakeAccountBalances;
-use oysterpack_smart_near::domain::YoctoNear;
+use oysterpack_smart_near::domain::{BlockTimestamp, YoctoNear};
 use oysterpack_smart_near::near_sdk::PromiseOrValue;
 use oysterpack_smart_near::{Level, LogEvent};
 
@@ -28,7 +28,7 @@ pub trait Treasury {
     /// - dividend is paid out before transfer
     ///
     /// ## Panics
-    /// - requires [`PERMISSION_TREASURER`] permission
+    /// - requires [`PERMISSION_TREASURER`] permission or the owner
     /// - if there are insufficient funds   
     fn ops_stake_treasury_transfer_to_owner(&mut self, amount: Option<YoctoNear>);
 }
