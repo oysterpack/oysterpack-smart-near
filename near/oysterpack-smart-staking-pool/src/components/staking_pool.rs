@@ -2696,7 +2696,7 @@ mod tests {
                     logs,
                     vec![
                         "[INFO] [FT_BURN] account: bob, amount: 2000000000000000000000000",
-                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(116)",
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(184)",
                     ]
                 );
                 assert_eq!(
@@ -2783,7 +2783,7 @@ mod tests {
                         "[ERR] [STAKE_ACTION_FAILED] ",
                         "[WARN] [STATUS_OFFLINE] StakeActionFailed",
                         "[INFO] [FT_BURN] account: bob, amount: 2000000000000000000000000",
-                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(116)",
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(184)",
                     ]
                 );
                 assert_eq!(
@@ -2892,7 +2892,6 @@ mod tests {
                 let logs = test_utils::get_logs();
                 println!("restaked all: {:#?}", logs);
                 assert_eq!(logs, vec![
-                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-24)", // storage for unstaked balances was freed up
                     "[INFO] [STAKE] near_amount=992000000000000000000000, stake_token_amount=992000000000000000000000",
                 ]);
                 let account = account_manager().registered_account_data(ACCOUNT);
@@ -3117,7 +3116,6 @@ mod tests {
                 let logs = test_utils::get_logs();
                 println!("restaked all: {:#?}", logs);
                 assert_eq!(logs, vec![
-                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-24)",
                     "[INFO] [STAKE] near_amount=992000000000000000000000, stake_token_amount=992000000000000000000000",
                     "[WARN] [STATUS_OFFLINE] ",
                     "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
@@ -4383,7 +4381,7 @@ mod tests {
                 assert_eq!(owner_balance.available, YoctoNear::ZERO);
                 assert_eq!(
                     balances.staked.unwrap().near_value,
-                    9996920990000000000000000000.into()
+                    9996918230000000000000000000.into()
                 );
 
                 // Assert
@@ -5575,7 +5573,7 @@ mod tests {
                         logs,
                         vec![
                             "[INFO] [FT_BURN] account: admin, amount: 1000000000000000000000000",
-                            "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(116)",
+                            "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(184)",
                         ]
                     );
                     assert_eq!(

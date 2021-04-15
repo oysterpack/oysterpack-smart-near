@@ -15,7 +15,7 @@ const EPOCHS_LOCKED: usize = 4;
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone, Copy, PartialEq, Default)]
 pub struct UnstakedBalances {
     available: YoctoNear,
-    locked: [Option<(EpochHeight, YoctoNear)>; EPOCHS_LOCKED],
+    locked: [(EpochHeight, YoctoNear); EPOCHS_LOCKED],
 }
 
 impl UnstakedBalances {
@@ -28,17 +28,17 @@ impl UnstakedBalances {
     }
 
     pub fn locked_balance(&self) -> YoctoNear {
-        self.locked.iter().fold(YoctoNear::ZERO, |total, entry| {
-            total + entry.map_or(YoctoNear::ZERO, |(_, amount)| amount)
-        })
+        self.locked
+            .iter()
+            .fold(YoctoNear::ZERO, |total, (_, amount)| total + *amount)
     }
 
     pub fn locked(&self) -> Option<BTreeMap<EpochHeight, YoctoNear>> {
         let result: BTreeMap<EpochHeight, YoctoNear> =
             self.locked
                 .iter()
-                .fold(BTreeMap::new(), |mut result, entry| {
-                    if let Some((epoch, amount)) = entry {
+                .fold(BTreeMap::new(), |mut result, (epoch, amount)| {
+                    if *amount > YoctoNear::ZERO {
                         result.insert(*epoch, *amount);
                     }
                     result
@@ -54,10 +54,11 @@ impl UnstakedBalances {
         let current_epoch: EpochHeight = env::epoch_height().into();
 
         for i in 0..EPOCHS_LOCKED {
-            if let Some((epoch, balance)) = self.locked[i] {
+            let (epoch, balance) = self.locked[i];
+            if balance > YoctoNear::ZERO {
                 if epoch <= current_epoch {
                     self.available += balance;
-                    self.locked[i] = None;
+                    self.locked[i] = Default::default();
                 }
             }
         }
@@ -81,7 +82,7 @@ impl UnstakedBalances {
         if liquidity >= locked_balance {
             self.available = self.total();
             for i in 0..EPOCHS_LOCKED {
-                self.locked[i] = None;
+                self.locked[i] = Default::default();
             }
             return locked_balance;
         }
@@ -96,17 +97,18 @@ impl UnstakedBalances {
         self.unlock();
         let available_on: EpochHeight = (env::epoch_height() + EPOCHS_LOCKED as u64).into();
         for i in 0..EPOCHS_LOCKED {
-            if let Some((epoch, balance)) = self.locked[i] {
+            let (epoch, balance) = self.locked[i];
+            if balance > YoctoNear::ZERO {
                 if epoch == available_on {
-                    self.locked[i] = Some((epoch, balance + amount));
+                    self.locked[i] = (epoch, balance + amount);
                     return;
                 }
             }
         }
 
         for i in 0..EPOCHS_LOCKED {
-            if self.locked[i].is_none() {
-                self.locked[i] = Some((available_on, amount));
+            if self.locked[i].1 == YoctoNear::ZERO {
+                self.locked[i] = (available_on, amount);
                 return;
             }
         }
@@ -116,16 +118,16 @@ impl UnstakedBalances {
 
     fn sort_locked(&mut self) {
         self.locked.sort_by(|left, right| {
-            if left.is_none() && right.is_none() {
+            if left.1 == YoctoNear::ZERO && right.1 == YoctoNear::ZERO {
                 return Ordering::Equal;
             }
-            if left.is_some() && right.is_none() {
+            if left.1 > YoctoNear::ZERO && right.1 == YoctoNear::ZERO {
                 return Ordering::Less;
             }
-            if left.is_none() && right.is_some() {
+            if left.1 == YoctoNear::ZERO && right.1 > YoctoNear::ZERO {
                 return Ordering::Greater;
             }
-            left.unwrap().0.cmp(&right.unwrap().0)
+            left.0.cmp(&right.0)
         });
     }
 
@@ -161,12 +163,13 @@ impl UnstakedBalances {
 
         // take from the most recent unstaked balances
         for i in (0..EPOCHS_LOCKED).rev() {
-            if let Some((available_on, unstaked)) = self.locked[i] {
+            let (available_on, unstaked) = self.locked[i];
+            if unstaked > YoctoNear::ZERO {
                 if unstaked <= amount {
                     amount -= unstaked;
-                    self.locked[i] = None;
+                    self.locked[i] = Default::default();
                 } else {
-                    self.locked[i] = Some((available_on, unstaked - amount));
+                    self.locked[i] = (available_on, unstaked - amount);
                     return YoctoNear::ZERO;
                 }
 
@@ -280,10 +283,10 @@ mod tests {
             UnstakedBalances {
                 available: (2 * YOCTO).into(),
                 locked: [
-                    Some((107.into(), YOCTO.into())),
-                    Some((108.into(), YOCTO.into())),
-                    Some((110.into(), YOCTO.into())),
-                    None
+                    (107.into(), YOCTO.into()),
+                    (108.into(), YOCTO.into()),
+                    (110.into(), YOCTO.into()),
+                    Default::default()
                 ]
             }
         );
@@ -294,10 +297,10 @@ mod tests {
             UnstakedBalances {
                 available: (2 * YOCTO).into(),
                 locked: [
-                    Some((107.into(), YOCTO.into())),
-                    Some((108.into(), YOCTO.into())),
-                    Some((110.into(), (YOCTO - 1000).into())),
-                    None
+                    (107.into(), YOCTO.into()),
+                    (108.into(), YOCTO.into()),
+                    (110.into(), (YOCTO - 1000).into()),
+                    Default::default()
                 ]
             }
         );
@@ -308,10 +311,10 @@ mod tests {
             UnstakedBalances {
                 available: (2 * YOCTO).into(),
                 locked: [
-                    Some((107.into(), YOCTO.into())),
-                    Some((108.into(), (YOCTO - 1000).into())),
-                    None,
-                    None
+                    (107.into(), YOCTO.into()),
+                    (108.into(), (YOCTO - 1000).into()),
+                    Default::default(),
+                    Default::default()
                 ]
             }
         );
@@ -321,7 +324,7 @@ mod tests {
             unstaked_balances,
             UnstakedBalances {
                 available: ((2 * YOCTO) - 1000).into(),
-                locked: [None, None, None, None]
+                locked: Default::default()
             }
         );
 
@@ -330,7 +333,7 @@ mod tests {
             unstaked_balances,
             UnstakedBalances {
                 available: (YOCTO - 1000).into(),
-                locked: [None, None, None, None]
+                locked: Default::default()
             }
         );
     }
