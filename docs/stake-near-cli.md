@@ -37,6 +37,12 @@ near view $CONTRACT_NAME ops_permissions_is_admin --args '{"account_id":"oysterp
 near view $CONTRACT_NAME ops_permissions_is_operator --args '{"account_id":"oysterpack.testnet"}'
 near view $CONTRACT_NAME ops_permissions --args '{"account_id":"oysterpack.testnet"}'
 
-near view $CONTRACT_NAME ops_permissions_contract_permissions
+near call $CONTRACT_NAME ops_permissions_grant_admin --args '{"account_id":"oysterpack-2.testnet"}' --accountId oysterpack.testnet
+near call $CONTRACT_NAME ops_permissions_grant_operator --args '{"account_id":"oysterpack-2.testnet"}' --accountId oysterpack.testnet
 
+near call $CONTRACT_NAME ops_permissions_revoke_all --args '{"account_id":"oysterpack-2.testnet"}' --accountId oysterpack.testnet
+
+near call $CONTRACT_NAME ops_permissions_grant_permissions --args '{"account_id":"oysterpack-2.testnet", "permissions": [0]}' --accountId oysterpack.testnet
+
+near view $CONTRACT_NAME ops_permissions_contract_permissions
 ```

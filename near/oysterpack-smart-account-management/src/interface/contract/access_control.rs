@@ -111,6 +111,8 @@ pub trait PermissionsManagement {
     /// - returns None if the account is not registered
     fn ops_permissions(&self, account_id: ValidAccountId) -> Option<Permissions>;
 
+    fn ops_permissions_granted(&self, account_id: ValidAccountId) -> Option<HashMap<u8, String>>;
+
     /// lists the permission bits that are supported by the contract with a human friendly name
     /// - [`crate::Permissions::ADMIN`] and [`crate::Permissions::OPERATOR`] are excluded
     fn ops_permissions_contract_permissions(&self) -> Option<HashMap<u8, String>>;

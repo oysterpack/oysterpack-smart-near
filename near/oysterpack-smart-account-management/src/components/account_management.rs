@@ -525,6 +525,25 @@ where
             .flatten()
     }
 
+    fn ops_permissions_granted(&self, account_id: ValidAccountId) -> Option<HashMap<u8, String>> {
+        self.ops_permissions(account_id).map(|perms| {
+            let mut account_perms = HashMap::with_capacity(self.contract_permissions.0.len() + 2);
+            for (perm_bit, name) in self.contract_permissions.0.iter() {
+                if perms.contains(1 << *perm_bit) {
+                    account_perms.insert(*perm_bit, name.to_string());
+                }
+            }
+            if perms.contains(Permissions::ADMIN) {
+                account_perms.insert(63, "admin".to_string());
+            }
+            if perms.contains(Permissions::OPERATOR) {
+                account_perms.insert(62, "operator".to_string());
+            }
+
+            account_perms
+        })
+    }
+
     fn ops_permissions_contract_permissions(&self) -> Option<HashMap<u8, String>> {
         if self.contract_permissions.0.is_empty() {
             return None;
@@ -2860,6 +2879,11 @@ mod test_permission_management {
                         to_valid_account_id(PREDECESSOR_ACCOUNT),
                         PERM_0.into()
                     ));
+                    let accounts_perms = account_manager
+                        .ops_permissions_granted(to_valid_account_id(PREDECESSOR_ACCOUNT))
+                        .unwrap();
+                    assert_eq!(accounts_perms.len(), 1);
+                    assert_eq!(accounts_perms.get(&63).unwrap(), "admin");
 
                     // grant admin
                     account_manager.ops_permissions_grant_admin(to_valid_account_id(bob));
@@ -2872,11 +2896,20 @@ mod test_permission_management {
                     account_manager.ops_permissions_revoke_admin(to_valid_account_id(bob));
                     assert!(!account_manager.ops_permissions_is_admin(to_valid_account_id(bob)));
                     assert!(!account_manager.ops_permissions_is_operator(to_valid_account_id(bob)));
+                    let accounts_perms =
+                        account_manager.ops_permissions_granted(to_valid_account_id(bob));
+                    println!("accounts_perms = {:?}", accounts_perms);
+                    assert!(accounts_perms.is_none());
 
                     // grant operator
                     account_manager.ops_permissions_grant_operator(to_valid_account_id(bob));
                     assert!(account_manager.ops_permissions_is_operator(to_valid_account_id(bob)));
                     assert!(!account_manager.ops_permissions_is_admin(to_valid_account_id(bob)));
+                    let accounts_perms = account_manager
+                        .ops_permissions_granted(to_valid_account_id(bob))
+                        .unwrap();
+                    assert_eq!(accounts_perms.len(), 1);
+                    assert_eq!(accounts_perms.get(&62).unwrap(), "operator");
 
                     // revoke operator
                     account_manager.ops_permissions_revoke_operator(to_valid_account_id(bob));
@@ -2893,6 +2926,12 @@ mod test_permission_management {
                         to_valid_account_id(bob),
                         (PERM_0 | PERM_1).into()
                     ));
+                    let accounts_perms = account_manager
+                        .ops_permissions_granted(to_valid_account_id(bob))
+                        .unwrap();
+                    assert_eq!(accounts_perms.len(), 2);
+                    assert_eq!(accounts_perms.get(&0).unwrap(), "perm_0");
+                    assert_eq!(accounts_perms.get(&1).unwrap(), "perm_1");
 
                     // revoke permissions
                     account_manager.ops_permissions_revoke(to_valid_account_id(bob), PERM_0.into());
@@ -2928,11 +2967,21 @@ mod test_permission_management {
                         (PERM_0 | PERM_1).into()
                     ));
                     assert!(account_manager.ops_permissions_is_operator(to_valid_account_id(bob)));
+                    let accounts_perms = account_manager
+                        .ops_permissions_granted(to_valid_account_id(bob))
+                        .unwrap();
+                    assert_eq!(accounts_perms.len(), 3);
+                    assert_eq!(accounts_perms.get(&0).unwrap(), "perm_0");
+                    assert_eq!(accounts_perms.get(&1).unwrap(), "perm_1");
+                    assert_eq!(accounts_perms.get(&62).unwrap(), "operator");
 
                     // revoke all permissions
                     account_manager.ops_permissions_revoke_all(to_valid_account_id(bob));
                     assert!(account_manager
                         .ops_permissions(to_valid_account_id(bob))
+                        .is_none());
+                    assert!(account_manager
+                        .ops_permissions_granted(to_valid_account_id(bob))
                         .is_none());
 
                     let logs = test_utils::get_logs();
