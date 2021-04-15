@@ -4,7 +4,7 @@ use oysterpack_smart_near::Error;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Default, PartialEq)]
-pub struct ContractPermissions(pub Option<HashMap<u8, &'static str>>);
+pub struct ContractPermissions(pub HashMap<u8, &'static str>);
 
 impl ContractPermissions {
     /// retains permission bits that are in the range 0-61
@@ -28,29 +28,34 @@ impl ContractPermissions {
             || names.len() == permissions.len(),
             || "permission names must be unique",
         );
-        Self(Some(permissions))
+        Self(permissions)
     }
 
     pub fn is_supported(&self, permissions: Permissions) -> bool {
-        self.0.as_ref().map_or(false, |perms| {
-            let supported_perms = perms
-                .keys()
-                .fold(0_u64, |supported_perms, perm| supported_perms | 1 << *perm);
-            Permissions(supported_perms.into()).contains(permissions)
-        })
+        if self.0.is_empty() {
+            return false;
+        }
+
+        let supported_perms = self
+            .0
+            .keys()
+            .fold(0_u64, |supported_perms, perm| supported_perms | 1 << *perm);
+        Permissions(supported_perms.into()).contains(permissions)
     }
 
     /// permissions will be returned as sorted
     pub fn permission_names(&self, permissions: Permissions) -> Vec<String> {
-        let mut labels = self.0.as_ref().map_or(vec![], |perms| {
-            perms
-                .keys()
-                .filter(|perm| permissions.contains(1_u64 << *perm))
-                .fold(vec![], |mut labels, perm| {
-                    labels.push(perms.get(perm).as_ref().unwrap().to_string());
-                    labels
-                })
-        });
+        if self.0.is_empty() {
+            return vec![];
+        }
+        let mut labels = self
+            .0
+            .keys()
+            .filter(|perm| permissions.contains(1_u64 << *perm))
+            .fold(vec![], |mut labels, perm| {
+                labels.push(self.0.get(perm).as_ref().unwrap().to_string());
+                labels
+            });
         labels.sort();
         labels
     }
@@ -58,15 +63,17 @@ impl ContractPermissions {
     /// unfolds the individual permissions from the specified `permissions` set. For example, if
     /// `permissions` has 5 permission bits set, then the 5 permissions will be extracted and returned.
     pub fn unfold_permissions(&self, permissions: Permissions) -> Vec<Permissions> {
-        let mut perms = self.0.as_ref().map_or(vec![], |perms| {
-            perms
-                .keys()
-                .filter(|perm| permissions.contains(1_u64 << *perm))
-                .fold(vec![], |mut perms, perm| {
-                    perms.push((1 << *perm).into());
-                    perms
-                })
-        });
+        if self.0.is_empty() {
+            return vec![];
+        }
+        let mut perms = self
+            .0
+            .keys()
+            .filter(|perm| permissions.contains(1_u64 << *perm))
+            .fold(vec![], |mut perms, perm| {
+                perms.push((1 << *perm).into());
+                perms
+            });
         perms.sort();
         perms
     }
@@ -77,37 +84,36 @@ impl ContractPermissions {
             return Ok(0.into());
         }
 
-        match self.0.as_ref() {
-            None => Err(ERR_INVALID.error("contract has no permissions".to_string())),
-            Some(perms) => {
-                let contract_perms: HashSet<String> =
-                    perms.values().map(|perm| perm.to_string()).collect();
-                let mut invalid_perms: Vec<String> = permissions
-                    .iter()
-                    .filter(|perm| {
-                        // let perm = perm.to_string();
-                        !contract_perms.contains(perm.as_str())
-                    })
-                    .map(|perm| perm.to_string())
-                    .collect();
-                if !invalid_perms.is_empty() {
-                    invalid_perms.sort();
-                    invalid_perms.dedup();
-                    return Err(ERR_INVALID.error(format!(
-                        "contract does not support specified permissions: {:?}",
-                        invalid_perms
-                    )));
-                }
-                let perms = perms.iter().fold(HashMap::new(), |mut perms, (k, v)| {
-                    perms.insert(v.to_string(), *k);
-                    perms
-                });
-                let permissions: u64 = permissions.iter().fold(0_64, |permissions, perm| {
-                    permissions | 1 << *perms.get(perm).unwrap()
-                });
-                Ok(permissions.into())
-            }
+        if self.0.is_empty() {
+            return Err(ERR_INVALID.error("contract has no permissions".to_string()));
         }
+
+        let contract_perms: HashSet<String> =
+            self.0.values().map(|perm| perm.to_string()).collect();
+        let mut invalid_perms: Vec<String> = permissions
+            .iter()
+            .filter(|perm| {
+                // let perm = perm.to_string();
+                !contract_perms.contains(perm.as_str())
+            })
+            .map(|perm| perm.to_string())
+            .collect();
+        if !invalid_perms.is_empty() {
+            invalid_perms.sort();
+            invalid_perms.dedup();
+            return Err(ERR_INVALID.error(format!(
+                "contract does not support specified permissions: {:?}",
+                invalid_perms
+            )));
+        }
+        let perms = self.0.iter().fold(HashMap::new(), |mut perms, (k, v)| {
+            perms.insert(v.to_string(), *k);
+            perms
+        });
+        let permissions: u64 = permissions.iter().fold(0_64, |permissions, perm| {
+            permissions | 1 << *perms.get(perm).unwrap()
+        });
+        Ok(permissions.into())
     }
 }
 
@@ -165,7 +171,7 @@ mod test_contract_permissions {
         let mut perms = HashMap::new();
         perms.insert(10, "minter");
         perms.insert(20, "burner");
-        let contract_permissions = ContractPermissions(Some(perms));
+        let contract_permissions = ContractPermissions(perms);
 
         assert!(!contract_permissions.is_supported((1 << 15).into()));
         assert!(contract_permissions.is_supported((1 << 10).into()));
@@ -245,10 +251,7 @@ mod test_contract_permissions {
             Ok(_) => panic!("should have failed"),
             Err(err) => {
                 assert_eq!(err.0, ERR_INVALID);
-                assert_eq!(
-                    err.1,
-                    "contract does not support specified permissions: [\"1\", \"2\", \"3\"]"
-                );
+                assert_eq!(err.1, "contract has no permissions");
             }
         }
     }

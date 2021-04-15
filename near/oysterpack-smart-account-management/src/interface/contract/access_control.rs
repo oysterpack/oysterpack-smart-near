@@ -60,6 +60,9 @@ pub trait PermissionsManagement {
     /// [`crate::Permissions::ADMIN`] and [`crate::Permissions::OPERATOR`] can not be granted - explicit grant functions
     /// must be used.
     ///
+    /// ## Args
+    /// - permissions - array of permission bits
+    ///
     /// ## Panics
     /// - if predecessor account is not owner or admin
     /// - if `account_id` is not registered

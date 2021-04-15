@@ -21,7 +21,7 @@ impl Contract {
         let contract_permissions = {
             let mut permissions = HashMap::with_capacity(1);
             permissions.insert(0, PERMISSION_TREASURER);
-            ContractPermissions(Some(permissions))
+            ContractPermissions(permissions)
         };
 
         AccountManager::new(contract_permissions)

@@ -1063,7 +1063,7 @@ mod tests {
         StakeFungibleToken::register_storage_management_event_handler();
         let mut permissions = HashMap::new();
         permissions.insert(TREASURER_PERMISSION_BIT, PERMISSION_TREASURER);
-        let contract_permissions = ContractPermissions(Some(permissions));
+        let contract_permissions = ContractPermissions(permissions);
         AccountManager::new(contract_permissions)
     }
 

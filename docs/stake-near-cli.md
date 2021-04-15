@@ -29,5 +29,14 @@ near call $CONTRACT_NAME storage_withdraw --args
 
 near call $CONTRACT_NAME storage_unregister --args --accountId alfio-zappala-oysterpack.testnet --amount 0.000000000000000000000001
 near call $CONTRACT_NAME storage_unregister --args --accountId oysterpack-2.testnet --amount 0.000000000000000000000001
+```
+
+## Access Control
+```shell
+near view $CONTRACT_NAME ops_permissions_is_admin --args '{"account_id":"oysterpack.testnet"}'
+near view $CONTRACT_NAME ops_permissions_is_operator --args '{"account_id":"oysterpack.testnet"}'
+near view $CONTRACT_NAME ops_permissions --args '{"account_id":"oysterpack.testnet"}'
+
+near view $CONTRACT_NAME ops_permissions_contract_permissions
 
 ```

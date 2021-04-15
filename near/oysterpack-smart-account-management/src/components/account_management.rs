@@ -526,13 +526,14 @@ where
     }
 
     fn ops_permissions_contract_permissions(&self) -> Option<HashMap<u8, String>> {
-        self.contract_permissions.0.as_ref().map(|permissions| {
-            let mut perms = HashMap::with_capacity(permissions.len());
-            for (k, value) in permissions {
-                perms.insert(*k, value.to_string());
-            }
-            perms
-        })
+        if self.contract_permissions.0.is_empty() {
+            return None;
+        }
+        let mut perms = HashMap::with_capacity(self.contract_permissions.0.len());
+        for (k, value) in self.contract_permissions.0.iter() {
+            perms.insert(*k, value.to_string());
+        }
+        Some(perms)
     }
 }
 
@@ -556,18 +557,15 @@ where
     }
 
     pub fn permission_by_name(&self, name: &str) -> Option<Permission> {
-        self.contract_permissions
-            .0
-            .as_ref()
-            .map(|permissions| {
-                for (k, v) in permissions {
-                    if name == *v {
-                        return Some(1_u64 << *k);
-                    }
-                }
-                None
-            })
-            .flatten()
+        if self.contract_permissions.0.is_empty() {
+            return None;
+        }
+        for (k, v) in self.contract_permissions.0.iter() {
+            if name == *v {
+                return Some(1_u64 << *k);
+            }
+        }
+        None
     }
 }
 
