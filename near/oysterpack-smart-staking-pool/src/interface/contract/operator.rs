@@ -22,3 +22,17 @@ pub enum StakingPoolOperatorCommand {
     /// max fee is 1000 BPS (10%)
     UpdateStakingFee(BasisPoints),
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oysterpack_smart_near_test::near_sdk::serde_json;
+
+    #[test]
+    fn json_serialization() {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&StakingPoolOperatorCommand::StartStaking).unwrap()
+        );
+    }
+}

@@ -130,6 +130,19 @@ impl State {
         }
     }
 
+    fn total_staked_balance_view(&self) -> YoctoNear {
+        match self.status {
+            Status::Online => {
+                // if there are no stake actions in flight, then resync the total staked balance
+                // to ensure any staking rewards are captured
+                let staked = ContractNearBalances::near_balance(Self::STAKED_BALANCE);
+                let unstaked = ContractNearBalances::near_balance(Self::UNSTAKED_BALANCE);
+                ContractNearBalances::near_balance(Self::TOTAL_STAKED_BALANCE) + staked - unstaked
+            }
+            Status::Offline(_) => ContractNearBalances::near_balance(Self::TOTAL_STAKED_BALANCE),
+        }
+    }
+
     fn incr_total_staked_balance(amount: YoctoNear) {
         ContractNearBalances::incr_balance(State::TOTAL_STAKED_BALANCE, amount);
     }
@@ -430,7 +443,10 @@ impl StakingPool for StakingPoolComponent {
     }
 
     fn ops_stake_token_value(&self, amount: Option<TokenAmount>) -> YoctoNear {
-        self.stake_near_value_rounded_down(amount.unwrap_or(YOCTO.into()))
+        self.compute_stake_near_value_rounded_down(
+            amount.unwrap_or(YOCTO.into()),
+            Self::state().total_staked_balance_view(),
+        )
     }
 
     fn ops_stake_status(&self) -> Status {
@@ -982,11 +998,18 @@ impl StakingPoolComponent {
     }
 
     fn stake_near_value_rounded_down(&self, stake: TokenAmount) -> YoctoNear {
+        self.compute_stake_near_value_rounded_down(stake, Self::state().total_staked_balance())
+    }
+
+    fn compute_stake_near_value_rounded_down(
+        &self,
+        stake: TokenAmount,
+        total_staked_near_balance: YoctoNear,
+    ) -> YoctoNear {
         if *stake == 0 {
             return YoctoNear::ZERO;
         }
 
-        let total_staked_near_balance = Self::state().total_staked_balance();
         let ft_total_supply = *self.stake_token.ft_total_supply();
         if *total_staked_near_balance == 0 || ft_total_supply == 0 {
             return (*stake).into();
