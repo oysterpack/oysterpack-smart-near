@@ -693,7 +693,7 @@ mod tests_fungible_token {
     use crate::*;
     use near_sdk::{test_utils, VMContext};
     use oysterpack_smart_account_management::components::account_management::AccountManagementComponentConfig;
-    use oysterpack_smart_account_management::{ContractPermissions, StorageManagement};
+    use oysterpack_smart_account_management::StorageManagement;
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
@@ -732,7 +732,7 @@ mod tests_fungible_token {
 
         deploy_comps();
 
-        let mut account_manager = AccountManager::new(&ContractPermissions::default());
+        let mut account_manager = AccountManager::default();
 
         // register accounts
         {
@@ -811,13 +811,13 @@ mod tests_fungible_token {
 
         deploy_comps();
 
-        let account_manager = AccountManager::new(&ContractPermissions::default());
+        let account_manager = AccountManager::default();
 
         let mut stake = STAKE::new(account_manager);
 
         // register accounts
         {
-            let mut account_manager = AccountManager::new(&ContractPermissions::default());
+            let mut account_manager = AccountManager::default();
 
             if let Some(balance) = sender_balance {
                 let mut ctx = ctx.clone();
@@ -1781,7 +1781,7 @@ mod tests_operator {
 
         deploy_comps();
 
-        let mut account_manager = AccountManager::new(&ContractPermissions::default());
+        let mut account_manager = AccountManager::default();
 
         // register operator account
         {
@@ -1858,7 +1858,7 @@ mod tests_operator {
 
         deploy_comps();
 
-        let mut account_manager = AccountManager::new(&ContractPermissions::default());
+        let mut account_manager = AccountManager::default();
 
         // register normal account with no permissions
         {
@@ -1881,7 +1881,7 @@ mod tests_operator {
 
         deploy_comps();
 
-        let account_manager = AccountManager::new(&ContractPermissions::default());
+        let account_manager = AccountManager::default();
 
         let mut stake = STAKE::new(account_manager);
         stake.ft_operator_command(OperatorCommand::ClearReference);
@@ -1937,13 +1937,13 @@ mod tests_token_service {
 
         deploy_comps();
 
-        let account_manager = AccountManager::new(&ContractPermissions::default());
+        let account_manager = AccountManager::default();
 
         let mut stake = STAKE::new(account_manager);
 
         // register accounts
         {
-            let mut account_manager = AccountManager::new(&ContractPermissions::default());
+            let mut account_manager = AccountManager::default();
 
             if let Some(balance) = account_balance {
                 let mut ctx = ctx.clone();

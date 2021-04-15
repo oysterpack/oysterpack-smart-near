@@ -1064,7 +1064,7 @@ mod tests {
         let mut permissions = HashMap::new();
         permissions.insert(TREASURER_PERMISSION_BIT, PERMISSION_TREASURER);
         let contract_permissions = ContractPermissions(Some(permissions));
-        AccountManager::new(&contract_permissions)
+        AccountManager::new(contract_permissions)
     }
 
     fn ft_stake() -> StakeFungibleToken {

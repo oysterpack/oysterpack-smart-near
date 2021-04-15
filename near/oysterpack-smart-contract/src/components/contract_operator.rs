@@ -48,7 +48,7 @@ mod tests {
     use crate::components::contract_metrics::ContractMetricsComponent;
     use crate::ContractMetrics;
     use oysterpack_smart_account_management::components::account_management::AccountManagementComponentConfig;
-    use oysterpack_smart_account_management::{ContractPermissions, StorageManagement};
+    use oysterpack_smart_account_management::StorageManagement;
     use oysterpack_smart_near::component::Deploy;
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
@@ -68,8 +68,7 @@ mod tests {
             admin_account: to_valid_account_id(operator),
         });
 
-        let mut operator =
-            ContractOperatorComponent::new(AccountManager::new(&ContractPermissions::default()));
+        let mut operator = ContractOperatorComponent::new(AccountManager::default());
 
         // act
         testing_env!(ctx.clone());
@@ -107,8 +106,7 @@ mod tests {
             admin_account: to_valid_account_id(operator),
         });
 
-        let mut operator =
-            ContractOperatorComponent::new(AccountManager::new(&ContractPermissions::default()));
+        let mut operator = ContractOperatorComponent::new(AccountManager::default());
 
         // act
         ctx.predecessor_account_id = "not_registered".to_string();
@@ -130,8 +128,7 @@ mod tests {
             admin_account: to_valid_account_id("owner"),
         });
 
-        let mut operator =
-            ContractOperatorComponent::new(AccountManager::new(&ContractPermissions::default()));
+        let mut operator = ContractOperatorComponent::new(AccountManager::default());
 
         {
             let mut ctx = ctx.clone();

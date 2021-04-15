@@ -43,7 +43,6 @@ pub const ERR_INSUFFICIENT_STORAGE_BALANCE: ErrorConst = ErrorConst(
 ///
 /// ## Constructor
 /// - [AccountManagementComponent::new]
-#[derive(Default)]
 pub struct AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
@@ -54,14 +53,23 @@ where
     _phantom_data: PhantomData<T>,
 }
 
+impl<T> Default for AccountManagementComponent<T>
+where
+    T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
+{
+    fn default() -> Self {
+        Self::new(Default::default())
+    }
+}
+
 impl<T> AccountManagementComponent<T>
 where
     T: BorshSerialize + BorshDeserialize + Clone + Debug + PartialEq + Default,
 {
-    pub fn new(contract_permissions: &ContractPermissions) -> Self {
+    pub fn new(contract_permissions: ContractPermissions) -> Self {
         AccountMetrics::register_account_storage_event_handler();
         Self {
-            contract_permissions: contract_permissions.clone(),
+            contract_permissions,
             account_repository: Default::default(),
             _phantom_data: Default::default(),
         }
@@ -74,7 +82,7 @@ where
 {
     /// helper method used to measure the amount of storage needed to store the specified data.
     pub fn measure_storage_usage(account_data: T) -> StorageUsage {
-        let mut account_manager: Self = Self::new(&Default::default());
+        let mut account_manager: Self = Self::new(Default::default());
 
         // seeds the storage required to store metrics
         {
@@ -696,7 +704,7 @@ mod tests {
             admin_account: to_valid_account_id(ADMIN),
         }));
 
-        (ctx, AccountManager::new(&Default::default()))
+        (ctx, AccountManager::new(Default::default()))
     }
 
     #[test]
@@ -768,7 +776,7 @@ mod tests_service {
             admin_account: to_valid_account_id("owner"),
         });
 
-        let service: AccountManager = AccountManager::new(&Default::default());
+        let service: AccountManager = AccountManager::new(Default::default());
         let storage_balance_bounds = service.storage_balance_bounds();
         assert_eq!(
             storage_balance_bounds.min,
@@ -818,7 +826,7 @@ mod tests_storage_management {
         AccountStorageUsageComponent::deploy(storage_usage_bounds);
 
         let mut service: AccountManagementComponent<()> =
-            AccountManagementComponent::new(&Default::default());
+            AccountManagementComponent::new(Default::default());
         let storage_balance_bounds = service.storage_balance_bounds();
         println!("storage_balance_bounds = {:?}", storage_balance_bounds);
 
@@ -1432,7 +1440,7 @@ mod tests_storage_management {
                     component_account_storage_mins: None,
                 });
 
-                let mut service = AccountManagementComponent::<()>::new(&Default::default());
+                let mut service = AccountManagementComponent::<()>::new(Default::default());
 
                 ctx.attached_deposit = YOCTO;
                 testing_env!(ctx.clone());
@@ -2179,7 +2187,7 @@ mod tests_storage_management {
             AccountStorageUsageComponent::deploy(storage_usage_bounds);
 
             let mut service: AccountManagementComponent<()> =
-                AccountManagementComponent::new(&Default::default());
+                AccountManagementComponent::new(Default::default());
 
             if deposit.value() > 0 {
                 ctx.attached_deposit = deposit.value();
@@ -2370,7 +2378,7 @@ mod tests_storage_management {
             AccountStorageUsageComponent::deploy(storage_usage_bounds);
 
             let mut service: AccountManagementComponent<()> =
-                AccountManagementComponent::new(&Default::default());
+                AccountManagementComponent::new(Default::default());
 
             if deposit.value() > 0 {
                 ctx.attached_deposit = deposit.value();
@@ -2535,7 +2543,7 @@ mod tests_storage_management {
                 component_account_storage_mins: None,
             });
 
-            let mut service = AccountManager::new(&Default::default());
+            let mut service = AccountManager::new(Default::default());
             ctx.attached_deposit = YOCTO;
             testing_env!(ctx.clone());
             service.storage_deposit(None, None);
@@ -2564,7 +2572,7 @@ mod tests_storage_management {
             });
             eventbus::register(on_unregister_panic);
 
-            let mut service = AccountManager::new(&Default::default());
+            let mut service = AccountManager::new(Default::default());
             ctx.attached_deposit = YOCTO;
             testing_env!(ctx.clone());
             service.storage_deposit(None, None);
@@ -2606,7 +2614,7 @@ mod tests_account_storage_usage {
             component_account_storage_mins: None,
         });
 
-        let mut service = AccountManager::new(&Default::default());
+        let mut service = AccountManager::new(Default::default());
         assert_eq!(storage_usage_bounds, service.ops_storage_usage_bounds());
 
         assert!(service
@@ -2672,7 +2680,7 @@ mod tests_account_metrics {
         println!("after deploy: {:?}", metrics);
         println!("{:#?}", test_utils::get_logs());
 
-        let mut service = AccountManager::new(&Default::default());
+        let mut service = AccountManager::new(Default::default());
         let admin_account = service.registered_account_near_data("admin");
         // Act
         let metrics = AccountManager::account_metrics();
@@ -2807,7 +2815,7 @@ mod test_permission_management {
             component_account_storage_mins: None,
         });
 
-        let mut account_manager = AccountManager::new(&permissions);
+        let mut account_manager = AccountManager::new(permissions);
 
         {
             let mut ctx = ctx.clone();

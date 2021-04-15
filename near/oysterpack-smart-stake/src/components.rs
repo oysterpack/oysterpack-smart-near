@@ -1,8 +1,10 @@
 use crate::*;
 use oysterpack_smart_account_management::components::account_management::AccountManagementComponent;
+use oysterpack_smart_account_management::ContractPermissions;
 use oysterpack_smart_contract::components::contract_operator::ContractOperatorComponent;
 use oysterpack_smart_staking_pool::components::staking_pool::StakingPoolComponent;
-use oysterpack_smart_staking_pool::StakeAccountData;
+use oysterpack_smart_staking_pool::{StakeAccountData, PERMISSION_TREASURER};
+use std::collections::HashMap;
 
 pub type AccountData = StakeAccountData;
 
@@ -15,7 +17,14 @@ pub type ContractOperator = ContractOperatorComponent<AccountData>;
 impl Contract {
     pub(crate) fn account_manager() -> AccountManager {
         StakeFungibleToken::register_storage_management_event_handler();
-        AccountManager::default()
+
+        let contract_permissions = {
+            let mut permissions = HashMap::with_capacity(1);
+            permissions.insert(0, PERMISSION_TREASURER);
+            ContractPermissions(Some(permissions))
+        };
+
+        AccountManager::new(contract_permissions)
     }
 
     pub(crate) fn ft_stake() -> StakeFungibleToken {
