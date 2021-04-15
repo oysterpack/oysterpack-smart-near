@@ -47,7 +47,8 @@ pub trait StorageManagement {
     ///     this API to deposit additional funds to pay for additional account storage usage growth.
     ///
     /// ## Arguments
-    /// - `account_id` - optional NEAR account ID. If not specified, then predecessor account ID will be used.
+    /// - `account_id` - defaults to predecessor account ID
+    /// - `registration_only` - defaults to false
     ///
     /// ## Returns
     /// The account's updated storage balance.
