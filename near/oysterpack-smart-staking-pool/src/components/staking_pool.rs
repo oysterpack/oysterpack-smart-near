@@ -111,6 +111,10 @@ impl State {
     /// when online, the total staked balance will automatically update, i.e., sync up with the
     /// account's locked balance, when all pending stake actions have been finalized - this will
     /// pick up any staking rewards
+    ///
+    /// ## NOTES
+    /// This method cannot be used by any contract view methods because it does attempt to write to
+    /// storage.
     fn total_staked_balance(&self) -> YoctoNear {
         match self.status {
             Status::Online => {
@@ -134,14 +138,22 @@ impl State {
         }
     }
 
-    fn last_total_staked_balance(&self) -> YoctoNear {
+    /// if the staking pool is online, then it will use the actual account locked balance
+    /// - if the account locked balance is 0, then it means the the validator node was kicked out.
+    ///   This can happen when the seat price goes up and the not enough is currently staked.
+    fn current_total_staked_balance(&self) -> YoctoNear {
         match self.status {
             Status::Online => {
                 // if there are no stake actions in flight, then resync the total staked balance
                 // to ensure any staking rewards are captured
                 let staked = ContractNearBalances::near_balance(Self::STAKED_BALANCE);
                 let unstaked = ContractNearBalances::near_balance(Self::UNSTAKED_BALANCE);
-                ContractNearBalances::near_balance(Self::TOTAL_STAKED_BALANCE) + staked - unstaked
+                let total_staked_balance = if env::account_locked_balance() > 0 {
+                    env::account_locked_balance().into()
+                } else {
+                    ContractNearBalances::near_balance(Self::TOTAL_STAKED_BALANCE)
+                };
+                total_staked_balance + staked - unstaked
             }
             Status::Offline(_) => ContractNearBalances::near_balance(Self::TOTAL_STAKED_BALANCE),
         }
@@ -449,7 +461,7 @@ impl StakingPool for StakingPoolComponent {
     fn ops_stake_token_value(&self, amount: Option<TokenAmount>) -> YoctoNear {
         self.compute_stake_near_value_rounded_down(
             amount.unwrap_or(YOCTO.into()),
-            Self::state().last_total_staked_balance(),
+            Self::state().current_total_staked_balance(),
         )
     }
 
