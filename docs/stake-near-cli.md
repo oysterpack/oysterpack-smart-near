@@ -58,7 +58,10 @@ near view $CONTRACT_NAME ops_stake_fee
 near view $CONTRACT_NAME ops_stake_public_key
 near view $CONTRACT_NAME ops_stake_token_value
 
+near view $CONTRACT_NAME ops_stake_balance --args '{"account_id":"oysterpack.testnet"}'
+
 near call $CONTRACT_NAME ops_stake --accountId oysterpack.testnet
+near call $CONTRACT_NAME ops_stake --accountId oysterpack.testnet --amount 1
 ```
 
 ### Staking Pool Operator

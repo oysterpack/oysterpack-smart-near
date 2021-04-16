@@ -119,10 +119,14 @@ impl State {
                 let staked = ContractNearBalances::near_balance(Self::STAKED_BALANCE);
                 let unstaked = ContractNearBalances::near_balance(Self::UNSTAKED_BALANCE);
                 if staked == YoctoNear::ZERO && unstaked == YoctoNear::ZERO {
-                    ContractNearBalances::set_balance(
-                        Self::TOTAL_STAKED_BALANCE,
-                        env::account_locked_balance().into(),
-                    );
+                    let total_staked_balance = env::account_locked_balance();
+                    // if the total_staked_balance == 0, it means the node has lost its validator seat
+                    if total_staked_balance > 0 {
+                        ContractNearBalances::set_balance(
+                            Self::TOTAL_STAKED_BALANCE,
+                            total_staked_balance.into(),
+                        );
+                    }
                 }
                 ContractNearBalances::near_balance(Self::TOTAL_STAKED_BALANCE) + staked - unstaked
             }
