@@ -134,7 +134,7 @@ impl State {
         }
     }
 
-    fn total_staked_balance_view(&self) -> YoctoNear {
+    fn last_total_staked_balance(&self) -> YoctoNear {
         match self.status {
             Status::Online => {
                 // if there are no stake actions in flight, then resync the total staked balance
@@ -290,7 +290,7 @@ impl StakingPool for StakingPoolComponent {
                     } else {
                         Some(StakedBalance {
                             stake: token_balance,
-                            near_value: self.stake_near_value_rounded_down(token_balance),
+                            near_value: self.ops_stake_token_value(Some(token_balance)),
                         })
                     }
                 };
@@ -449,7 +449,7 @@ impl StakingPool for StakingPoolComponent {
     fn ops_stake_token_value(&self, amount: Option<TokenAmount>) -> YoctoNear {
         self.compute_stake_near_value_rounded_down(
             amount.unwrap_or(YOCTO.into()),
-            Self::state().total_staked_balance_view(),
+            Self::state().last_total_staked_balance(),
         )
     }
 

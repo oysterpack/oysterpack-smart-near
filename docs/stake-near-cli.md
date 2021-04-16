@@ -52,8 +52,8 @@ near view $CONTRACT_NAME ops_permissions_contract_permissions
 
 ## Staking Pool
 ```shell
-near view $CONTRACT_NAME ops_stake_pool_balances
 near view $CONTRACT_NAME ops_stake_status
+near view $CONTRACT_NAME ops_stake_pool_balances
 near view $CONTRACT_NAME ops_stake_fee
 near view $CONTRACT_NAME ops_stake_public_key
 near view $CONTRACT_NAME ops_stake_token_value
