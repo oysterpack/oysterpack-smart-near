@@ -82,3 +82,5 @@ near call $CONTRACT_NAME ops_stake_operator_command --args '{"command":"StopStak
 ```
 
 #      1000000000000000000000000 - 1 NEAR
+
+#           1000000000000000000 - 1 TGas
