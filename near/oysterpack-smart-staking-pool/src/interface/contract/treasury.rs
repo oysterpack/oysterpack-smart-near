@@ -1,7 +1,6 @@
 use crate::StakeAccountBalances;
 use oysterpack_smart_near::domain::YoctoNear;
 use oysterpack_smart_near::near_sdk::PromiseOrValue;
-use oysterpack_smart_near::{Level, LogEvent};
 
 /// # **Contract Interface**: Staking Pool Treasury API
 pub trait Treasury {
@@ -45,5 +44,3 @@ pub trait Treasury {
 }
 
 pub const PERMISSION_TREASURER: &str = "treasurer";
-
-pub const LOG_EVENT_TREASURY_DEPOSIT: LogEvent = LogEvent(Level::INFO, "TREASURY_DEPOSIT");

@@ -5,13 +5,13 @@ use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     serde::{Deserialize, Deserializer, Serialize, Serializer},
 };
-use std::fmt::Formatter;
+use std::fmt::{Debug, Formatter};
 use std::{
     convert::{TryFrom, TryInto},
     fmt::{self, Display},
 };
 
-#[derive(BorshDeserialize, BorshSerialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(BorshDeserialize, BorshSerialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PublicKey {
     ED25519([u8; 32]),
     SECP256K1(([u8; 32], [u8; 32])),
@@ -94,7 +94,13 @@ impl Display for PublicKey {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let key = Base58PublicKey::from(*self);
         let s: String = (&key).try_into().map_err(|_| fmt::Error)?;
-        s.fmt(f)
+        Display::fmt(&s, f)
+    }
+}
+
+impl Debug for PublicKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Display::fmt(&self, f)
     }
 }
 

@@ -45,18 +45,24 @@ pub struct ContractNearBalances {
 
 impl ContractNearBalances {
     pub fn new(accounts: YoctoNear, balances: Option<NearBalances>) -> Self {
-        let locked = env::account_locked_balance().into();
-        let total = locked + env::account_balance();
-        let owner = total
-            - locked
-            - accounts
-            - balances.as_ref().map_or(YoctoNear::ZERO, |balances| {
+        let locked: YoctoNear = env::account_locked_balance().into();
+        let total: YoctoNear = locked + env::account_balance();
+
+        let total_contract_near_balances: YoctoNear =
+            balances.as_ref().map_or(YoctoNear::ZERO, |balances| {
                 balances
                     .values()
                     .map(|balance| balance.value())
                     .sum::<u128>()
                     .into()
             });
+
+        // let owner = (total - locked)
+        //     .saturating_sub(*accounts)
+        //     .saturating_sub(*total_contract_near_balances)
+        //     .into();
+        let owner = total - locked - accounts - total_contract_near_balances;
+
         Self {
             total,
             accounts,

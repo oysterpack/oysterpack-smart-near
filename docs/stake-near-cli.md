@@ -50,6 +50,12 @@ near call $CONTRACT_NAME ops_permissions_grant_permissions --args '{"account_id"
 near view $CONTRACT_NAME ops_permissions_contract_permissions
 ```
 
+## Contract Metrics
+```shell
+near view $CONTRACT_NAME ops_metrics_near_balances
+near view $CONTRACT_NAME  ops_metrics_accounts
+```
+
 ## Staking Pool
 ```shell
 near view $CONTRACT_NAME ops_stake_status
@@ -62,9 +68,22 @@ near view $CONTRACT_NAME ops_stake_balance --args '{"account_id":"oysterpack.tes
 
 near call $CONTRACT_NAME ops_stake --accountId oysterpack.testnet
 near call $CONTRACT_NAME ops_stake --accountId oysterpack.testnet --amount 1
+
+near call $CONTRACT_NAME ops_unstake --accountId oysterpack.testnet --args '{"amount":"1000000000000000000000000"}'
+
+near call $CONTRACT_NAME ops_restake --accountId oysterpack.testnet
 ```
 
 ### Staking Pool Operator
 ```shell
 near call $CONTRACT_NAME ops_stake_operator_command --args '{"command":"StartStaking"}' --accountId oysterpack.testnet
+
+near call $CONTRACT_NAME ops_stake_operator_command --args '{"command":"StopStaking"}' --accountId oysterpack.testnet
 ```
+
+#      1000000000000000000000000 - 1 NEAR
+#      1011790000000000000000000
+#        11790000000000000000000
+#      2976420000000000000001000
+#       992140000000000000000000
+# 300002999999999999999999999999

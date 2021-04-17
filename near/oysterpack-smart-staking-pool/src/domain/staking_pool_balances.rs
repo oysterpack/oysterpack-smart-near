@@ -11,10 +11,6 @@ use oysterpack_smart_near::{
 pub struct StakingPoolBalances {
     /// total NEAR funds that have been staked and confirmed
     pub total_staked: YoctoNear,
-    /// tracks in flight funds that have been staked but not yet confirmed
-    pub staked: YoctoNear,
-    /// tracks in flight funds that have been unstaked but not yet confirmed
-    pub unstaked: YoctoNear,
 
     /// total unstaked funds that have not yet been withdrawn
     /// - includes locked and unlocked funds
@@ -28,13 +24,12 @@ pub struct StakingPoolBalances {
 
 impl StakingPoolBalances {
     pub fn load() -> Self {
+        let state = StakingPoolComponent::state();
         Self {
-            total_staked: ContractNearBalances::near_balance(State::TOTAL_STAKED_BALANCE),
-            staked: ContractNearBalances::near_balance(State::STAKED_BALANCE),
-            unstaked: ContractNearBalances::near_balance(State::UNSTAKED_BALANCE),
+            total_staked: state.total_staked_balance,
             total_unstaked: ContractNearBalances::near_balance(State::TOTAL_UNSTAKED_BALANCE),
             unstaked_liquidity: ContractNearBalances::near_balance(State::UNSTAKED_LIQUIDITY_POOL),
-            treasury_balance: StakingPoolComponent::state().treasury_balance,
+            treasury_balance: state.treasury_balance,
         }
     }
 }
