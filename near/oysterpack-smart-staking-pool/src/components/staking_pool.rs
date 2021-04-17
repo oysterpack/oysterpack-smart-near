@@ -239,7 +239,14 @@ impl StakingPool for StakingPoolComponent {
                 let unstaked = self
                     .account_manager
                     .load_account_data(account_id.as_ref())
-                    .map(|data| data.unstaked_balances.into());
+                    .map(|data| {
+                        if data.unstaked_balances.total() == YoctoNear::ZERO {
+                            None
+                        } else {
+                            Some(data.unstaked_balances.into())
+                        }
+                    })
+                    .flatten();
 
                 StakeAccountBalances {
                     storage_balance,
@@ -1703,6 +1710,181 @@ last_contract_managed_total_balance             {}
                         );
                     }
                     _ => panic!("expected transfer action"),
+                }
+            }
+        }
+
+        #[cfg(test)]
+        mod tests_restake {
+            use super::*;
+
+            #[test]
+            fn restake_partial() {
+                // Arrange
+                let mut ctx = new_context(ACCOUNT);
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                let contract_managed_total_balance = State::contract_managed_total_balance();
+
+                let mut account_manager = account_manager();
+                let mut staking_pool = staking_pool();
+                assert!(!staking_pool.ops_stake_status().is_online());
+
+                let ft_stake = ft_stake();
+
+                // register account
+                ctx.account_balance = env::account_balance();
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, Some(true));
+                account_manager.storage_deposit(None, Some(false));
+
+                // stake storage deposit
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = 0;
+                testing_env!(ctx.clone());
+                if let PromiseOrValue::Value(_) = staking_pool.ops_stake() {
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+                } else {
+                    panic!("expected value");
+                }
+
+                // unstake all
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = 0;
+                testing_env!(ctx.clone());
+                if let PromiseOrValue::Value(_) = staking_pool.ops_unstake(None) {
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+                } else {
+                    panic!("expected value");
+                }
+
+                let balances_before_restaking = staking_pool
+                    .ops_stake_balance(to_valid_account_id(ACCOUNT))
+                    .unwrap();
+
+                // Act
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = 0;
+                testing_env!(ctx.clone());
+                if let PromiseOrValue::Value(balances) =
+                    staking_pool.ops_restake(Some((1000).into()))
+                {
+                    // Assert
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+                    assert_eq!(
+                        logs,
+                        vec![
+                            "[INFO] [STAKE] near_amount=1000, stake_token_amount=1000",
+                            "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                            "[INFO] [FT_MINT] account: bob, amount: 1000",
+                            "[INFO] [FT_BURN] account: bob, amount: 8",
+                            "[INFO] [FT_MINT] account: owner, amount: 8",
+                            "[WARN] [STATUS_OFFLINE] ",
+                        ]
+                    );
+
+                    println!("{}", serde_json::to_string_pretty(&balances).unwrap());
+                    assert_eq!(
+                        balances.unstaked.as_ref().unwrap().total,
+                        balances_before_restaking.unstaked.as_ref().unwrap().total - 1000
+                    );
+                    let staking_fee = staking_pool.ops_stake_fee() * 1000.into();
+                    assert_eq!(
+                        balances.staked.as_ref().unwrap().near_value,
+                        (1000 - *staking_fee).into()
+                    );
+                } else {
+                    panic!("expected Value")
+                }
+            }
+
+            #[test]
+            fn restake_all() {
+                // Arrange
+                let mut ctx = new_context(ACCOUNT);
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                let contract_managed_total_balance = State::contract_managed_total_balance();
+
+                let mut account_manager = account_manager();
+                let mut staking_pool = staking_pool();
+                assert!(!staking_pool.ops_stake_status().is_online());
+
+                let ft_stake = ft_stake();
+
+                // register account
+                ctx.account_balance = env::account_balance();
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, Some(true));
+                account_manager.storage_deposit(None, Some(false));
+
+                // stake storage deposit
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = 0;
+                testing_env!(ctx.clone());
+                if let PromiseOrValue::Value(_) = staking_pool.ops_stake() {
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+                } else {
+                    panic!("expected value");
+                }
+
+                // unstake all
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = 0;
+                testing_env!(ctx.clone());
+                if let PromiseOrValue::Value(_) = staking_pool.ops_unstake(None) {
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+                } else {
+                    panic!("expected value");
+                }
+
+                let balance_before_restaking = staking_pool
+                    .ops_stake_balance(to_valid_account_id(ACCOUNT))
+                    .unwrap();
+
+                // Act
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = 0;
+                testing_env!(ctx.clone());
+                if let PromiseOrValue::Value(balances) = staking_pool.ops_restake(None) {
+                    // Assert
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+                    assert_eq!(
+                        logs,
+                        vec![
+                            "[INFO] [STAKE] near_amount=992000000000000000000000, stake_token_amount=992000000000000000000000",
+                            "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                            "[INFO] [FT_MINT] account: bob, amount: 992000000000000000000000",
+                            "[INFO] [FT_BURN] account: bob, amount: 7936000000000000000000",
+                            "[INFO] [FT_MINT] account: owner, amount: 7936000000000000000000",
+                            "[WARN] [STATUS_OFFLINE] ",
+                        ]
+                    );
+
+                    println!("{}", serde_json::to_string_pretty(&balances).unwrap());
+                    assert!(balances.unstaked.is_none());
+                    let staking_fee = staking_pool.ops_stake_fee()
+                        * balance_before_restaking.unstaked.as_ref().unwrap().total;
+                    assert_eq!(
+                        balances.staked.as_ref().unwrap().near_value,
+                        balance_before_restaking.unstaked.as_ref().unwrap().total - staking_fee
+                    );
+                } else {
+                    panic!("expected Value")
                 }
             }
         }
