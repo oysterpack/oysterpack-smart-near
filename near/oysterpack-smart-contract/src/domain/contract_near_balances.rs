@@ -57,11 +57,7 @@ impl ContractNearBalances {
                     .into()
             });
 
-        // let owner = (total - locked)
-        //     .saturating_sub(*accounts)
-        //     .saturating_sub(*total_contract_near_balances)
-        //     .into();
-        let owner = total - locked - accounts - total_contract_near_balances;
+        let owner = total - accounts - total_contract_near_balances;
 
         Self {
             total,
