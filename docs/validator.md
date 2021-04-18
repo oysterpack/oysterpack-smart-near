@@ -12,12 +12,13 @@ nearup run testnet --binary-path $NEARCORE/target/release --account-id $STAKING_
 ```shell
 git clone https://github.com/near/nearcore.git
 export NEAR_RELEASE_VERSION=$(curl -s https://github.com/near/nearcore/releases/latest | tr '/" ' '\n' | grep "[0-9]\.[0-9]*\.[0-9]" | head -n 1)
+echo $NEAR_RELEASE_VERSION
 cd nearcore
 git checkout $NEAR_RELEASE_VERSION
 cargo build -p neard --release
 
 target/release/neard init --chain-id="mainnet" --account-id=<YOUR_STAKING_POOL_ID>
-target/release/neard runn
+target/release/neard run
 ```
 
 ## Initializing the STAKE contract
