@@ -109,11 +109,13 @@ impl State {
     /// no access to
     /// - this is used to compute staking rewards that are earned - since this balance is completely
     ///  managed by the contract, then if the balance increases, then we know rewards have been earned
+    /// - account storage balances and unstaked liquidity pool funds are funds that accounts can deposit
+    ///   and withdraw from at any time, and thus are excluded from the equation
     pub fn contract_managed_total_balance() -> YoctoNear {
         let total_contract_balance: YoctoNear =
             (env::account_balance() + env::account_locked_balance() - env::attached_deposit())
                 .into();
-        total_contract_balance - AccountMetrics::load().total_near_balance
+        total_contract_balance - AccountMetrics::load().total_near_balance - State::liquidity()
     }
 
     /// returns any earnings that have been received since the last time we checked
@@ -883,13 +885,19 @@ impl StakingPoolComponent {
 
     pub(crate) fn state_with_updated_earnings() -> ComponentState<State> {
         let mut state = Self::state();
-        let earnings = state.check_for_earnings();
+
+        let contract_managed_total_balance = State::contract_managed_total_balance();
+        // we do a saturating subtraction here because when staking the attached deposit will be
+        // added to the `last_contract_managed_total_balance
+        let earnings: YoctoNear = contract_managed_total_balance
+            .saturating_sub(*state.last_contract_managed_total_balance)
+            .into();
         if earnings > YoctoNear::ZERO {
             LOG_EVENT_EARNINGS.log(earnings);
             state.total_staked_balance += earnings;
-            state.last_contract_managed_total_balance += earnings;
-            state.save();
         }
+        state.last_contract_managed_total_balance = contract_managed_total_balance;
+        state.save();
         state
     }
 
@@ -2881,6 +2889,72 @@ last_contract_managed_total_balance             {}
         #[cfg(test)]
         mod tests_stake_callback {
             use super::*;
+
+            #[test]
+            fn online_and_promise_success_with_zero_earnings() {
+                // Arrange
+                let mut ctx = new_context(ACCOUNT);
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                let mut account_manager = account_manager();
+                let mut staking_pool = staking_pool();
+
+                // start staking
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                assert!(staking_pool.ops_stake_status().is_online());
+
+                // register account
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, Some(true));
+
+                // stake
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake();
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+
+                let receipts = deserialize_receipts();
+                match &receipts[1].actions[0] {
+                    Action::FunctionCall(action) => {
+                        let args: StakeActionCallbackArgs =
+                            serde_json::from_str(&action.args).unwrap();
+
+                        ctx.predecessor_account_id = (&receipts[1]).receiver_id.to_string();
+                        ctx.account_balance = env::account_balance()
+                            - *staking_pool.ops_stake_pool_balances().total_staked;
+                        ctx.account_locked_balance =
+                            *staking_pool.ops_stake_pool_balances().total_staked;
+                        testing_env_with_promise_result_success(ctx.clone());
+                        let state_before_callback =
+                            StakingPoolComponent::state_with_updated_earnings();
+                        let balances = staking_pool.ops_stake_finalize(args.account_id.clone());
+                        println!("{}", serde_json::to_string_pretty(&balances).unwrap());
+                        assert_eq!(
+                            balances,
+                            staking_pool
+                                .ops_stake_balance(to_valid_account_id(&args.account_id))
+                                .unwrap()
+                        );
+                        let state_after_callback =
+                            StakingPoolComponent::state_with_updated_earnings();
+                        assert_eq!(
+                            state_before_callback.last_contract_managed_total_balance,
+                            state_after_callback.last_contract_managed_total_balance
+                        );
+                    }
+                    _ => panic!("expected function call"),
+                }
+            }
         }
     }
 
