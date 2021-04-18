@@ -329,6 +329,7 @@ impl StakingPool for StakingPoolComponent {
                 }
             },
             Some(mut account) => {
+                Self::state_with_updated_earnings();
                 let (near_amount, stake_token_amount) = {
                     let near = amount.unwrap_or_else(|| account.unstaked_balances.total());
                     let (stake, remainder) = self.near_to_stake(near);
@@ -365,6 +366,7 @@ impl StakingPool for StakingPoolComponent {
             Promise::new(env::predecessor_account_id()).transfer(*amount);
         }
 
+        Self::state_with_updated_earnings();
         match amount {
             // withdraw all available
             None => {
