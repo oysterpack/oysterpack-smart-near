@@ -543,8 +543,8 @@ impl StakingPoolOwner for StakingPoolComponent {
 impl StakeActionCallbacks for StakingPoolComponent {
     fn ops_stake_finalize(&mut self, account_id: AccountId) -> StakeAccountBalances {
         let state = Self::state_with_updated_earnings();
-        if state.status.is_online() {
-            Self::handle_stake_action_result();
+        if state.status.is_online() && !is_promise_success() {
+            Self::stop_staking(OfflineReason::StakeActionFailed);
         }
 
         self.ops_stake_balance(to_valid_account_id(&account_id))
@@ -553,8 +553,8 @@ impl StakeActionCallbacks for StakingPoolComponent {
 
     fn ops_unstake_finalize(&mut self, account_id: AccountId) -> StakeAccountBalances {
         let state = Self::state_with_updated_earnings();
-        if state.status.is_online() {
-            Self::handle_stake_action_result();
+        if state.status.is_online() && !is_promise_success() {
+            Self::stop_staking(OfflineReason::StakeActionFailed);
         }
         self.ops_stake_balance(to_valid_account_id(&account_id))
             .unwrap()
@@ -865,16 +865,6 @@ impl StakingPoolComponent {
 
         state.save();
         state
-    }
-
-    /// return true if stake action succeeded
-    fn handle_stake_action_result() -> bool {
-        if !is_promise_success() {
-            Self::stop_staking(OfflineReason::StakeActionFailed);
-            false
-        } else {
-            true
-        }
     }
 
     fn registered_stake_account_balance(
@@ -2881,6 +2871,16 @@ last_contract_managed_total_balance             {}
                     }
                 }
             }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests_callbacks {
+        use super::*;
+
+        #[cfg(test)]
+        mod tests_stake_callback {
+            use super::*;
         }
     }
 
