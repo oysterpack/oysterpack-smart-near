@@ -470,21 +470,20 @@ impl StakingPoolComponent {
                 state.status = Status::Online;
                 state.save();
             }
-            LOG_EVENT_STATUS_ONLINE.log("starting");
 
             // stake
-            {
-                if state.total_staked_balance > YoctoNear::ZERO {
-                    Promise::new(env::current_account_id())
-                        .stake(*state.total_staked_balance, state.stake_public_key.into())
-                        .then(json_function_callback(
-                            "ops_stake_start_finalize",
-                            Option::<()>::None,
-                            YoctoNear::ZERO,
-                            Self::callback_gas(),
-                        ));
-                }
+            if state.total_staked_balance > YoctoNear::ZERO {
+                Promise::new(env::current_account_id())
+                    .stake(*state.total_staked_balance, state.stake_public_key.into())
+                    .then(json_function_callback(
+                        "ops_stake_start_finalize",
+                        Option::<()>::None,
+                        YoctoNear::ZERO,
+                        Self::callback_gas(),
+                    ));
             }
+
+            LOG_EVENT_STATUS_ONLINE.log("");
         }
     }
 
@@ -552,7 +551,7 @@ impl StakeActionCallbacks for StakingPoolComponent {
 
     fn ops_stake_start_finalize(&mut self) {
         if is_promise_success() {
-            LOG_EVENT_STATUS_ONLINE.log("started");
+            LOG_EVENT_STATUS_ONLINE.log("staked");
         } else {
             Self::stop_staking(OfflineReason::StakeActionFailed);
         }
@@ -2913,6 +2912,49 @@ last_contract_managed_total_balance             {}
                         _ => panic!("expected StakeAction"),
                     }
                 }
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests_operator_commands {
+        use super::*;
+
+        #[cfg(test)]
+        mod tests_start_staking {
+            use super::*;
+
+            #[test]
+            fn initial_startup_with_zero_staked() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                let contract_managed_total_balance = State::contract_managed_total_balance();
+
+                let mut account_manager = account_manager();
+                let mut staking_pool = staking_pool();
+                assert!(!staking_pool.ops_stake_status().is_online());
+
+                // start staking
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                assert!(staking_pool.ops_stake_status().is_online());
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs, vec!["[INFO] [STATUS_ONLINE] ",]);
+
+                let pool_balances = staking_pool.ops_stake_pool_balances();
+                println!("{}", serde_json::to_string_pretty(&pool_balances).unwrap());
+                assert_eq!(pool_balances.total_staked, YoctoNear::ZERO);
+                assert_eq!(pool_balances.total_unstaked, YoctoNear::ZERO);
+                assert_eq!(pool_balances.unstaked_liquidity, YoctoNear::ZERO);
+                assert_eq!(pool_balances.treasury_balance, YoctoNear::ZERO);
+
+                assert!(deserialize_receipts().is_empty());
             }
         }
     }
