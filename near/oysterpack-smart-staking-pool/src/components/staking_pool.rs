@@ -3878,6 +3878,105 @@ last_contract_managed_total_balance             {}
             }
         }
     }
+
+    #[cfg(test)]
+    mod tests_treasury {
+        use super::*;
+
+        #[cfg(test)]
+        mod tests_online {
+            use super::*;
+
+            #[cfg(test)]
+            mod tests_deposit {
+                use super::*;
+
+                #[test]
+                fn nonzero_attached_deposit() {
+                    // Arrange
+                    let mut ctx = new_context(OWNER);
+                    testing_env!(ctx.clone());
+
+                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                    let mut staking_pool = staking_pool();
+
+                    // start staking
+                    ctx.predecessor_account_id = OWNER.to_string();
+                    testing_env!(ctx.clone());
+                    staking_pool
+                        .ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                    assert!(staking_pool.ops_stake_status().is_online());
+
+                    let ft_stake = ft_stake();
+                    assert_eq!(
+                        ft_stake.ft_balance_of(to_valid_account_id(&env::current_account_id())),
+                        TokenAmount::ZERO
+                    );
+
+                    // register account
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    ctx.attached_deposit = YOCTO;
+                    ctx.account_balance = env::account_balance();
+                    testing_env!(ctx.clone());
+                    if let PromiseOrValue::Value(_) = staking_pool.ops_stake_treasury_deposit() {
+                        panic!("expected Promise")
+                    }
+
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+
+                    assert_eq!(
+                        ft_stake.ft_balance_of(to_valid_account_id(&env::current_account_id())),
+                        YOCTO.into()
+                    );
+
+                    let receipts = deserialize_receipts();
+                    assert_eq!(receipts.len(), 2);
+                    {
+                        let receipt = &receipts[0];
+                        assert_eq!(receipt.receiver_id, env::current_account_id());
+                        assert_eq!(receipt.actions.len(), 1);
+                        match &receipt.actions[0] {
+                            Action::Stake(action) => {
+                                assert_eq!(
+                                    action.stake,
+                                    *staking_pool.ops_stake_pool_balances().total_staked
+                                );
+
+                                assert_eq!(
+                                    action.public_key,
+                                    "1".to_string()
+                                        + staking_pool
+                                            .ops_stake_public_key()
+                                            .to_string()
+                                            .split(":")
+                                            .last()
+                                            .unwrap()
+                                );
+                            }
+                            _ => panic!("expected StakeAction"),
+                        }
+                    }
+                    {
+                        let receipt = &receipts[1];
+                        assert_eq!(receipt.receiver_id, env::current_account_id());
+                        assert_eq!(receipt.actions.len(), 1);
+                        match &receipt.actions[0] {
+                            Action::FunctionCall(action) => {
+                                assert_eq!(action.method_name, "ops_stake_finalize");
+                                let args: StakeActionCallbackArgs =
+                                    serde_json::from_str(&action.args).unwrap();
+                                assert_eq!(args.account_id, env::current_account_id());
+                                assert_eq!(action.deposit, 0);
+                            }
+                            _ => panic!("expected StakeAction"),
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 // #[cfg(test)]
