@@ -26,7 +26,7 @@ impl StakingPoolBalances {
     pub fn load() -> Self {
         let state = StakingPoolComponent::state();
         Self {
-            total_staked: state.total_staked_balance,
+            total_staked: State::total_staked_balance(),
             total_unstaked: ContractNearBalances::near_balance(State::TOTAL_UNSTAKED_BALANCE),
             unstaked_liquidity: ContractNearBalances::near_balance(State::UNSTAKED_LIQUIDITY_POOL),
             treasury_balance: state.treasury_balance,

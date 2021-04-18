@@ -17,8 +17,13 @@ use near_sdk::{
     near_bindgen, PanicOnDefault,
 };
 use oysterpack_smart_account_management::components::account_management::AccountManagementComponentConfig;
-use oysterpack_smart_account_management::StorageUsageBounds;
-use oysterpack_smart_contract::components::contract_ownership::ContractOwnershipComponent;
+use oysterpack_smart_account_management::{AccountRepository, StorageUsageBounds};
+use oysterpack_smart_contract::{
+    components::contract_operator::ContractOperatorComponent, ContractOperator,
+};
+use oysterpack_smart_contract::{
+    components::contract_ownership::ContractOwnershipComponent, ContractOwnership,
+};
 use oysterpack_smart_fungible_token::components::fungible_token::{
     FungibleTokenComponent, FungibleTokenConfig,
 };
@@ -46,9 +51,20 @@ impl Contract {
 
         AccountManager::deploy(AccountManagementComponentConfig {
             storage_usage_bounds: None,
-            admin_account: owner,
+            admin_account: owner.clone(),
             component_account_storage_mins: Some(vec![StakeFungibleToken::account_storage_min]),
         });
+
+        // transfer any contract balance to the owner - minus the contract operational balance
+        {
+            let mut contract_operator = ContractOperatorComponent::new(Self::account_manager());
+            contract_operator.ops_operator_lock_storage_balance(10000.into());
+            let account_manager = Self::account_manager();
+            let mut owner_account = account_manager.registered_account_near_data(owner.as_ref());
+            owner_account
+                .incr_near_balance(ContractOwnershipComponent.ops_owner_balance().available);
+            owner_account.save();
+        }
 
         StakeFungibleToken::deploy(FungibleTokenConfig {
             metadata: Metadata {

@@ -70,7 +70,7 @@ near view $CONTRACT_NAME ops_stake_token_value
 near view $CONTRACT_NAME ops_stake_balance --args '{"account_id":"oysterpack.testnet"}'
 
 near call $CONTRACT_NAME ops_stake --accountId oysterpack.testnet
-near call $CONTRACT_NAME ops_stake --accountId oysterpack.testnet --amount 1
+near call $CONTRACT_NAME ops_stake --accountId oysterpack.testnet --amount 350000
 
 near call $CONTRACT_NAME ops_unstake --accountId oysterpack.testnet --args '{"amount":"1000000000000000000000000"}'
 

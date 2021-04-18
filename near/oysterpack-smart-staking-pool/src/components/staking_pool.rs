@@ -77,7 +77,6 @@ pub struct State {
 
     pub status: Status,
 
-    pub total_staked_balance: YoctoNear,
     /// used to check if staking rewards were earned
     pub last_contract_managed_total_balance: YoctoNear,
 
@@ -90,6 +89,8 @@ pub struct State {
 }
 
 impl State {
+    pub const TOTAL_STAKED_BALANCE: BalanceId = BalanceId(1956973021105502521442959170292258855);
+
     /// unstaked funds are locked for 4 epochs
     /// - we need to track unstaked funds that is owned by accounts separate from the account NEAR balances
     /// - accounts will need to withdraw unstaked balances against this balance in combination with
@@ -135,6 +136,18 @@ impl State {
         contract_managed_total_balance
             .saturating_sub(*self.last_contract_managed_total_balance)
             .into()
+    }
+
+    pub(crate) fn total_staked_balance() -> YoctoNear {
+        ContractNearBalances::near_balance(Self::TOTAL_STAKED_BALANCE)
+    }
+
+    fn incr_total_staked_balance(amount: YoctoNear) {
+        ContractNearBalances::incr_balance(Self::TOTAL_STAKED_BALANCE, amount);
+    }
+
+    fn decr_total_staked_balance(amount: YoctoNear) {
+        ContractNearBalances::decr_balance(Self::TOTAL_STAKED_BALANCE, amount);
     }
 
     fn total_unstaked_balance() -> YoctoNear {
@@ -210,7 +223,6 @@ impl Deploy for StakingPoolComponent {
             staking_fee: config.staking_fee.unwrap_or(80.into()),
             treasury_balance: YoctoNear::ZERO,
             last_contract_managed_total_balance: State::contract_managed_total_balance(),
-            total_staked_balance: YoctoNear::ZERO,
         };
         let state = Self::new_state(state);
         state.save();
@@ -299,14 +311,12 @@ impl StakingPool for StakingPoolComponent {
             near_amount, stake_token_amount
         ));
 
-        let mut state = Self::state();
-        state.total_staked_balance -= near_amount;
-        state.save();
-
+        State::decr_total_staked_balance(near_amount);
         State::incr_total_unstaked_balance(near_amount);
         self.stake_token.ft_burn(&account_id, stake_token_amount);
         self.credit_unstaked_amount(&account_id, near_amount);
 
+        let state = Self::state();
         match state.status {
             Status::Online => {
                 let promise =
@@ -407,7 +417,7 @@ impl StakingPool for StakingPoolComponent {
         // which is not permitted to be invoked in a view method
         self.compute_stake_near_value_rounded_down(
             amount.unwrap_or(YOCTO.into()),
-            state.total_staked_balance + state.check_for_earnings_in_view_mode(),
+            State::total_staked_balance() + state.check_for_earnings_in_view_mode(),
         )
     }
 
@@ -494,9 +504,10 @@ impl StakingPoolComponent {
             }
 
             // stake
-            if state.total_staked_balance > YoctoNear::ZERO {
+            let total_staked_balance = State::total_staked_balance();
+            if total_staked_balance > YoctoNear::ZERO {
                 Promise::new(env::current_account_id())
-                    .stake(*state.total_staked_balance, state.stake_public_key.into())
+                    .stake(*total_staked_balance, state.stake_public_key.into())
                     .then(json_function_callback(
                         "ops_stake_start_finalize",
                         Option::<()>::None,
@@ -705,7 +716,7 @@ impl StakingPoolComponent {
         ));
         let state = {
             let mut state = Self::state();
-            state.total_staked_balance += near_amount;
+            State::incr_total_staked_balance(near_amount);
             state.last_contract_managed_total_balance += near_amount;
             state.save();
             state
@@ -883,7 +894,7 @@ impl StakingPoolComponent {
             .into();
         if earnings > YoctoNear::ZERO {
             LOG_EVENT_EARNINGS.log(earnings);
-            state.total_staked_balance += earnings;
+            State::incr_total_staked_balance(earnings);
         }
         state.last_contract_managed_total_balance = contract_managed_total_balance;
         state.save();
@@ -897,8 +908,10 @@ impl StakingPoolComponent {
     }
 
     fn create_stake_workflow(state: State, account_id: &str, callback: &str) -> Promise {
-        let stake = Promise::new(env::current_account_id())
-            .stake(*state.total_staked_balance, state.stake_public_key.into());
+        let stake = Promise::new(env::current_account_id()).stake(
+            *State::total_staked_balance(),
+            state.stake_public_key.into(),
+        );
         let finalize = json_function_callback(
             callback,
             Some(StakeActionCallbackArgs {
@@ -911,7 +924,7 @@ impl StakingPoolComponent {
     }
 
     fn stake_near_value_rounded_down(&self, stake: TokenAmount) -> YoctoNear {
-        self.compute_stake_near_value_rounded_down(stake, Self::state().total_staked_balance)
+        self.compute_stake_near_value_rounded_down(stake, State::total_staked_balance())
     }
 
     fn compute_stake_near_value_rounded_down(
@@ -949,7 +962,7 @@ impl StakingPoolComponent {
             return TokenAmount::ZERO;
         }
 
-        let total_staked_balance = *Self::state().total_staked_balance;
+        let total_staked_balance = *State::total_staked_balance();
         let ft_total_supply = *self.stake_token.ft_total_supply();
         if total_staked_balance == 0 || ft_total_supply == 0 {
             return (*amount).into();
@@ -965,7 +978,7 @@ impl StakingPoolComponent {
             return TokenAmount::ZERO;
         }
 
-        let total_staked_balance = *Self::state().total_staked_balance;
+        let total_staked_balance = *State::total_staked_balance();
         let ft_total_supply = *self.stake_token.ft_total_supply();
         if total_staked_balance == 0 || ft_total_supply == 0 {
             return amount.value().into();
@@ -1200,7 +1213,7 @@ last_contract_managed_total_balance             {}
                     );
                     let state = StakingPoolComponent::state();
                     println!("{:#?}", *state);
-                    assert_eq!(state.total_staked_balance, YOCTO.into());
+                    assert_eq!(State::total_staked_balance(), YOCTO.into());
                     assert_eq!(state.treasury_balance, YoctoNear::ZERO);
 
                     log_contract_managed_total_balance("after staking");
@@ -1317,7 +1330,7 @@ last_contract_managed_total_balance             {}
                     );
                     let state = StakingPoolComponent::state();
                     println!("{:#?}", *state);
-                    assert_eq!(state.total_staked_balance, YOCTO.into());
+                    assert_eq!(State::total_staked_balance(), YOCTO.into());
                     assert_eq!(state.treasury_balance, YoctoNear::ZERO);
 
                     log_contract_managed_total_balance("after staking");
@@ -1990,7 +2003,7 @@ last_contract_managed_total_balance             {}
                 );
                 let state = StakingPoolComponent::state();
                 println!("{:#?}", *state);
-                assert_eq!(state.total_staked_balance, YOCTO.into());
+                assert_eq!(State::total_staked_balance(), YOCTO.into());
                 assert_eq!(state.treasury_balance, YoctoNear::ZERO);
 
                 log_contract_managed_total_balance("after staking");
@@ -2105,7 +2118,7 @@ last_contract_managed_total_balance             {}
                     );
                     let state = StakingPoolComponent::state();
                     println!("{:#?}", *state);
-                    assert_eq!(state.total_staked_balance, YOCTO.into());
+                    assert_eq!(State::total_staked_balance(), YOCTO.into());
                     assert_eq!(state.treasury_balance, YoctoNear::ZERO);
 
                     log_contract_managed_total_balance("after staking");
