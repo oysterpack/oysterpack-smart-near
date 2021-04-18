@@ -1,9 +1,8 @@
 use crate::{
     OfflineReason, StakeAccountBalances, StakeAccountData, StakeActionCallbacks, StakedBalance,
-    StakingPool, StakingPoolBalances, StakingPoolOperator, StakingPoolOperatorCommand,
-    StakingPoolOwner, Status, Treasury, ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE,
-    ERR_STAKE_ACTION_FAILED, LOG_EVENT_EARNINGS, LOG_EVENT_LIQUIDITY,
-    LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE,
+    StakingPool, StakingPoolBalances, StakingPoolOperator, StakingPoolOperatorCommand, Status,
+    Treasury, ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE, ERR_STAKE_ACTION_FAILED, LOG_EVENT_EARNINGS,
+    LOG_EVENT_LIQUIDITY, LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE,
     LOG_EVENT_STATUS_ONLINE, LOG_EVENT_TREASURY_DIVIDEND, LOG_EVENT_UNSTAKE, PERMISSION_TREASURER,
 };
 use oysterpack_smart_account_management::{
@@ -13,7 +12,7 @@ use oysterpack_smart_account_management::{
 };
 use oysterpack_smart_contract::{
     components::contract_ownership::ContractOwnershipComponent, BalanceId, ContractNearBalances,
-    ContractOwnerObject, ContractOwnership,
+    ContractOwnership,
 };
 use oysterpack_smart_fungible_token::{
     components::fungible_token::FungibleTokenComponent, FungibleToken, TokenAmount, TokenService,
@@ -48,7 +47,6 @@ pub type StakeFungibleToken = FungibleTokenComponent<StakeAccountData>;
 pub struct StakingPoolComponent {
     account_manager: AccountManager,
     stake_token: StakeFungibleToken,
-    contract_ownership: ContractOwnershipComponent,
 }
 
 impl StakingPoolComponent {
@@ -59,7 +57,6 @@ impl StakingPoolComponent {
         Self {
             account_manager,
             stake_token: stake,
-            contract_ownership: ContractOwnershipComponent,
         }
     }
 }
@@ -521,26 +518,6 @@ impl StakingPoolComponent {
         let mut state = Self::state();
         state.staking_fee = fee;
         state.save();
-    }
-}
-
-impl StakingPoolOwner for StakingPoolComponent {
-    fn ops_stake_owner_balance(
-        &mut self,
-        amount: Option<YoctoNear>,
-    ) -> PromiseOrValue<StakeAccountBalances> {
-        ContractOwnerObject::assert_owner_access();
-        let owner_account_id = env::predecessor_account_id();
-        let mut owner = AccountManager::get_or_register_account(&owner_account_id);
-
-        let balance = self.contract_ownership.ops_owner_balance();
-        let amount = amount.unwrap_or_else(|| balance.available);
-        ERR_INSUFFICIENT_FUNDS.assert(|| balance.available >= amount);
-        // transfer owner balance to owner account's storage balance
-        owner.incr_near_balance(amount);
-        owner.save();
-
-        self.stake_account_funds(&owner_account_id, YoctoNear::ZERO)
     }
 }
 

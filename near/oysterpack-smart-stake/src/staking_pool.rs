@@ -4,7 +4,7 @@ use oysterpack_smart_near::domain::{BasisPoints, YoctoNear};
 use oysterpack_smart_near::near_sdk::{AccountId, PromiseOrValue};
 use oysterpack_smart_staking_pool::{
     StakeAccountBalances, StakeActionCallbacks, StakingPool, StakingPoolBalances,
-    StakingPoolOperator, StakingPoolOperatorCommand, StakingPoolOwner, Status, Treasury,
+    StakingPoolOperator, StakingPoolOperatorCommand, Status, Treasury,
 };
 
 #[near_bindgen]
@@ -54,23 +54,13 @@ impl StakingPool for Contract {
 #[near_bindgen]
 impl StakeActionCallbacks for Contract {
     #[private]
-    fn ops_stake_finalize(
-        &mut self,
-        account_id: AccountId,
-        amount: YoctoNear,
-        stake_token_amount: TokenAmount,
-    ) -> StakeAccountBalances {
-        Self::staking_pool().ops_stake_finalize(account_id, amount, stake_token_amount)
+    fn ops_stake_finalize(&mut self, account_id: AccountId) -> StakeAccountBalances {
+        Self::staking_pool().ops_stake_finalize(account_id)
     }
 
     #[private]
-    fn ops_unstake_finalize(
-        &mut self,
-        account_id: AccountId,
-        amount: YoctoNear,
-        stake_token_amount: TokenAmount,
-    ) -> StakeAccountBalances {
-        Self::staking_pool().ops_unstake_finalize(account_id, amount, stake_token_amount)
+    fn ops_unstake_finalize(&mut self, account_id: AccountId) -> StakeAccountBalances {
+        Self::staking_pool().ops_unstake_finalize(account_id)
     }
 
     #[private]
@@ -88,16 +78,6 @@ impl StakeActionCallbacks for Contract {
 impl StakingPoolOperator for Contract {
     fn ops_stake_operator_command(&mut self, command: StakingPoolOperatorCommand) {
         Self::staking_pool().ops_stake_operator_command(command);
-    }
-}
-
-#[near_bindgen]
-impl StakingPoolOwner for Contract {
-    fn ops_stake_owner_balance(
-        &mut self,
-        amount: Option<YoctoNear>,
-    ) -> PromiseOrValue<StakeAccountBalances> {
-        Self::staking_pool().ops_stake_owner_balance(amount)
     }
 }
 
