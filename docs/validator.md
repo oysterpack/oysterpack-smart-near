@@ -1,7 +1,7 @@
 ## Running a Validator Node on testnet
 - https://docs.near.org/docs/validator/staking
 ```shell
-STAKING_POOL=dev-1618485186536-2839500
+STAKING_POOL=dev-1618763984966-3812063
 NEARCORE=~/Documents/projects/github/near/nearcore
 
 nearup run testnet --binary-path $NEARCORE/target/release --account-id $STAKING_POOL
@@ -27,5 +27,5 @@ cd near/oysterpack-smart-stake
 # set `CONTRACT_NAME` env var
 . ./neardev/dev-account.env
 echo $CONTRACT_NAME
-near call $CONTRACT_NAME deploy --accountId oysterpack.testnet --args '{"stake_public_key":"ed25519:GTi3gtSio5ZYYKTT8WVovqJEob6KqdmkTi8KqGSfwqdm"}'
+near call $CONTRACT_NAME deploy --accountId oysterpack.testnet --args '{"stake_public_key":"ed25519:AC1pVDXsE8sZiLAqLTDa3sD8DH74U5yUDaYKWeBwwyJj"}'
 ```

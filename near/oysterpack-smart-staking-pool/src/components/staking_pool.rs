@@ -106,18 +106,30 @@ impl State {
     /// no access to
     /// - this is used to compute staking rewards that are earned - since this balance is completely
     ///  managed by the contract, then if the balance increases, then we know rewards have been earned
-    /// - account storage balances and unstaked liquidity pool funds are funds that accounts can deposit
+    /// - account storage balances and unstaked balances are funds that accounts can deposit
     ///   and withdraw from at any time, and thus are excluded from the equation
-    pub fn contract_managed_total_balance() -> YoctoNear {
+    fn contract_managed_total_balance() -> YoctoNear {
         let total_contract_balance: YoctoNear =
             (env::account_balance() + env::account_locked_balance() - env::attached_deposit())
                 .into();
-        total_contract_balance - AccountMetrics::load().total_near_balance - State::liquidity()
+        total_contract_balance
+            - AccountMetrics::load().total_near_balance
+            - State::liquidity()
+            - State::total_unstaked_balance()
     }
 
-    /// returns any earnings that have been received since the last time we checked
-    pub fn check_for_earnings(&self) -> YoctoNear {
-        let contract_managed_total_balance = Self::contract_managed_total_balance();
+    /// returns any earnings that have been received since the last time we checked - but excludes
+    /// attached deposit because this should only be called in view mode on the contract
+    /// - `env::attached_deposit` is illegal to call in view mode
+    fn check_for_earnings_in_view_mode(&self) -> YoctoNear {
+        let contract_managed_total_balance = {
+            let total_contract_balance: YoctoNear =
+                (env::account_balance() + env::account_locked_balance()).into();
+            total_contract_balance
+                - AccountMetrics::load().total_near_balance
+                - State::liquidity()
+                - State::total_unstaked_balance()
+        };
         // we do a saturating subtraction here because when staking the attached deposit will be
         // added to the `last_contract_managed_total_balance`
         contract_managed_total_balance
@@ -125,11 +137,7 @@ impl State {
             .into()
     }
 
-    fn current_total_staked_balance(&self) -> YoctoNear {
-        self.total_staked_balance + self.check_for_earnings()
-    }
-
-    pub fn total_unstaked_balance() -> YoctoNear {
+    fn total_unstaked_balance() -> YoctoNear {
         ContractNearBalances::near_balance(Self::TOTAL_UNSTAKED_BALANCE)
     }
 
@@ -177,7 +185,7 @@ impl State {
         }
     }
 
-    pub fn liquidity() -> YoctoNear {
+    pub(crate) fn liquidity() -> YoctoNear {
         ContractNearBalances::near_balance(Self::UNSTAKED_LIQUIDITY_POOL)
     }
 }
@@ -395,9 +403,11 @@ impl StakingPool for StakingPoolComponent {
 
     fn ops_stake_token_value(&self, amount: Option<TokenAmount>) -> YoctoNear {
         let state = Self::state();
+        // NOTE: we cannot check for earnings because it check if there is any attached deposit,
+        // which is not permitted to be invoked in a view method
         self.compute_stake_near_value_rounded_down(
             amount.unwrap_or(YOCTO.into()),
-            state.current_total_staked_balance() + state.check_for_earnings(),
+            state.total_staked_balance + state.check_for_earnings_in_view_mode(),
         )
     }
 

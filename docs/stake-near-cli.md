@@ -5,6 +5,9 @@ cd near/oysterpack-smart-stake
 echo $CONTRACT_NAME
 
 ACCOUNT=oysterpack.testnet
+
+# DELETE contract and reclaim funds
+# near delete $CONTRACT_NAME oysterpack.testnet
 ```
 
 ## Account Storage Usage
@@ -82,6 +85,7 @@ near call $CONTRACT_NAME ops_stake_operator_command --args '{"command":"StopStak
 ```
 
 #      1000000000000000000000000 - 1 NEAR
-#         8000000000000000000000
+#               1964010147207714
+#          687403551522700000000
 
 #           1000000000000000000 - 1 TGas
