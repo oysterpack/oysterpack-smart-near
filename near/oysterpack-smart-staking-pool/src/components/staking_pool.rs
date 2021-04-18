@@ -434,6 +434,24 @@ impl StakingPoolOperator for StakingPoolComponent {
 
 impl StakingPoolComponent {
     fn stop_staking(reason: OfflineReason) {
+        fn unstake_all(public_key: PublicKey) {
+            Promise::new(env::current_account_id())
+                .stake(0, public_key.into())
+                .then(json_function_callback(
+                    "ops_stake_stop_finalize",
+                    Option::<()>::None,
+                    YoctoNear::ZERO,
+                    StakingPoolComponent::callback_gas(),
+                ));
+        }
+
+        let log = || {
+            if let OfflineReason::StakeActionFailed = reason {
+                ERR_STAKE_ACTION_FAILED.log("");
+            }
+            LOG_EVENT_STATUS_OFFLINE.log(reason);
+        };
+
         let mut state = Self::state();
         if let Status::Online = state.status {
             // update the status
@@ -442,25 +460,16 @@ impl StakingPoolComponent {
                 state.save();
             }
 
-            // unstake all
             if env::account_locked_balance() > 0 {
-                Promise::new(env::current_account_id())
-                    .stake(0, state.stake_public_key.into())
-                    .then(json_function_callback(
-                        "ops_stake_stop_finalize",
-                        Option::<()>::None,
-                        YoctoNear::ZERO,
-                        Self::callback_gas(),
-                    ));
+                unstake_all(state.stake_public_key);
             }
 
-            // log
-            {
-                if let OfflineReason::StakeActionFailed = reason {
-                    ERR_STAKE_ACTION_FAILED.log("");
-                }
-                LOG_EVENT_STATUS_OFFLINE.log(reason);
-            }
+            log();
+        } else if env::account_locked_balance() > 0 {
+            LOG_EVENT_STATUS_OFFLINE
+                .log("already offline but locked balance was > 0 -> unstaking all");
+            unstake_all(state.stake_public_key);
+            log();
         }
     }
 
@@ -3056,6 +3065,249 @@ last_contract_managed_total_balance             {}
                 }
 
                 assert!(staking_pool.ops_stake_status().is_online());
+            }
+        }
+
+        #[cfg(test)]
+        mod tests_stop_staking {
+            use super::*;
+
+            #[test]
+            fn start_then_stop_with_zero_staked_balance() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                let mut staking_pool = staking_pool();
+                assert!(!staking_pool.ops_stake_status().is_online());
+
+                // start staking
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                assert!(staking_pool.ops_stake_status().is_online());
+
+                // Act - stop staking
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StopStaking);
+                assert!(!staking_pool.ops_stake_status().is_online());
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs, vec!["[WARN] [STATUS_OFFLINE] Stopped",]);
+
+                assert!(deserialize_receipts().is_empty());
+            }
+
+            #[test]
+            fn start_then_stop_with_nonzero_staked_balance_and_nonzero_locked_balance() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                let mut staking_pool = staking_pool();
+                assert!(!staking_pool.ops_stake_status().is_online());
+
+                // start staking
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                assert!(staking_pool.ops_stake_status().is_online());
+
+                // stake
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake();
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+
+                ctx.predecessor_account_id = OWNER.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.account_locked_balance = *staking_pool.ops_stake_pool_balances().total_staked;
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StopStaking);
+                assert!(!staking_pool.ops_stake_status().is_online());
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs, vec!["[WARN] [STATUS_OFFLINE] Stopped",]);
+
+                let receipts = deserialize_receipts();
+                assert_eq!(receipts.len(), 2);
+                {
+                    let receipt = &receipts[0];
+                    assert_eq!(receipt.receiver_id, env::current_account_id());
+                    assert_eq!(receipt.actions.len(), 1);
+                    match &receipt.actions[0] {
+                        Action::Stake(action) => {
+                            assert_eq!(action.stake, 0);
+
+                            assert_eq!(
+                                action.public_key,
+                                "1".to_string()
+                                    + staking_pool
+                                        .ops_stake_public_key()
+                                        .to_string()
+                                        .split(":")
+                                        .last()
+                                        .unwrap()
+                            );
+                        }
+                        _ => panic!("expected StakeAction"),
+                    }
+                }
+                {
+                    let receipt = &receipts[1];
+                    assert_eq!(receipt.receiver_id, env::current_account_id());
+                    assert_eq!(receipt.actions.len(), 1);
+                    match &receipt.actions[0] {
+                        Action::FunctionCall(action) => {
+                            assert_eq!(action.method_name, "ops_stake_stop_finalize");
+                            assert!(action.args.is_empty());
+                            assert_eq!(action.deposit, 0);
+                        }
+                        _ => panic!("expected StakeAction"),
+                    }
+                }
+            }
+
+            #[test]
+            fn start_then_stop_with_nonzero_staked_balance_and_zero_locked_balance() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                let mut staking_pool = staking_pool();
+                assert!(!staking_pool.ops_stake_status().is_online());
+
+                // start staking
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                assert!(staking_pool.ops_stake_status().is_online());
+
+                // stake
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake();
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+
+                // Act
+                ctx.predecessor_account_id = OWNER.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.account_locked_balance = 0;
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StopStaking);
+
+                // Assert
+                assert!(!staking_pool.ops_stake_status().is_online());
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs, vec!["[WARN] [STATUS_OFFLINE] Stopped",]);
+
+                assert!(deserialize_receipts().is_empty());
+            }
+
+            #[test]
+            fn already_stopped_with_nonzero_locked_balance() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                let mut staking_pool = staking_pool();
+                assert!(!staking_pool.ops_stake_status().is_online());
+
+                // start staking
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                assert!(staking_pool.ops_stake_status().is_online());
+
+                // stake
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake();
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+
+                // stop staking
+                ctx.predecessor_account_id = OWNER.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.account_locked_balance = *staking_pool.ops_stake_pool_balances().total_staked;
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StopStaking);
+                assert!(!staking_pool.ops_stake_status().is_online());
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(deserialize_receipts().len(), 2);
+
+                // Act
+                ctx.predecessor_account_id = OWNER.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.account_locked_balance = *staking_pool.ops_stake_pool_balances().total_staked;
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StopStaking);
+
+                // Assert
+                assert!(!staking_pool.ops_stake_status().is_online());
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs, vec![
+                    "[WARN] [STATUS_OFFLINE] already offline but locked balance was > 0 -> unstaking all",
+                    "[WARN] [STATUS_OFFLINE] Stopped",
+                ]);
+
+                let receipts = deserialize_receipts();
+                assert_eq!(receipts.len(), 2);
+                {
+                    let receipt = &receipts[0];
+                    assert_eq!(receipt.receiver_id, env::current_account_id());
+                    assert_eq!(receipt.actions.len(), 1);
+                    match &receipt.actions[0] {
+                        Action::Stake(action) => {
+                            assert_eq!(action.stake, 0);
+
+                            assert_eq!(
+                                action.public_key,
+                                "1".to_string()
+                                    + staking_pool
+                                        .ops_stake_public_key()
+                                        .to_string()
+                                        .split(":")
+                                        .last()
+                                        .unwrap()
+                            );
+                        }
+                        _ => panic!("expected StakeAction"),
+                    }
+                }
+                {
+                    let receipt = &receipts[1];
+                    assert_eq!(receipt.receiver_id, env::current_account_id());
+                    assert_eq!(receipt.actions.len(), 1);
+                    match &receipt.actions[0] {
+                        Action::FunctionCall(action) => {
+                            assert_eq!(action.method_name, "ops_stake_stop_finalize");
+                            assert!(action.args.is_empty());
+                            assert_eq!(action.deposit, 0);
+                        }
+                        _ => panic!("expected StakeAction"),
+                    }
+                }
             }
         }
     }
