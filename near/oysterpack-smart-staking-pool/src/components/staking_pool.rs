@@ -983,7 +983,6 @@ impl StakingPoolComponent {
 }
 
 #[cfg(test)]
-#[allow(unused_imports, dead_code, unused_variables, unused_mut)]
 mod tests_staking_pool {
     use super::*;
     use crate::*;
@@ -1003,7 +1002,7 @@ mod tests_staking_pool {
     };
     use oysterpack_smart_near::{
         component::*,
-        near_sdk::{env, serde_json, test_utils, VMContext},
+        near_sdk::{env, serde_json, test_utils},
         *,
     };
     use oysterpack_smart_near_test::*;
@@ -1015,7 +1014,6 @@ mod tests_staking_pool {
     pub type StakeFungibleToken = FungibleTokenComponent<StakeAccountData>;
 
     const OWNER: &str = "owner";
-    const ADMIN: &str = "admin";
     const ACCOUNT: &str = "bob";
 
     pub fn deploy_stake_contract(owner: Option<ValidAccountId>, stake_public_key: PublicKey) {
@@ -1116,8 +1114,6 @@ last_contract_managed_total_balance             {}
         #[cfg(test)]
         mod tests_stake {
             use super::*;
-            use oysterpack_smart_contract::components::contract_metrics::ContractMetricsComponent;
-            use oysterpack_smart_contract::ContractMetrics;
 
             #[test]
             fn with_attached_deposit() {
@@ -1364,13 +1360,10 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
 
                 deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
-                let contract_managed_total_balance = State::contract_managed_total_balance();
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
                 assert!(!staking_pool.ops_stake_status().is_online());
-
-                let ft_stake = ft_stake();
 
                 // register account
                 ctx.account_balance = env::account_balance();
@@ -1463,13 +1456,10 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
 
                 deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
-                let contract_managed_total_balance = State::contract_managed_total_balance();
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
                 assert!(!staking_pool.ops_stake_status().is_online());
-
-                let ft_stake = ft_stake();
 
                 // register account
                 ctx.account_balance = env::account_balance();
@@ -1567,13 +1557,10 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
 
                 deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
-                let contract_managed_total_balance = State::contract_managed_total_balance();
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
                 assert!(!staking_pool.ops_stake_status().is_online());
-
-                let ft_stake = ft_stake();
 
                 // register account
                 ctx.account_balance = env::account_balance();
@@ -1642,13 +1629,10 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
 
                 deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
-                let contract_managed_total_balance = State::contract_managed_total_balance();
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
                 assert!(!staking_pool.ops_stake_status().is_online());
-
-                let ft_stake = ft_stake();
 
                 // register account
                 ctx.account_balance = env::account_balance();
@@ -1727,13 +1711,10 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
 
                 deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
-                let contract_managed_total_balance = State::contract_managed_total_balance();
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
                 assert!(!staking_pool.ops_stake_status().is_online());
-
-                let ft_stake = ft_stake();
 
                 // register account
                 ctx.account_balance = env::account_balance();
@@ -1814,13 +1795,10 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
 
                 deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
-                let contract_managed_total_balance = State::contract_managed_total_balance();
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
                 assert!(!staking_pool.ops_stake_status().is_online());
-
-                let ft_stake = ft_stake();
 
                 // register account
                 ctx.account_balance = env::account_balance();
@@ -2161,7 +2139,6 @@ last_contract_managed_total_balance             {}
         #[cfg(test)]
         mod tests_unstake {
             use super::*;
-            use oysterpack_smart_near::domain::TGas;
 
             #[test]
             fn unstake_partial() {
@@ -2171,7 +2148,6 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
 
                 deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
-                let contract_managed_total_balance = State::contract_managed_total_balance();
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -2182,8 +2158,6 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
                 staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
                 assert!(staking_pool.ops_stake_status().is_online());
-
-                let ft_stake = ft_stake();
 
                 // register account
                 ctx.account_balance = env::account_balance();
@@ -2197,7 +2171,7 @@ last_contract_managed_total_balance             {}
                 ctx.account_balance = env::account_balance();
                 ctx.attached_deposit = 0;
                 testing_env!(ctx.clone());
-                if let PromiseOrValue::Promise(promise) = staking_pool.ops_stake() {
+                if let PromiseOrValue::Promise(_) = staking_pool.ops_stake() {
                     let logs = test_utils::get_logs();
                     println!("{:#?}", logs);
 
@@ -2325,7 +2299,6 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
 
                 deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
-                let contract_managed_total_balance = State::contract_managed_total_balance();
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -2335,8 +2308,6 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
                 staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
                 assert!(staking_pool.ops_stake_status().is_online());
-
-                let ft_stake = ft_stake();
 
                 // register account
                 ctx.account_balance = env::account_balance();
@@ -2371,9 +2342,7 @@ last_contract_managed_total_balance             {}
                 ctx.account_balance = env::account_balance();
                 ctx.attached_deposit = 0;
                 testing_env!(ctx.clone());
-                if let PromiseOrValue::Value(balances_after_unstaking) =
-                    staking_pool.ops_unstake(None)
-                {
+                if let PromiseOrValue::Value(_) = staking_pool.ops_unstake(None) {
                     panic!("expected Promise")
                 }
 
@@ -2482,7 +2451,6 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
 
                 deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
-                let contract_managed_total_balance = State::contract_managed_total_balance();
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -2493,8 +2461,6 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
                 staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
                 assert!(staking_pool.ops_stake_status().is_online());
-
-                let ft_stake = ft_stake();
 
                 // register account
                 ctx.account_balance = env::account_balance();
@@ -2563,7 +2529,6 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
 
                 deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
-                let contract_managed_total_balance = State::contract_managed_total_balance();
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -2574,8 +2539,6 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
                 staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
                 assert!(staking_pool.ops_stake_status().is_online());
-
-                let ft_stake = ft_stake();
 
                 // register account
                 ctx.account_balance = env::account_balance();
@@ -2654,7 +2617,6 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
 
                 deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
-                let contract_managed_total_balance = State::contract_managed_total_balance();
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -2665,8 +2627,6 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
                 staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
                 assert!(staking_pool.ops_stake_status().is_online());
-
-                let ft_stake = ft_stake();
 
                 // register account
                 ctx.account_balance = env::account_balance();
@@ -2790,7 +2750,6 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
 
                 deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
-                let contract_managed_total_balance = State::contract_managed_total_balance();
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -2801,8 +2760,6 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
                 staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
                 assert!(staking_pool.ops_stake_status().is_online());
-
-                let ft_stake = ft_stake();
 
                 // register account
                 ctx.account_balance = env::account_balance();
@@ -2933,9 +2890,7 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
 
                 deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
-                let contract_managed_total_balance = State::contract_managed_total_balance();
 
-                let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
                 assert!(!staking_pool.ops_stake_status().is_online());
 
@@ -3058,6 +3013,49 @@ last_contract_managed_total_balance             {}
                         _ => panic!("expected StakeAction"),
                     }
                 }
+            }
+
+            #[test]
+            fn start_while_already_started() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                let mut staking_pool = staking_pool();
+                assert!(!staking_pool.ops_stake_status().is_online());
+
+                // stake
+                ctx.predecessor_account_id = OWNER.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                if let PromiseOrValue::Promise(_) = staking_pool.ops_stake() {
+                    panic!("expected Value");
+                }
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+
+                // Act - start staking 2x
+                for i in 0..2 {
+                    ctx.account_balance = env::account_balance();
+                    ctx.attached_deposit = 0;
+                    ctx.predecessor_account_id = OWNER.to_string();
+                    testing_env!(ctx.clone());
+                    staking_pool
+                        .ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+
+                    let receipts = deserialize_receipts();
+                    if i == 1 {
+                        assert!(logs.is_empty());
+                        assert!(receipts.is_empty());
+                    }
+                }
+
+                assert!(staking_pool.ops_stake_status().is_online());
             }
         }
     }
