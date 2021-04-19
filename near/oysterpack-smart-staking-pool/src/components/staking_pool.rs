@@ -1217,7 +1217,7 @@ last_contract_managed_total_balance             {}
                         "[INFO] [FT_MINT] account: owner, amount: 8000000000000000000000",
                         "[WARN] [STATUS_OFFLINE] ",
                     ]);
-                    let staking_fee = staking_pool.ops_stake_fee() * YOCTO.into();
+                    let staking_fee = staking_pool.ops_stake_fee() * YOCTO;
                     assert_eq!(staking_pool.ops_stake_token_value(None), YOCTO.into());
                     assert_eq!(
                         ft_stake.ft_balance_of(to_valid_account_id(ACCOUNT)),
@@ -1306,7 +1306,7 @@ last_contract_managed_total_balance             {}
                     println!("{:#?}", logs);
 
                     println!("{}", serde_json::to_string_pretty(&balances).unwrap());
-                    let staking_fee = staking_pool.ops_stake_fee() * YOCTO.into();
+                    let staking_fee = staking_pool.ops_stake_fee() * YOCTO;
                     assert!(balances.unstaked.is_none());
                     match balances.staked.as_ref() {
                         Some(stake) => {
@@ -1334,7 +1334,7 @@ last_contract_managed_total_balance             {}
                         "[INFO] [FT_MINT] account: owner, amount: 8000000000000000000000",
                         "[WARN] [STATUS_OFFLINE] ",
                     ]);
-                    let staking_fee = staking_pool.ops_stake_fee() * YOCTO.into();
+                    let staking_fee = staking_pool.ops_stake_fee() * YOCTO;
                     assert_eq!(staking_pool.ops_stake_token_value(None), YOCTO.into());
                     assert_eq!(
                         ft_stake.ft_balance_of(to_valid_account_id(ACCOUNT)),
@@ -1802,7 +1802,7 @@ last_contract_managed_total_balance             {}
                         balances.unstaked.as_ref().unwrap().total,
                         balances_before_restaking.unstaked.as_ref().unwrap().total - 1000
                     );
-                    let staking_fee = staking_pool.ops_stake_fee() * 1000.into();
+                    let staking_fee = staking_pool.ops_stake_fee() * 1000;
                     assert_eq!(
                         balances.staked.as_ref().unwrap().near_value,
                         (1000 - *staking_fee).into()
@@ -2007,7 +2007,7 @@ last_contract_managed_total_balance             {}
                     "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
                     "[INFO] [FT_MINT] account: owner, amount: 8000000000000000000000",
                 ]);
-                let staking_fee = staking_pool.ops_stake_fee() * YOCTO.into();
+                let staking_fee = staking_pool.ops_stake_fee() * YOCTO;
                 assert_eq!(staking_pool.ops_stake_token_value(None), YOCTO.into());
                 assert_eq!(
                     ft_stake.ft_balance_of(to_valid_account_id(ACCOUNT)),
@@ -2098,7 +2098,7 @@ last_contract_managed_total_balance             {}
                     let logs = test_utils::get_logs();
                     println!("{:#?}", logs);
 
-                    let staking_fee = staking_pool.ops_stake_fee() * YOCTO.into();
+                    let staking_fee = staking_pool.ops_stake_fee() * YOCTO;
 
                     let balances = staking_pool
                         .ops_stake_balance(to_valid_account_id(ACCOUNT))
@@ -2122,7 +2122,7 @@ last_contract_managed_total_balance             {}
                         "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
                         "[INFO] [FT_MINT] account: owner, amount: 8000000000000000000000",
                     ]);
-                    let staking_fee = staking_pool.ops_stake_fee() * YOCTO.into();
+                    let staking_fee = staking_pool.ops_stake_fee() * YOCTO;
                     assert_eq!(staking_pool.ops_stake_token_value(None), YOCTO.into());
                     assert_eq!(
                         ft_stake.ft_balance_of(to_valid_account_id(ACCOUNT)),
@@ -2717,7 +2717,7 @@ last_contract_managed_total_balance             {}
                     balances.unstaked.as_ref().unwrap().total,
                     balances_before_restaking.unstaked.as_ref().unwrap().total - 1000
                 );
-                let staking_fee = staking_pool.ops_stake_fee() * 1000.into();
+                let staking_fee = staking_pool.ops_stake_fee() * 1000;
                 assert_eq!(
                     balances.staked.as_ref().unwrap().near_value,
                     (1000 - *staking_fee).into()

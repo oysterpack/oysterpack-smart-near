@@ -123,12 +123,12 @@ impl<'de> Visitor<'de> for BasisPointVisitor {
     }
 }
 
-impl Mul<YoctoNear> for BasisPoints {
+impl<T: Into<YoctoNear>> Mul<T> for BasisPoints {
     type Output = YoctoNear;
 
     /// result is rounded down
-    fn mul(self, rhs: YoctoNear) -> Self::Output {
-        (U256::from(*rhs) * U256::from(*self) / U256::from(10000))
+    fn mul(self, rhs: T) -> Self::Output {
+        (U256::from(*rhs.into()) * U256::from(*self) / U256::from(10000))
             .as_u128()
             .into()
     }

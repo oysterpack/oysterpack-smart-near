@@ -1,3 +1,6 @@
+use oysterpack_smart_near::domain::BasisPoints;
+use oysterpack_smart_near::YOCTO;
+
 #[test]
 fn quick_test() {
     let last_contract_managed_total_balance: u128 = 350209991710169784696199999999;
@@ -24,4 +27,7 @@ fn quick_test() {
     } else {
         println!("{}", total_staked - last_total_staked);
     }
+
+    let fee = BasisPoints(80);
+    println!("{}", fee * (10 * YOCTO));
 }
