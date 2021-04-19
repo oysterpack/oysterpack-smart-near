@@ -150,7 +150,7 @@ impl State {
         ContractNearBalances::decr_balance(Self::TOTAL_STAKED_BALANCE, amount);
     }
 
-    fn total_unstaked_balance() -> YoctoNear {
+    pub(crate) fn total_unstaked_balance() -> YoctoNear {
         ContractNearBalances::near_balance(Self::TOTAL_UNSTAKED_BALANCE)
     }
 
@@ -584,14 +584,20 @@ impl Treasury for StakingPoolComponent {
         let deposit = YoctoNear::from(env::attached_deposit());
         ERR_NEAR_DEPOSIT_REQUIRED.assert(|| deposit > YoctoNear::ZERO);
 
-        State::add_liquidity(deposit);
+        let mut state = Self::state_with_updated_earnings();
         let stake = self.near_stake_value_rounded_down(deposit);
+        state.treasury_balance += deposit;
+        state.save();
+
+        State::add_liquidity(deposit);
         self.stake(&env::current_account_id(), deposit, stake)
     }
 
     fn ops_stake_treasury_distribution(&mut self) {
         let deposit = YoctoNear::from(env::attached_deposit());
         ERR_NEAR_DEPOSIT_REQUIRED.assert(|| deposit > YoctoNear::ZERO);
+
+        Self::state_with_updated_earnings();
         State::add_liquidity(deposit);
         self.stake(&env::current_account_id(), deposit, TokenAmount::ZERO);
     }
@@ -806,13 +812,21 @@ impl StakingPoolComponent {
             .unwrap()
     }
 
-    /// returns the current treasury balance after paying the dividend
-    fn pay_dividend(&mut self, treasury_balance: YoctoNear) -> YoctoNear {
+    fn treasury_stake_balance(&self) -> (TokenAmount, YoctoNear) {
         let treasury_stake_balance = self
             .stake_token
             .ft_balance_of(to_valid_account_id(&env::current_account_id()));
-        let current_treasury_near_value =
-            self.stake_near_value_rounded_down(treasury_stake_balance);
+        let treasury_near_value = self.stake_near_value_rounded_down(treasury_stake_balance);
+        (treasury_stake_balance, treasury_near_value)
+    }
+
+    /// returns the current treasury balance after paying the dividend
+    fn pay_dividend(&mut self, treasury_balance: YoctoNear) -> YoctoNear {
+        let (treasury_stake_balance, current_treasury_near_value) = self.treasury_stake_balance();
+        println!(
+            "**** {} {} {}",
+            treasury_stake_balance, current_treasury_near_value, treasury_balance
+        );
         if treasury_balance > YoctoNear::ZERO {
             let treasury_staking_earnings = current_treasury_near_value - treasury_balance;
             let treasury_staking_earnings_stake_value =
@@ -3936,22 +3950,111 @@ last_contract_managed_total_balance             {}
                         ft_stake.ft_balance_of(to_valid_account_id(&env::current_account_id())),
                         TokenAmount::ZERO
                     );
+                    let state = StakingPoolComponent::state();
+                    assert_eq!(state.treasury_balance, YoctoNear::ZERO);
 
                     // Act
-                    ctx.predecessor_account_id = ACCOUNT.to_string();
-                    ctx.attached_deposit = YOCTO;
-                    ctx.account_balance = env::account_balance();
-                    testing_env!(ctx.clone());
-                    if let PromiseOrValue::Value(_) = staking_pool.ops_stake_treasury_deposit() {
-                        panic!("expected Promise")
+                    {
+                        ctx.predecessor_account_id = ACCOUNT.to_string();
+                        ctx.attached_deposit = YOCTO;
+                        ctx.account_balance = env::account_balance();
+                        testing_env!(ctx.clone());
+                        if let PromiseOrValue::Value(_) = staking_pool.ops_stake_treasury_deposit()
+                        {
+                            panic!("expected Promise")
+                        }
                     }
 
                     let logs = test_utils::get_logs();
                     println!("{:#?}", logs);
+                    assert_eq!(logs, vec![
+                        "[INFO] [STAKE] near_amount=1000000000000000000000000, stake_token_amount=1000000000000000000000000",
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                        "[INFO] [FT_MINT] account: contract.near, amount: 1000000000000000000000000",
+                    ]);
 
                     assert_eq!(
                         ft_stake.ft_balance_of(to_valid_account_id(&env::current_account_id())),
                         YOCTO.into()
+                    );
+
+                    let state = StakingPoolComponent::state();
+                    assert_eq!(state.treasury_balance, YOCTO.into());
+
+                    let receipts = deserialize_receipts();
+                    assert_eq!(receipts.len(), 2);
+                    {
+                        let receipt = &receipts[0];
+                        assert_eq!(receipt.receiver_id, env::current_account_id());
+                        assert_eq!(receipt.actions.len(), 1);
+                        match &receipt.actions[0] {
+                            Action::Stake(action) => {
+                                assert_eq!(
+                                    action.stake,
+                                    *staking_pool.ops_stake_pool_balances().total_staked
+                                );
+
+                                assert_eq!(
+                                    action.public_key,
+                                    "1".to_string()
+                                        + staking_pool
+                                            .ops_stake_public_key()
+                                            .to_string()
+                                            .split(":")
+                                            .last()
+                                            .unwrap()
+                                );
+                            }
+                            _ => panic!("expected StakeAction"),
+                        }
+                    }
+                    {
+                        let receipt = &receipts[1];
+                        assert_eq!(receipt.receiver_id, env::current_account_id());
+                        assert_eq!(receipt.actions.len(), 1);
+                        match &receipt.actions[0] {
+                            Action::FunctionCall(action) => {
+                                assert_eq!(action.method_name, "ops_stake_finalize");
+                                let args: StakeActionCallbackArgs =
+                                    serde_json::from_str(&action.args).unwrap();
+                                assert_eq!(args.account_id, env::current_account_id());
+                                assert_eq!(action.deposit, 0);
+                            }
+                            _ => panic!("expected StakeAction"),
+                        }
+                    }
+
+                    // Act - deposit again
+                    {
+                        ctx.predecessor_account_id = ACCOUNT.to_string();
+                        ctx.attached_deposit = YOCTO;
+                        ctx.account_balance = env::account_balance();
+                        testing_env!(ctx.clone());
+                        if let PromiseOrValue::Value(_) = staking_pool.ops_stake_treasury_deposit()
+                        {
+                            panic!("expected Promise")
+                        }
+                    }
+
+                    // Assert
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+                    assert_eq!(logs, vec![
+                        "[INFO] [STAKE] near_amount=1000000000000000000000000, stake_token_amount=1000000000000000000000000",
+                        "[INFO] [FT_MINT] account: contract.near, amount: 1000000000000000000000000",
+                    ]);
+
+                    assert_eq!(
+                        ft_stake.ft_balance_of(to_valid_account_id(&env::current_account_id())),
+                        (2 * YOCTO).into()
+                    );
+
+                    let state = StakingPoolComponent::state();
+                    assert_eq!(state.treasury_balance, (2 * YOCTO).into());
+
+                    assert_eq!(
+                        *staking_pool.ops_stake_pool_balances().total_staked,
+                        2 * YOCTO
                     );
 
                     let receipts = deserialize_receipts();
