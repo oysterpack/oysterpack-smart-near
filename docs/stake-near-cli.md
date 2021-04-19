@@ -65,6 +65,8 @@ near view $CONTRACT_NAME ft_total_supply
 
 near view $CONTRACT_NAME ft_balance_of --args '{"account_id":"oysterpack.testnet"}'
 near view $CONTRACT_NAME ft_balance_of --args '{"account_id":"oysterpack-2.testnet"}'
+
+near call $CONTRACT_NAME ft_transfer --args '{"receiver_id":"dev-1618770943926-8326158","amount":"1000000000000000000000000000"}' --accountId oysterpack.testnet --amount 0.000000000000000000000001
 ```
 
 ## Staking Pool
@@ -83,7 +85,7 @@ near call $CONTRACT_NAME ops_stake --accountId oysterpack.testnet --amount 1
 
 near call $CONTRACT_NAME ops_unstake --accountId alfio-zappala-oysterpack.testnet --args '{"amount":"1000000000000000000000000"}'
 
-near call $CONTRACT_NAME ops_restake --accountId oysterpack.testnet
+near call $CONTRACT_NAME ops_restake --accountId alfio-zappala-oysterpack.testnet
 
 near call $CONTRACT_NAME ops_stake_withdraw --accountId alfio-zappala-oysterpack.testnet 
 ```
@@ -93,6 +95,11 @@ near call $CONTRACT_NAME ops_stake_withdraw --accountId alfio-zappala-oysterpack
 near call $CONTRACT_NAME ops_stake_operator_command --args '{"command":"StartStaking"}' --accountId oysterpack.testnet
 
 near call $CONTRACT_NAME ops_stake_operator_command --args '{"command":"StopStaking"}' --accountId oysterpack.testnet
+```
+
+## Staking Pool Treasury
+```shell
+near call $CONTRACT_NAM ops_stake_treasury_deposit --accountId oysterpack.testnet -amount 10
 ```
 
 # 1000000000000000000000000     - 1 NEAR

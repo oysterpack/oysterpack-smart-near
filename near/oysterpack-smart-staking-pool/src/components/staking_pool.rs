@@ -825,29 +825,28 @@ impl StakingPoolComponent {
     /// returns the current treasury balance after paying the dividend
     fn pay_dividend(&mut self, treasury_balance: YoctoNear) -> YoctoNear {
         let (treasury_stake_balance, current_treasury_near_value) = self.treasury_stake_balance();
-        println!(
-            "**** {} {} {}",
-            treasury_stake_balance, current_treasury_near_value, treasury_balance
-        );
-        if treasury_balance > YoctoNear::ZERO {
-            let treasury_staking_earnings = current_treasury_near_value - treasury_balance;
-            let treasury_staking_earnings_stake_value =
-                self.near_stake_value_rounded_down(treasury_staking_earnings);
-            if treasury_staking_earnings_stake_value > TokenAmount::ZERO {
-                self.stake_token.ft_burn(
-                    &env::current_account_id(),
-                    treasury_staking_earnings_stake_value,
-                );
-                LOG_EVENT_TREASURY_DIVIDEND.log(format!(
-                    "{} yoctoNEAR / {} yoctoSTAKE",
-                    treasury_staking_earnings, treasury_staking_earnings_stake_value
-                ));
-                return self.stake_near_value_rounded_down(
-                    treasury_stake_balance - treasury_staking_earnings_stake_value,
-                );
-            }
+        if treasury_balance == YoctoNear::ZERO {
+            return current_treasury_near_value;
         }
-        current_treasury_near_value
+
+        let treasury_staking_earnings = current_treasury_near_value - treasury_balance;
+        let treasury_staking_earnings_stake_value =
+            self.near_stake_value_rounded_down(treasury_staking_earnings);
+        if treasury_staking_earnings_stake_value == TokenAmount::ZERO {
+            return current_treasury_near_value;
+        }
+
+        self.stake_token.ft_burn(
+            &env::current_account_id(),
+            treasury_staking_earnings_stake_value,
+        );
+        LOG_EVENT_TREASURY_DIVIDEND.log(format!(
+            "{} yoctoNEAR / {} yoctoSTAKE",
+            treasury_staking_earnings, treasury_staking_earnings_stake_value
+        ));
+        self.stake_near_value_rounded_down(
+            treasury_stake_balance - treasury_staking_earnings_stake_value,
+        )
     }
 
     /// if treasury has earned staking rewards then burn STAKE tokens to distribute earnings
