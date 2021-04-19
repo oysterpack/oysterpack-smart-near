@@ -135,12 +135,11 @@ impl UnstakedBalances {
     ///
     /// ## NOTES
     /// - locked balances are checked if they have become available
-    /// - if there are locked balances, then liquidity will be applied
     ///
     /// ## Panics
     /// if there are insufficient funds
     pub(crate) fn debit_available_balance(&mut self, amount: YoctoNear) {
-        self.apply_liquidity();
+        self.unlock();
         ERR_INSUFFICIENT_FUNDS.assert(|| self.available >= amount);
         self.available -= amount;
     }

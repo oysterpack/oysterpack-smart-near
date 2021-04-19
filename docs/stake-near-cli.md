@@ -59,6 +59,14 @@ near view $CONTRACT_NAME ops_metrics_near_balances
 near view $CONTRACT_NAME  ops_metrics_accounts
 ```
 
+## Fungible Token
+```shell
+near view $CONTRACT_NAME ft_total_supply
+
+near view $CONTRACT_NAME ft_balance_of --args '{"account_id":"oysterpack.testnet"}'
+near view $CONTRACT_NAME ft_balance_of --args '{"account_id":"oysterpack-2.testnet"}'
+```
+
 ## Staking Pool
 ```shell
 near view $CONTRACT_NAME ops_stake_status
@@ -67,15 +75,17 @@ near view $CONTRACT_NAME ops_stake_fee
 near view $CONTRACT_NAME ops_stake_public_key
 near view $CONTRACT_NAME ops_stake_token_value
 
-near view $CONTRACT_NAME ops_stake_balance --args '{"account_id":"oysterpack.testnet"}'
+near view $CONTRACT_NAME ops_stake_balance --args '{"account_id":"alfio-zappala-oysterpack.testnet"}'
 
 near call $CONTRACT_NAME ops_stake --accountId oysterpack.testnet
 near call $CONTRACT_NAME ops_stake --accountId alfio-zappala-oysterpack.testnet
-near call $CONTRACT_NAME ops_stake --accountId oysterpack.testnet --amount 350000
+near call $CONTRACT_NAME ops_stake --accountId oysterpack.testnet --amount 1
 
-near call $CONTRACT_NAME ops_unstake --accountId oysterpack.testnet --args '{"amount":"1000000000000000000000000"}'
+near call $CONTRACT_NAME ops_unstake --accountId alfio-zappala-oysterpack.testnet --args '{"amount":"1000000000000000000000000"}'
 
 near call $CONTRACT_NAME ops_restake --accountId oysterpack.testnet
+
+near call $CONTRACT_NAME ops_stake_withdraw --accountId alfio-zappala-oysterpack.testnet 
 ```
 
 ### Staking Pool Operator
@@ -85,18 +95,6 @@ near call $CONTRACT_NAME ops_stake_operator_command --args '{"command":"StartSta
 near call $CONTRACT_NAME ops_stake_operator_command --args '{"command":"StopStaking"}' --accountId oysterpack.testnet
 ```
 
-#      1000000000000000000000000 - 1 NEAR
-#               1964010147207714
-#        79999999723157851582977
-         80000000000000000000000
-#         1200892249084800000000
-#          480786260264800000000
-#          687403551522700000000
+# 1000000000000000000000000     - 1 NEAR
 
-#           1000000000000000000 - 1 TGas
-
-932763604497300000000
-1200892249084800000000
-
-350209991292164780970499999999
-    350209991710169784696199999999
+# 1000000000000000000           - 1 TGas
