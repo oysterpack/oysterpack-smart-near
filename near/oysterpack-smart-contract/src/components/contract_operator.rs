@@ -1,4 +1,4 @@
-use crate::contract::contract_operator::CONTRACT_LOCKED_STORAGE_BALANCE_ID;
+use crate::contract::contract_operator::CONTRACT_LOCKED_STORAGE_BALANCE;
 use crate::interface::contract::contract_operator::ContractOperator;
 use crate::ContractNearBalances;
 use oysterpack_smart_account_management::components::account_management::AccountManagementComponent;
@@ -35,10 +35,7 @@ where
     fn ops_operator_lock_storage_balance(&mut self, storage_usage: StorageUsage) {
         self.account_manager.assert_operator();
         let storage_use_cost = env::storage_byte_cost() * *storage_usage as u128;
-        ContractNearBalances::set_balance(
-            CONTRACT_LOCKED_STORAGE_BALANCE_ID,
-            storage_use_cost.into(),
-        );
+        ContractNearBalances::set_balance(CONTRACT_LOCKED_STORAGE_BALANCE, storage_use_cost.into());
     }
 }
 
@@ -80,7 +77,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             **contract_balances
-                .get(&CONTRACT_LOCKED_STORAGE_BALANCE_ID)
+                .get(&CONTRACT_LOCKED_STORAGE_BALANCE)
                 .unwrap(),
             1024 * env::storage_byte_cost()
         );

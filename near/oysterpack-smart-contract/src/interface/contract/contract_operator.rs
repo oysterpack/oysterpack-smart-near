@@ -16,5 +16,5 @@ pub trait ContractOperator {
 }
 
 /// used by ['ContractOwnership::ops_owner_lock_balance`]
-pub const CONTRACT_LOCKED_STORAGE_BALANCE_ID: BalanceId =
+pub const CONTRACT_LOCKED_STORAGE_BALANCE: BalanceId =
     BalanceId(1955299460766524333040021403508226880);
