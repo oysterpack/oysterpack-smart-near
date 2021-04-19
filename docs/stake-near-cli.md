@@ -25,8 +25,8 @@ near view $CONTRACT_NAME storage_balance_bounds
 near view $CONTRACT_NAME storage_balance_of --args '{"account_id":"oysterpack.testnet"}'
 
 near call $CONTRACT_NAME storage_deposit --accountId alfio-zappala-oysterpack.testnet --amount 0.00393
-near call $CONTRACT_NAME storage_deposit --args '{"account_id":"oysterpack-2.testnet", "registration_only":true}' --accountId oysterpack-2.testnet --amount 1
-near call $CONTRACT_NAME storage_deposit --args '{"account_id":"oysterpack.testnet"}' --accountId oysterpack-2.testnet --amount 1
+near call $CONTRACT_NAME storage_deposit --args '{"account_id":"oysterpack-2.testnet", "registration_only":true}' --accountId oysterpack.testnet --amount 1
+near call $CONTRACT_NAME storage_deposit --args '{"registration_only":true}' --accountId oysterpack-2.testnet --amount 1
 
 near call $CONTRACT_NAME storage_deposit --accountId oysterpack-2.testnet --amount 1
 
@@ -70,6 +70,7 @@ near view $CONTRACT_NAME ops_stake_token_value
 near view $CONTRACT_NAME ops_stake_balance --args '{"account_id":"oysterpack.testnet"}'
 
 near call $CONTRACT_NAME ops_stake --accountId oysterpack.testnet
+near call $CONTRACT_NAME ops_stake --accountId alfio-zappala-oysterpack.testnet
 near call $CONTRACT_NAME ops_stake --accountId oysterpack.testnet --amount 350000
 
 near call $CONTRACT_NAME ops_unstake --accountId oysterpack.testnet --args '{"amount":"1000000000000000000000000"}'
@@ -86,7 +87,11 @@ near call $CONTRACT_NAME ops_stake_operator_command --args '{"command":"StopStak
 
 #      1000000000000000000000000 - 1 NEAR
 #               1964010147207714
+#         1200892249084800000000
 #          480786260264800000000
 #          687403551522700000000
 
 #           1000000000000000000 - 1 TGas
+
+932763604497300000000
+1200892249084800000000

@@ -21,16 +21,31 @@ pub struct StakingPoolBalances {
     /// treasury STAKE NEAR value - staking rewards earned by the treasury are distributed as dividends
     /// - balance gets updated when funds are staked
     pub treasury_balance: YoctoNear,
+
+    /// used to track transaction fee earnings
+    /// - transaction gas earnings are staked into the pool, which effectively increases STAKE value
+    pub last_contract_managed_total_balance: YoctoNear,
+    pub current_contract_managed_total_balance: YoctoNear,
+    /// [`StakingPoolBalances::last_contract_managed_total_balance`] - [`StakingPoolBalances::current_contract_managed_total_balance`]
+    pub transaction_fee_earnings: YoctoNear,
 }
 
 impl StakingPoolBalances {
     pub fn load() -> Self {
         let state = StakingPoolComponent::state();
+        let current_contract_managed_total_balance =
+            State::contract_managed_total_balance_in_view_mode();
         Self {
             total_staked: State::total_staked_balance(),
             total_unstaked: State::total_unstaked_balance(),
             unstaked_liquidity: State::liquidity(),
             treasury_balance: state.treasury_balance,
+            last_contract_managed_total_balance: state.last_contract_managed_total_balance,
+            current_contract_managed_total_balance,
+            transaction_fee_earnings: state
+                .last_contract_managed_total_balance
+                .saturating_sub(*current_contract_managed_total_balance)
+                .into(),
         }
     }
 }

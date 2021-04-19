@@ -119,21 +119,23 @@ impl State {
             - State::total_unstaked_balance()
     }
 
+    /// excludes
+    /// attached deposit because this should only be called in view mode on the contract
+    /// - `env::attached_deposit` is illegal to call in view mode
+    pub(crate) fn contract_managed_total_balance_in_view_mode() -> YoctoNear {
+        let total_contract_balance: YoctoNear =
+            (env::account_balance() + env::account_locked_balance()).into();
+        total_contract_balance
+            - AccountMetrics::load().total_near_balance
+            - State::liquidity()
+            - State::total_unstaked_balance()
+    }
+
     /// returns any earnings that have been received since the last time we checked - but excludes
     /// attached deposit because this should only be called in view mode on the contract
     /// - `env::attached_deposit` is illegal to call in view mode
     fn check_for_earnings_in_view_mode(&self) -> YoctoNear {
-        let contract_managed_total_balance = {
-            let total_contract_balance: YoctoNear =
-                (env::account_balance() + env::account_locked_balance()).into();
-            total_contract_balance
-                - AccountMetrics::load().total_near_balance
-                - State::liquidity()
-                - State::total_unstaked_balance()
-        };
-        // we do a saturating subtraction here because when staking the attached deposit will be
-        // added to the `last_contract_managed_total_balance`
-        contract_managed_total_balance
+        State::contract_managed_total_balance_in_view_mode()
             .saturating_sub(*self.last_contract_managed_total_balance)
             .into()
     }
