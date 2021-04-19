@@ -18,7 +18,8 @@ pub struct StakingPoolBalances {
     /// unstaked funds that can be withdrawn from liquidity added by staking
     pub unstaked_liquidity: YoctoNear,
 
-    /// treasury STAKE NEAR value - staking rewards earned by the treasury are distributed as dividends
+    /// used to track the treasury STAKE NEAR value
+    /// - staking rewards earned by the treasury are distributed as dividends
     /// - balance gets updated when funds are staked
     pub treasury_balance: YoctoNear,
 
