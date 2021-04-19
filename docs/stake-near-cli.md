@@ -55,8 +55,12 @@ near view $CONTRACT_NAME ops_permissions_contract_permissions
 
 ## Contract Metrics
 ```shell
+near view $CONTRACT_NAME ops_metrics
 near view $CONTRACT_NAME ops_metrics_near_balances
-near view $CONTRACT_NAME  ops_metrics_accounts
+near view $CONTRACT_NAME ops_metrics_accounts
+near view $CONTRACT_NAME ops_metrics_total_registered_accounts
+near view $CONTRACT_NAME ops_metrics_contract_storage_usage
+near view $CONTRACT_NAME ops_metrics_storage_usage_costs
 ```
 
 ## Fungible Token
@@ -107,9 +111,13 @@ near call $CONTRACT_NAME ops_stake_operator_command --args '{"command":"StopStak
 
 ## Staking Pool Treasury
 ```shell
-near call $CONTRACT_NAM ops_stake_treasury_deposit --accountId oysterpack.testnet -amount 10
+near call $CONTRACT_NAME ops_stake_treasury_deposit --accountId oysterpack.testnet --amount 10
+
+near call $CONTRACT_NAME ops_stake_treasury_distribution --accountId oysterpack.testnet --amount 10
+
+near call $CONTRACT_NAME ops_stake_treasury_transfer_to_owner --accountId oysterpack.testnet --args '{"amount":"1000000000000000000000000"}'
 ```
 
 # 1000000000000000000000000     - 1 NEAR
-
+#    2063051333321399999998
 # 1000000000000000000           - 1 TGas
