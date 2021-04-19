@@ -1,9 +1,25 @@
 use oysterpack_smart_near::data::numbers::U128;
-use oysterpack_smart_near::near_sdk::serde::{Deserialize, Serialize};
+use oysterpack_smart_near::near_sdk::{
+    borsh::{self, BorshDeserialize, BorshSerialize},
+    serde::{Deserialize, Serialize},
+};
 use std::fmt::{self, Display, Formatter};
 use std::ops::{Deref, DerefMut, Sub};
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(
+    BorshDeserialize,
+    BorshSerialize,
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Default,
+)]
 #[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct TokenAmount(pub U128);
 
