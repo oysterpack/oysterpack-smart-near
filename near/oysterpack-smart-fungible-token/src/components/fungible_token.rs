@@ -376,7 +376,7 @@ where
             - transfer_callback_gas().value()
             - ft_on_transfer_receipt_action_cost.value()
             - ft_resolve_transfer_call_receipt_action_cost.value()
-            - TERA; // to complete this call;
+            - 5 * TERA; // to complete this call;
 
         // create the function call chain
         {
@@ -1741,9 +1741,7 @@ mod tests_operator {
     use crate::*;
     use near_sdk::VMContext;
     use oysterpack_smart_account_management::components::account_management::AccountManagementComponentConfig;
-    use oysterpack_smart_account_management::{
-        ContractPermissions, PermissionsManagement, StorageManagement,
-    };
+    use oysterpack_smart_account_management::{PermissionsManagement, StorageManagement};
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 
@@ -1895,7 +1893,7 @@ mod tests_token_service {
     use crate::*;
     use near_sdk::{test_utils, VMContext};
     use oysterpack_smart_account_management::components::account_management::AccountManagementComponentConfig;
-    use oysterpack_smart_account_management::{ContractPermissions, StorageManagement};
+    use oysterpack_smart_account_management::StorageManagement;
     use oysterpack_smart_near::YOCTO;
     use oysterpack_smart_near_test::*;
 

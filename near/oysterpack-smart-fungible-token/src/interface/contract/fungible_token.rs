@@ -201,7 +201,7 @@ pub trait TransferReceiver {
     /// - `amount` - the amount of tokens that were transferred to this account.
     /// - `msg` - a string message that was passed with this transfer call.
     ///
-    /// Returns the amount of tokens that are used/accepted by this contract from the transferred amount.
+    /// Returns the amount of tokens that were not used and should be refunded back to the sender.
     fn ft_on_transfer(
         &mut self,
         sender_id: ValidAccountId,

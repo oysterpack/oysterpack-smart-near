@@ -4,7 +4,7 @@ use oysterpack_smart_fungible_token::{
     OperatorCommand, ResolveTransferCall, TokenAmount, TransferCallMessage,
 };
 use oysterpack_smart_near::domain::Gas;
-use oysterpack_smart_near::near_sdk::Promise;
+use oysterpack_smart_near::near_sdk::{Promise, PromiseOrValue};
 
 #[near_bindgen]
 impl FungibleToken for Contract {
@@ -66,5 +66,17 @@ impl FungibleTokenOperator for Contract {
 
     fn ft_operator_transfer_callback_gas(&self) -> Gas {
         Self::ft_stake().ft_operator_transfer_callback_gas()
+    }
+}
+
+#[near_bindgen]
+impl TransferReceiver for Contract {
+    fn ft_on_transfer(
+        &mut self,
+        sender_id: ValidAccountId,
+        amount: TokenAmount,
+        msg: TransferCallMessage,
+    ) -> PromiseOrValue<TokenAmount> {
+        Self::staking_pool().ft_on_transfer(sender_id, amount, msg)
     }
 }

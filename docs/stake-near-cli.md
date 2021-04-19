@@ -67,6 +67,14 @@ near view $CONTRACT_NAME ft_balance_of --args '{"account_id":"oysterpack.testnet
 near view $CONTRACT_NAME ft_balance_of --args '{"account_id":"oysterpack-2.testnet"}'
 
 near call $CONTRACT_NAME ft_transfer --args '{"receiver_id":"dev-1618770943926-8326158","amount":"1000000000000000000000000000"}' --accountId oysterpack.testnet --amount 0.000000000000000000000001
+
+near call $CONTRACT_NAME ft_transfer_call --args '{"receiver_id":"dev-1618770943926-8326158","amount":"1000000000000000000000000000","msg":""}' --accountId oysterpack.testnet --amount 0.000000000000000000000001
+
+```
+
+## Fungible Token Operator
+```shell
+near view $CONTRACT_NAME ft_operator_transfer_callback_gas
 ```
 
 ## Staking Pool

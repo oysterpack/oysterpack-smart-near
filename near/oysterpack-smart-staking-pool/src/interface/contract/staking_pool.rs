@@ -39,6 +39,12 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 /// - when staking, the account's available storage balance will be staked in addition to the
 ///   attached deposit
 ///
+/// The staking pool is integrated with fungible token API to support treasury deposits:
+/// - STAKE received through direct transfers are treated as treasury distributions. The next time
+///   funds are staked, the funds will be distributed as a treasury dividend.
+/// - STAKE received through transfer calls are treated as treasury deposits, i.e., the treasury
+///   balance will be updated to reflect the deposit.
+///
 pub trait StakingPool {
     /// Consolidates the account's storage balance with the STAKE token balance
     ///
@@ -134,6 +140,7 @@ pub const LOG_EVENT_STAKE: LogEvent = LogEvent(Level::INFO, "STAKE");
 pub const LOG_EVENT_UNSTAKE: LogEvent = LogEvent(Level::INFO, "UNSTAKE");
 
 pub const LOG_EVENT_TREASURY_DIVIDEND: LogEvent = LogEvent(Level::INFO, "TREASURY_DIVIDEND");
+pub const LOG_EVENT_TREASURY_DEPOSIT: LogEvent = LogEvent(Level::INFO, "TREASURY_DEPOSIT");
 pub const LOG_EVENT_EARNINGS: LogEvent = LogEvent(Level::INFO, "EARNINGS");
 
 pub const LOG_EVENT_LIQUIDITY: LogEvent = LogEvent(Level::INFO, "LIQUIDITY");

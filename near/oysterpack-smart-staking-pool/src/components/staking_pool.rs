@@ -3,7 +3,8 @@ use crate::{
     StakingPool, StakingPoolBalances, StakingPoolOperator, StakingPoolOperatorCommand, Status,
     Treasury, ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE, ERR_STAKE_ACTION_FAILED, LOG_EVENT_EARNINGS,
     LOG_EVENT_LIQUIDITY, LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE,
-    LOG_EVENT_STATUS_ONLINE, LOG_EVENT_TREASURY_DIVIDEND, LOG_EVENT_UNSTAKE, PERMISSION_TREASURER,
+    LOG_EVENT_STATUS_ONLINE, LOG_EVENT_TREASURY_DEPOSIT, LOG_EVENT_TREASURY_DIVIDEND,
+    LOG_EVENT_UNSTAKE, PERMISSION_TREASURER,
 };
 use oysterpack_smart_account_management::{
     components::account_management::AccountManagementComponent, AccountDataObject, AccountMetrics,
@@ -16,6 +17,7 @@ use oysterpack_smart_contract::{
 };
 use oysterpack_smart_fungible_token::{
     components::fungible_token::FungibleTokenComponent, FungibleToken, TokenAmount, TokenService,
+    TransferCallMessage, TransferReceiver,
 };
 use oysterpack_smart_near::{
     asserts::{ERR_ILLEGAL_STATE, ERR_INSUFFICIENT_FUNDS, ERR_INVALID, ERR_NEAR_DEPOSIT_REQUIRED},
@@ -654,6 +656,24 @@ impl Treasury for StakingPoolComponent {
             state.treasury_balance -= amount;
             state.save();
         }
+    }
+}
+
+impl TransferReceiver for StakingPoolComponent {
+    fn ft_on_transfer(
+        &mut self,
+        _sender_id: ValidAccountId,
+        _amount: TokenAmount,
+        _msg: TransferCallMessage,
+    ) -> PromiseOrValue<TokenAmount> {
+        let mut state = Self::state();
+        let treasury_stake_balance = self
+            .stake_token
+            .ft_balance_of(to_valid_account_id(&env::current_account_id()));
+        state.treasury_balance = self.stake_near_value_rounded_down(treasury_stake_balance);
+        state.save();
+        LOG_EVENT_TREASURY_DEPOSIT.log("");
+        PromiseOrValue::Value(TokenAmount::ZERO)
     }
 }
 
