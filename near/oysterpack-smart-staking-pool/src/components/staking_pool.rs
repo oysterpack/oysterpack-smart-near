@@ -280,11 +280,30 @@ impl StakingPool for StakingPoolComponent {
     }
 
     fn ops_stake(&mut self) -> PromiseOrValue<StakeAccountBalances> {
+        let account_id = env::predecessor_account_id();
+        let mut account = self
+            .account_manager
+            .registered_account_near_data(&account_id);
+
         Self::state_with_updated_earnings();
-        self.stake_account_funds(
-            &env::predecessor_account_id(),
-            env::attached_deposit().into(),
-        )
+
+        // all of the account's storage available balance will be staked
+        let (near_amount, stake_token_amount) = {
+            let account_storage_available_balance = account
+                .storage_balance(self.account_manager.storage_balance_bounds().min)
+                .available;
+            account.dec_near_balance(account_storage_available_balance);
+
+            let near = account_storage_available_balance + env::attached_deposit();
+            let (stake, remainder) = self.near_to_stake(near);
+            account.incr_near_balance(remainder);
+            account.save();
+
+            (near - remainder, stake)
+        };
+
+        State::add_liquidity(near_amount);
+        self.stake(&account_id, near_amount, stake_token_amount)
     }
 
     fn ops_unstake(&mut self, amount: Option<YoctoNear>) -> PromiseOrValue<StakeAccountBalances> {
@@ -691,34 +710,6 @@ struct ResumeFinalizeCallbackArgs {
 
 // staking related methods
 impl StakingPoolComponent {
-    fn stake_account_funds(
-        &mut self,
-        account_id: &str,
-        deposit: YoctoNear, // attached deposit amount
-    ) -> PromiseOrValue<StakeAccountBalances> {
-        let mut account = self
-            .account_manager
-            .registered_account_near_data(&account_id);
-
-        // all of the account's storage available balance will be staked
-        let (near_amount, stake_token_amount) = {
-            let account_storage_available_balance = account
-                .storage_balance(self.account_manager.storage_balance_bounds().min)
-                .available;
-            account.dec_near_balance(account_storage_available_balance);
-
-            let near = account_storage_available_balance + deposit;
-            let (stake, remainder) = self.near_to_stake(near);
-            account.incr_near_balance(remainder);
-            account.save();
-
-            (near - remainder, stake)
-        };
-
-        State::add_liquidity(near_amount);
-        self.stake(account_id, near_amount, stake_token_amount)
-    }
-
     /// ## Args
     /// - `near_amount` - new funds that are being staked but pending until the stake action is
     ///                   confirmed in the callback
