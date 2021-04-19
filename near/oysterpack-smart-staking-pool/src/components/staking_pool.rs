@@ -922,8 +922,6 @@ impl StakingPoolComponent {
         let mut state = Self::state();
 
         let contract_managed_total_balance = State::contract_managed_total_balance();
-        // we do a saturating subtraction here because when staking the attached deposit will be
-        // added to the `last_contract_managed_total_balance
         let earnings: YoctoNear = contract_managed_total_balance
             .saturating_sub(*state.last_contract_managed_total_balance)
             .into();
