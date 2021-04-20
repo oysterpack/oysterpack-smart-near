@@ -298,12 +298,25 @@ impl StakingPool for StakingPoolComponent {
             account.dec_near_balance(account_storage_available_balance);
 
             let near = account_storage_available_balance + env::attached_deposit();
+            ERR_NEAR_DEPOSIT_REQUIRED.assert_with_message(
+                || near > YoctoNear::ZERO,
+                || "deposit NEAR into storage balance or attach NEAR deposit",
+            );
             let (stake, remainder) = self.near_to_stake(near);
             account.incr_near_balance(remainder);
             account.save();
 
             (near - remainder, stake)
         };
+
+        if near_amount == YoctoNear::ZERO {
+            // INVARIANT CHECK: if `near_amount` is zero, then `stake_token_amount` should be zero
+            assert_eq!(stake_token_amount, TokenAmount::ZERO);
+            // NOTE: any attached deposit be deposited into the account's storage balance - this, there
+            // is no need to panic
+            LOG_EVENT_NOT_ENOUGH_TO_STAKE.log("");
+            return self.registered_stake_account_balance(&account_id);
+        }
 
         State::add_liquidity(near_amount);
         self.stake(&account_id, near_amount, stake_token_amount)
