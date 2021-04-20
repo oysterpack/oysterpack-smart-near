@@ -373,6 +373,8 @@ impl StakingPool for StakingPoolComponent {
         let account_id = env::predecessor_account_id();
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(&account_id));
 
+        Self::state_with_updated_earnings();
+
         match self.account_manager.load_account_data(&account_id) {
             // account has no unstaked funds to restake
             None => match amount {
@@ -383,7 +385,6 @@ impl StakingPool for StakingPoolComponent {
                 }
             },
             Some(mut account) => {
-                Self::state_with_updated_earnings();
                 let (near_amount, stake_token_amount) = {
                     let near = amount.unwrap_or_else(|| account.unstaked_balances.total());
                     let (stake, remainder) = self.near_to_stake(near);
@@ -395,6 +396,7 @@ impl StakingPool for StakingPoolComponent {
                     State::decr_total_unstaked_balance(stake_near_value);
                     (stake_near_value, stake)
                 };
+                // NOTE: restaking does not add liquidity because no new funds are being deposited
                 self.stake(&account_id, near_amount, stake_token_amount)
             }
         }
@@ -434,6 +436,7 @@ impl StakingPool for StakingPoolComponent {
                     }
                 }
             }
+            // withdraw specified amount
             Some(amount) => {
                 ERR_INVALID.assert(|| amount > YoctoNear::ZERO, || "amount must be > 0");
                 match self.account_manager.load_account_data(&account_id) {

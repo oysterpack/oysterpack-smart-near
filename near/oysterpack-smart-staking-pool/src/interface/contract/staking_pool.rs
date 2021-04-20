@@ -103,6 +103,9 @@ pub trait StakingPool {
     /// - If unstaking all, i.e., `amount` is None, then a zero staked balance is fine. However, if
     ///   an `amount` is specified, then the method will panic if there are insufficient staked funds
     ///   to fulfill the request
+    /// - the actual NEAR amount restaked might be less than the requested specified amount because
+    ///   of rounding when converting the restake NEAR amount to STAKE - check balances to confirm
+    ///   the actual amount restaked
     ///
     /// ## Panics
     /// - if account is not registered
