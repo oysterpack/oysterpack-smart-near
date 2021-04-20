@@ -132,3 +132,4 @@ near call $CONTRACT_NAME ops_stake_treasury_transfer_to_owner --accountId oyster
 # 1000000000000000000000000     - 1 NEAR
 # 
 # 1000000000000000000           - 1 TGas
+# 

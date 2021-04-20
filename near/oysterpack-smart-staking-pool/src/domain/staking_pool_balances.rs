@@ -28,7 +28,8 @@ pub struct StakingPoolBalances {
     /// - transaction gas earnings are staked into the pool, which effectively increases STAKE value
     pub last_contract_managed_total_balance: YoctoNear,
     /// [`StakingPoolBalances::last_contract_managed_total_balance`] - [`StakingPoolBalances::current_contract_managed_total_balance`]
-    pub transaction_fee_earnings: YoctoNear,
+    /// staking earnings + transaction fee earnings
+    pub earnings: YoctoNear,
 }
 
 impl StakingPoolBalances {
@@ -44,7 +45,7 @@ impl StakingPoolBalances {
 
             current_contract_managed_total_balance,
             last_contract_managed_total_balance: state.last_contract_managed_total_balance,
-            transaction_fee_earnings: current_contract_managed_total_balance
+            earnings: current_contract_managed_total_balance
                 .saturating_sub(*state.last_contract_managed_total_balance)
                 .into(),
         }

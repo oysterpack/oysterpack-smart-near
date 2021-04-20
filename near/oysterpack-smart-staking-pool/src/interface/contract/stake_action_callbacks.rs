@@ -11,13 +11,6 @@ pub trait StakeActionCallbacks {
     /// `#[private]`
     fn ops_stake_finalize(&mut self, account_id: AccountId) -> StakeAccountBalances;
 
-    /// Finalizes the stake action when funds are unstaked
-    ///
-    /// If the stake action failed, then the contract will fully unstake and go offline.
-    ///
-    /// `#[private]`
-    fn ops_unstake_finalize(&mut self, account_id: AccountId) -> StakeAccountBalances;
-
     /// invoked when the staking pool is brought back online and staking is resumed
     /// - the callback ensures that the retaking succeeded
     ///

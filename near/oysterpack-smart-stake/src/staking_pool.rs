@@ -59,11 +59,6 @@ impl StakeActionCallbacks for Contract {
     }
 
     #[private]
-    fn ops_unstake_finalize(&mut self, account_id: AccountId) -> StakeAccountBalances {
-        Self::staking_pool().ops_unstake_finalize(account_id)
-    }
-
-    #[private]
     fn ops_stake_start_finalize(&mut self) {
         Self::staking_pool().ops_stake_start_finalize();
     }
