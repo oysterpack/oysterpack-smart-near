@@ -576,7 +576,7 @@ impl StakingPoolComponent {
         let mut state = Self::state();
         ERR_ILLEGAL_STATE.assert(
             || !state.status.is_online(),
-            || "staking pool must be paused to update the staking public key",
+            || "staking pool must be offline to update the staking public key",
         );
         state.stake_public_key = public_key;
         state.save();
