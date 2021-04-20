@@ -111,6 +111,8 @@ near call $CONTRACT_NAME ops_unstake --accountId alfio-zappala-oysterpack.testne
 near call $CONTRACT_NAME ops_restake --accountId alfio-zappala-oysterpack.testnet
 
 near call $CONTRACT_NAME ops_stake_withdraw --accountId alfio-zappala-oysterpack.testnet 
+
+near call $CONTRACT_NAME ops_stake_transfer --accountId oysterpack.testnet --args '{"receiver_id":"alfio-zappala-oysterpack.testnet","amount":"1000000000000000000000000"}' --amount 0.000000000000000000000001
 ```
 
 ### Staking Pool Operator

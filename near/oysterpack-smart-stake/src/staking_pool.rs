@@ -1,7 +1,7 @@
 use crate::*;
 use near_sdk::near_bindgen;
 use oysterpack_smart_near::domain::{BasisPoints, YoctoNear};
-use oysterpack_smart_near::near_sdk::{AccountId, PromiseOrValue};
+use oysterpack_smart_near::near_sdk::{AccountId, Promise, PromiseOrValue};
 use oysterpack_smart_staking_pool::{
     StakeAccountBalances, StakeActionCallbacks, StakingPool, StakingPoolBalances,
     StakingPoolOperator, StakingPoolOperatorCommand, Status, Treasury,
@@ -28,6 +28,27 @@ impl StakingPool for Contract {
 
     fn ops_stake_withdraw(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances {
         Self::staking_pool().ops_stake_withdraw(amount)
+    }
+
+    #[payable]
+    fn ops_stake_transfer(
+        &mut self,
+        receiver_id: ValidAccountId,
+        amount: YoctoNear,
+        memo: Option<Memo>,
+    ) -> TokenAmount {
+        Self::staking_pool().ops_stake_transfer(receiver_id, amount, memo)
+    }
+
+    #[payable]
+    fn ops_stake_transfer_call(
+        &mut self,
+        receiver_id: ValidAccountId,
+        amount: YoctoNear,
+        memo: Option<Memo>,
+        msg: TransferCallMessage,
+    ) -> Promise {
+        Self::staking_pool().ops_stake_transfer_call(receiver_id, amount, memo, msg)
     }
 
     fn ops_stake_token_value(&self, amount: Option<TokenAmount>) -> YoctoNear {

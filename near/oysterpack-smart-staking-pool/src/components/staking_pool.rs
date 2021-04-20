@@ -16,8 +16,8 @@ use oysterpack_smart_contract::{
     ContractOwnership,
 };
 use oysterpack_smart_fungible_token::{
-    components::fungible_token::FungibleTokenComponent, FungibleToken, TokenAmount, TokenService,
-    TransferCallMessage, TransferReceiver,
+    components::fungible_token::FungibleTokenComponent, FungibleToken, Memo, TokenAmount,
+    TokenService, TransferCallMessage, TransferReceiver,
 };
 use oysterpack_smart_near::{
     asserts::{ERR_ILLEGAL_STATE, ERR_INSUFFICIENT_FUNDS, ERR_INVALID, ERR_NEAR_DEPOSIT_REQUIRED},
@@ -448,6 +448,31 @@ impl StakingPool for StakingPoolComponent {
 
         self.ops_stake_balance(to_valid_account_id(&account_id))
             .unwrap()
+    }
+
+    fn ops_stake_transfer(
+        &mut self,
+        receiver_id: ValidAccountId,
+        amount: YoctoNear,
+        memo: Option<Memo>,
+    ) -> TokenAmount {
+        Self::state_with_updated_earnings();
+        let stake_value = self.near_stake_value_rounded_up(amount);
+        self.stake_token.ft_transfer(receiver_id, stake_value, memo);
+        stake_value
+    }
+
+    fn ops_stake_transfer_call(
+        &mut self,
+        receiver_id: ValidAccountId,
+        amount: YoctoNear,
+        memo: Option<Memo>,
+        msg: TransferCallMessage,
+    ) -> Promise {
+        Self::state_with_updated_earnings();
+        let stake_value = self.near_stake_value_rounded_up(amount);
+        self.stake_token
+            .ft_transfer_call(receiver_id, stake_value, memo, msg)
     }
 
     fn ops_stake_token_value(&self, amount: Option<TokenAmount>) -> YoctoNear {

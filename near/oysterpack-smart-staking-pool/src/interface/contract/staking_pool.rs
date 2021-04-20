@@ -1,9 +1,9 @@
 use crate::Status;
 use crate::{StakeAccountBalances, StakingPoolBalances};
-use oysterpack_smart_fungible_token::TokenAmount;
+use oysterpack_smart_fungible_token::{Memo, TokenAmount, TransferCallMessage};
 use oysterpack_smart_near::domain::{BasisPoints, PublicKey, YoctoNear};
 use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
-use oysterpack_smart_near::near_sdk::PromiseOrValue;
+use oysterpack_smart_near::near_sdk::{Promise, PromiseOrValue};
 use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 
 /// # **Contract Interface**: Staking Pool API
@@ -117,6 +117,35 @@ pub trait StakingPool {
     /// - if account is not registered
     /// - if there are insufficient funds to fulfill the request
     fn ops_stake_withdraw(&mut self, amount: Option<YoctoNear>) -> StakeAccountBalances;
+
+    /// converts the specified NEAR amount to STAKE and transfers the funds to the specified receiver
+    /// account
+    /// - proxies [`FungibleToken::ft_transfer`] as a convenience method that enables the staker
+    ///   to transfer STAKE by specifying the transfer amount in NEAR vs in STAKE
+    /// - returns the amount of STAKE tokens that were transferred based on the current STAKE token value
+    ///
+    /// `#[payable]`
+    fn ops_stake_transfer(
+        &mut self,
+        receiver_id: ValidAccountId,
+        amount: YoctoNear,
+        memo: Option<Memo>,
+    ) -> TokenAmount;
+
+    /// converts the specified NEAR amount to STAKE and transfers the funds to the specified receiver
+    /// account via the FT transfer call mechanism
+    /// - proxies [`FungibleToken::ft_transfer_call`] a convenience method that enables the staker to
+    ///   transfer STAKE by specifying the transfer amount in NEAR vs in STAKE
+    /// - returns the amount of STAKE tokens that were transferred
+    ///
+    /// `#[payable]`
+    fn ops_stake_transfer_call(
+        &mut self,
+        receiver_id: ValidAccountId,
+        amount: YoctoNear,
+        memo: Option<Memo>,
+        msg: TransferCallMessage,
+    ) -> Promise;
 
     /// returns the current NEAR value for the specified amount
     /// - if no amount is specified, then the value for 1 STAKE token will be returned
