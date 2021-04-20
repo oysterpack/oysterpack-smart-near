@@ -1171,6 +1171,25 @@ last_contract_managed_total_balance             {}
             use super::*;
 
             #[test]
+            #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED]")]
+            fn with_unregistered_account() {
+                // Arrange
+                let mut ctx = new_context(ACCOUNT);
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                let mut staking_pool = staking_pool();
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                ctx.account_balance = env::account_balance();
+                testing_env!(ctx);
+                staking_pool.ops_stake();
+            }
+
+            #[test]
             fn with_attached_deposit() {
                 // Arrange
                 let mut ctx = new_context(ACCOUNT);
