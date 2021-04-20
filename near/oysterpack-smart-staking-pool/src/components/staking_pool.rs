@@ -522,9 +522,15 @@ impl StakingPoolOperator for StakingPoolComponent {
 
 impl StakingPoolComponent {
     fn stop_staking(reason: OfflineReason) {
-        fn unstake_all(public_key: PublicKey) {
+        // update status to offline
+        let mut state = Self::state();
+        state.status = Status::Offline(reason);
+        state.save();
+
+        // unstake all
+        if env::account_locked_balance() > 0 {
             Promise::new(env::current_account_id())
-                .stake(0, public_key.into())
+                .stake(0, state.stake_public_key.into())
                 .then(json_function_callback(
                     "ops_stake_stop_finalize",
                     Option::<()>::None,
@@ -533,32 +539,11 @@ impl StakingPoolComponent {
                 ));
         }
 
-        let log = || {
-            if let OfflineReason::StakeActionFailed = reason {
-                ERR_STAKE_ACTION_FAILED.log("");
-            }
-            LOG_EVENT_STATUS_OFFLINE.log(reason);
-        };
-
-        let mut state = Self::state();
-        if let Status::Online = state.status {
-            // update the status
-            {
-                state.status = Status::Offline(reason);
-                state.save();
-            }
-
-            if env::account_locked_balance() > 0 {
-                unstake_all(state.stake_public_key);
-            }
-
-            log();
-        } else if env::account_locked_balance() > 0 {
-            LOG_EVENT_STATUS_OFFLINE
-                .log("already offline but locked balance was > 0 -> unstaking all");
-            unstake_all(state.stake_public_key);
-            log();
+        // log
+        if let OfflineReason::StakeActionFailed = reason {
+            ERR_STAKE_ACTION_FAILED.log("");
         }
+        LOG_EVENT_STATUS_OFFLINE.log(reason);
     }
 
     fn start_staking() {
@@ -632,7 +617,7 @@ impl StakeActionCallbacks for StakingPoolComponent {
         if is_promise_success() {
             LOG_EVENT_STATUS_OFFLINE.log("all NEAR has been unstaked");
         } else {
-            ERR_STAKE_ACTION_FAILED.log("failed to go offline");
+            ERR_STAKE_ACTION_FAILED.log("failed to unstake when trying to stop staking pool");
         }
     }
 }
@@ -3681,10 +3666,7 @@ last_contract_managed_total_balance             {}
                 assert!(!staking_pool.ops_stake_status().is_online());
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
-                assert_eq!(logs, vec![
-                    "[WARN] [STATUS_OFFLINE] already offline but locked balance was > 0 -> unstaking all",
-                    "[WARN] [STATUS_OFFLINE] Stopped",
-                ]);
+                assert_eq!(logs, vec!["[WARN] [STATUS_OFFLINE] Stopped",]);
 
                 let receipts = deserialize_receipts();
                 assert_eq!(receipts.len(), 2);
