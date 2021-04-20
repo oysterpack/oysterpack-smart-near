@@ -750,6 +750,7 @@ impl StakingPoolComponent {
             "near_amount={}, stake_token_amount={}",
             near_amount, stake_token_amount
         ));
+        // update balances
         let state = {
             let mut state = Self::state();
             State::incr_total_staked_balance(near_amount);
