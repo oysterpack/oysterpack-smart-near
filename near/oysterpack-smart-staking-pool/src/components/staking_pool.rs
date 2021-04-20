@@ -191,15 +191,18 @@ impl State {
         if amount == YoctoNear::ZERO {
             return;
         }
+
         let total_unstaked_balance =
             ContractNearBalances::near_balance(Self::TOTAL_UNSTAKED_BALANCE);
-        if total_unstaked_balance > YoctoNear::ZERO {
-            let liquidity = min(amount, total_unstaked_balance);
-            ContractNearBalances::decr_balance(Self::TOTAL_UNSTAKED_BALANCE, liquidity);
-            let total_liquidity =
-                ContractNearBalances::incr_balance(Self::UNSTAKED_LIQUIDITY_POOL, liquidity);
-            LOG_EVENT_LIQUIDITY.log(format!("added={}, total={}", liquidity, total_liquidity));
+        if total_unstaked_balance == YoctoNear::ZERO {
+            return;
         }
+
+        let liquidity = min(amount, total_unstaked_balance);
+        ContractNearBalances::decr_balance(Self::TOTAL_UNSTAKED_BALANCE, liquidity);
+        let total_liquidity =
+            ContractNearBalances::incr_balance(Self::UNSTAKED_LIQUIDITY_POOL, liquidity);
+        LOG_EVENT_LIQUIDITY.log(format!("added={}, total={}", liquidity, total_liquidity));
     }
 
     pub(crate) fn liquidity() -> YoctoNear {
@@ -287,7 +290,7 @@ impl StakingPool for StakingPoolComponent {
 
         Self::state_with_updated_earnings();
 
-        // all of the account's storage available balance will be staked
+        // stake the account's total available storage balance + attached deposit
         let (near_amount, stake_token_amount) = {
             let account_storage_available_balance = account
                 .storage_balance(self.account_manager.storage_balance_bounds().min)
@@ -710,10 +713,11 @@ struct ResumeFinalizeCallbackArgs {
 
 // staking related methods
 impl StakingPoolComponent {
+    /// Stakes the NEAR and mints the corresponding STAKE for the account
+    ///
     /// ## Args
-    /// - `near_amount` - new funds that are being staked but pending until the stake action is
-    ///                   confirmed in the callback
-    /// - `stake_token_amount` - the amount of tokens that will be minted in the callback
+    /// - `near_amount` - new funds that are being staked
+    /// - `stake_token_amount` - the amount of tokens that will be minted
     fn stake(
         &mut self,
         account_id: &str,
