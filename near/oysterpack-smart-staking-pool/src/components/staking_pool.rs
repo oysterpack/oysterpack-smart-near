@@ -288,12 +288,7 @@ impl StakingPool for StakingPoolComponent {
             .account_manager
             .registered_account_near_data(&account_id);
 
-        // this handles the initial edge case when there are earnings currently no stakers, i.e.,
-        // stake token total supply is zero. If there are no stakers, then earnings will not be
-        // staked in this staking transaction - earnings will be staked in the next transaction.
-        if self.stake_token.ft_total_supply() > TokenAmount::ZERO {
-            Self::state_with_updated_earnings();
-        }
+        self.state_with_updated_earnings();
 
         // stake the account's total available storage balance + attached deposit
         let (near_amount, stake_token_amount) = {
@@ -331,7 +326,7 @@ impl StakingPool for StakingPoolComponent {
         let account_id = env::predecessor_account_id();
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(&account_id));
 
-        Self::state_with_updated_earnings();
+        self.state_with_updated_earnings();
 
         let stake_balance = self
             .stake_token
@@ -378,7 +373,7 @@ impl StakingPool for StakingPoolComponent {
         let account_id = env::predecessor_account_id();
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(&account_id));
 
-        Self::state_with_updated_earnings();
+        self.state_with_updated_earnings();
 
         match self.account_manager.load_account_data(&account_id) {
             // account has no unstaked funds to restake
@@ -427,7 +422,7 @@ impl StakingPool for StakingPoolComponent {
             Promise::new(env::predecessor_account_id()).transfer(*amount);
         }
 
-        Self::state_with_updated_earnings();
+        self.state_with_updated_earnings();
         match amount {
             // withdraw all available
             None => {
@@ -464,7 +459,7 @@ impl StakingPool for StakingPoolComponent {
         amount: YoctoNear,
         memo: Option<Memo>,
     ) -> TokenAmount {
-        Self::state_with_updated_earnings();
+        self.state_with_updated_earnings();
         let stake_value = self.near_stake_value_rounded_up(amount);
         self.stake_token.ft_transfer(receiver_id, stake_value, memo);
         stake_value
@@ -477,7 +472,7 @@ impl StakingPool for StakingPoolComponent {
         memo: Option<Memo>,
         msg: TransferCallMessage,
     ) -> Promise {
-        Self::state_with_updated_earnings();
+        self.state_with_updated_earnings();
         let stake_value = self.near_stake_value_rounded_up(amount);
         self.stake_token
             .ft_transfer_call(receiver_id, stake_value, memo, msg)
@@ -485,8 +480,6 @@ impl StakingPool for StakingPoolComponent {
 
     fn ops_stake_token_value(&self, amount: Option<TokenAmount>) -> YoctoNear {
         let state = Self::state();
-        // NOTE: we cannot check for earnings because it check if there is any attached deposit,
-        // which is not permitted to be invoked in a view method
         self.compute_stake_near_value_rounded_down(
             amount.unwrap_or(YOCTO.into()),
             State::total_staked_balance() + state.check_for_earnings_in_view_mode(),
@@ -516,7 +509,7 @@ impl StakingPoolOperator for StakingPoolComponent {
 
         match command {
             StakingPoolOperatorCommand::StopStaking => Self::stop_staking(OfflineReason::Stopped),
-            StakingPoolOperatorCommand::StartStaking => Self::start_staking(),
+            StakingPoolOperatorCommand::StartStaking => self.start_staking(),
             StakingPoolOperatorCommand::UpdatePublicKey(public_key) => {
                 Self::update_public_key(public_key)
             }
@@ -551,8 +544,8 @@ impl StakingPoolComponent {
         LOG_EVENT_STATUS_OFFLINE.log(reason);
     }
 
-    fn start_staking() {
-        let mut state = Self::state_with_updated_earnings();
+    fn start_staking(&mut self) {
+        let mut state = self.state_with_updated_earnings();
         if let Status::Offline(_) = state.status {
             // update status
             {
@@ -601,7 +594,7 @@ impl StakingPoolComponent {
 
 impl StakeActionCallbacks for StakingPoolComponent {
     fn ops_stake_finalize(&mut self, account_id: AccountId) -> StakeAccountBalances {
-        let state = Self::state_with_updated_earnings();
+        let state = self.state_with_updated_earnings();
         if state.status.is_online() && !is_promise_success() {
             Self::stop_staking(OfflineReason::StakeActionFailed);
         }
@@ -632,7 +625,7 @@ impl Treasury for StakingPoolComponent {
         let deposit = YoctoNear::from(env::attached_deposit());
         ERR_NEAR_DEPOSIT_REQUIRED.assert(|| deposit > YoctoNear::ZERO);
 
-        let mut state = Self::state_with_updated_earnings();
+        let mut state = self.state_with_updated_earnings();
         let stake = self.near_stake_value_rounded_down(deposit);
         state.treasury_balance += deposit;
         state.save();
@@ -645,7 +638,7 @@ impl Treasury for StakingPoolComponent {
         let deposit = YoctoNear::from(env::attached_deposit());
         ERR_NEAR_DEPOSIT_REQUIRED.assert(|| deposit > YoctoNear::ZERO);
 
-        Self::state_with_updated_earnings();
+        self.state_with_updated_earnings();
         State::add_liquidity(deposit);
         self.stake(&env::current_account_id(), deposit, TokenAmount::ZERO);
     }
@@ -936,8 +929,16 @@ impl StakingPoolComponent {
         Self::load_state().expect("component has not been deployed")
     }
 
-    pub(crate) fn state_with_updated_earnings() -> ComponentState<State> {
+    pub(crate) fn state_with_updated_earnings(&mut self) -> ComponentState<State> {
         let mut state = Self::state();
+
+        // If there are no stakers,i.e., STAKE total supply is zero, then earnings will not be
+        // staked in this staking transaction - earnings will be staked in the next transaction.
+        // - the reason we do this is because when computing token values, a zero token supply
+        //   effectively resets the token value 1:1 for STAKE:NEAR
+        if self.stake_token.ft_total_supply() == TokenAmount::ZERO {
+            return state;
+        }
 
         let contract_managed_total_balance = State::contract_managed_total_balance();
         let earnings: YoctoNear = contract_managed_total_balance
@@ -988,9 +989,10 @@ impl StakingPoolComponent {
         }
 
         let ft_total_supply = *self.stake_token.ft_total_supply();
-        if *total_staked_near_balance == 0 || ft_total_supply == 0 {
+        if ft_total_supply == 0 {
             return (*stake).into();
         }
+
         (U256::from(*total_staked_near_balance) * U256::from(*stake) / U256::from(ft_total_supply))
             .as_u128()
             .into()
@@ -1013,11 +1015,12 @@ impl StakingPoolComponent {
             return TokenAmount::ZERO;
         }
 
-        let total_staked_balance = *State::total_staked_balance();
         let ft_total_supply = *self.stake_token.ft_total_supply();
-        if total_staked_balance == 0 || ft_total_supply == 0 {
+        if ft_total_supply == 0 {
             return (*amount).into();
         }
+
+        let total_staked_balance = *State::total_staked_balance();
 
         (U256::from(ft_total_supply) * U256::from(*amount) / U256::from(total_staked_balance))
             .as_u128()
@@ -1029,11 +1032,12 @@ impl StakingPoolComponent {
             return TokenAmount::ZERO;
         }
 
-        let total_staked_balance = *State::total_staked_balance();
         let ft_total_supply = *self.stake_token.ft_total_supply();
-        if total_staked_balance == 0 || ft_total_supply == 0 {
+        if ft_total_supply == 0 {
             return amount.value().into();
         }
+
+        let total_staked_balance = *State::total_staked_balance();
 
         ((U256::from(ft_total_supply) * U256::from(*amount) + U256::from(total_staked_balance - 1))
             / U256::from(total_staked_balance))
@@ -3254,8 +3258,7 @@ last_contract_managed_total_balance             {}
                             ctx.account_locked_balance =
                                 *staking_pool.ops_stake_pool_balances().total_staked;
                             testing_env_with_promise_result_success(ctx.clone());
-                            let state_before_callback =
-                                StakingPoolComponent::state_with_updated_earnings();
+                            let state_before_callback = staking_pool.state_with_updated_earnings();
                             let balances = staking_pool.ops_stake_finalize(args.account_id.clone());
                             println!("{}", serde_json::to_string_pretty(&balances).unwrap());
                             assert_eq!(
@@ -3264,8 +3267,7 @@ last_contract_managed_total_balance             {}
                                     .ops_stake_balance(to_valid_account_id(&args.account_id))
                                     .unwrap()
                             );
-                            let state_after_callback =
-                                StakingPoolComponent::state_with_updated_earnings();
+                            let state_after_callback = staking_pool.state_with_updated_earnings();
                             assert_eq!(
                                 state_before_callback.last_contract_managed_total_balance,
                                 state_after_callback.last_contract_managed_total_balance
@@ -3289,6 +3291,7 @@ last_contract_managed_total_balance             {}
 
                     // start staking
                     ctx.predecessor_account_id = OWNER.to_string();
+                    ctx.account_balance = env::account_balance();
                     testing_env!(ctx.clone());
                     staking_pool
                         .ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
@@ -3296,6 +3299,7 @@ last_contract_managed_total_balance             {}
 
                     // register account
                     ctx.predecessor_account_id = ACCOUNT.to_string();
+                    ctx.account_balance = env::account_balance();
                     ctx.attached_deposit = YOCTO;
                     testing_env!(ctx.clone());
                     account_manager.storage_deposit(None, Some(true));
@@ -3323,7 +3327,7 @@ last_contract_managed_total_balance             {}
                                     *staking_pool.ops_stake_pool_balances().total_staked;
                                 ctx.attached_deposit = 0;
                                 testing_env!(ctx.clone());
-                                StakingPoolComponent::state_with_updated_earnings()
+                                staking_pool.state_with_updated_earnings()
                             };
 
                             let earnings = 1000;
@@ -3332,7 +3336,7 @@ last_contract_managed_total_balance             {}
                             ctx.account_locked_balance = env::account_locked_balance() + earnings;
                             ctx.attached_deposit = 0;
                             testing_env_with_promise_result_success(ctx.clone());
-
+                            // Act
                             let balances = staking_pool.ops_stake_finalize(args.account_id.clone());
                             println!("{}", serde_json::to_string_pretty(&balances).unwrap());
                             assert_eq!(
@@ -3350,8 +3354,7 @@ last_contract_managed_total_balance             {}
                                 992000000000000000000992
                             );
 
-                            let state_after_callback =
-                                StakingPoolComponent::state_with_updated_earnings();
+                            let state_after_callback = StakingPoolComponent::state();
                             assert_eq!(
                                 state_before_callback.last_contract_managed_total_balance
                                     + earnings,
@@ -3408,8 +3411,7 @@ last_contract_managed_total_balance             {}
                             ctx.account_locked_balance =
                                 *staking_pool.ops_stake_pool_balances().total_staked;
                             testing_env_with_promise_result_failure(ctx.clone());
-                            let state_before_callback =
-                                StakingPoolComponent::state_with_updated_earnings();
+                            let state_before_callback = staking_pool.state_with_updated_earnings();
                             let balances = staking_pool.ops_stake_finalize(args.account_id.clone());
                             println!("{}", serde_json::to_string_pretty(&balances).unwrap());
                             assert_eq!(
@@ -3418,8 +3420,7 @@ last_contract_managed_total_balance             {}
                                     .ops_stake_balance(to_valid_account_id(&args.account_id))
                                     .unwrap()
                             );
-                            let state_after_callback =
-                                StakingPoolComponent::state_with_updated_earnings();
+                            let state_after_callback = staking_pool.state_with_updated_earnings();
                             assert_eq!(
                                 state_before_callback.last_contract_managed_total_balance,
                                 state_after_callback.last_contract_managed_total_balance

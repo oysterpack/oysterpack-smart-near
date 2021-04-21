@@ -103,7 +103,7 @@ near view $CONTRACT_NAME ops_stake_token_value
 near view $CONTRACT_NAME ops_stake_balance --args '{"account_id":"alfio-zappala-oysterpack.testnet"}'
 
 near call $CONTRACT_NAME ops_stake --accountId oysterpack.testnet
-near call $CONTRACT_NAME ops_stake --accountId alfio-zappala-oysterpack.testnet
+near call $CONTRACT_NAME ops_stake --accountId alfio-zappala-oysterpack.testnet --amount 0.1
 near call $CONTRACT_NAME ops_stake --accountId oysterpack.testnet --amount 1
 
 near call $CONTRACT_NAME ops_unstake --accountId alfio-zappala-oysterpack.testnet --args '{"amount":"1000000000000000000000000"}'
