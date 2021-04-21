@@ -1,4 +1,4 @@
-use crate::components::staking_pool::{StakingPoolComponent, State};
+use oysterpack_smart_fungible_token::TokenAmount;
 use oysterpack_smart_near::{
     domain::YoctoNear,
     near_sdk::serde::{Deserialize, Serialize},
@@ -10,6 +10,8 @@ use oysterpack_smart_near::{
 pub struct StakingPoolBalances {
     /// total NEAR funds that have been staked and confirmed
     pub total_staked: YoctoNear,
+
+    pub total_stake_supply: TokenAmount,
 
     /// total unstaked funds that have not yet been withdrawn
     /// - includes locked and unlocked funds
@@ -30,24 +32,4 @@ pub struct StakingPoolBalances {
     /// [`StakingPoolBalances::last_contract_managed_total_balance`] - [`StakingPoolBalances::current_contract_managed_total_balance`]
     /// staking earnings + transaction fee earnings
     pub earnings: YoctoNear,
-}
-
-impl StakingPoolBalances {
-    pub fn load() -> Self {
-        let state = StakingPoolComponent::state();
-        let current_contract_managed_total_balance =
-            State::contract_managed_total_balance_in_view_mode();
-        Self {
-            total_staked: State::total_staked_balance(),
-            total_unstaked: State::total_unstaked_balance(),
-            unstaked_liquidity: State::liquidity(),
-            treasury_balance: state.treasury_balance,
-
-            current_contract_managed_total_balance,
-            last_contract_managed_total_balance: state.last_contract_managed_total_balance,
-            earnings: current_contract_managed_total_balance
-                .saturating_sub(*state.last_contract_managed_total_balance)
-                .into(),
-        }
-    }
 }
