@@ -1827,6 +1827,362 @@ last_contract_managed_total_balance             {}
                 println!("{}", serde_json::to_string_pretty(&pool_balances).unwrap());
                 assert_eq!(pool_balances.unstaked_liquidity, (5 * YOCTO).into());
             }
+
+            #[test]
+            fn stake_with_treasury_balance() {
+                // Arrange
+                let mut ctx = new_context(ACCOUNT);
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                let mut account_manager = account_manager();
+                let mut staking_pool = staking_pool();
+
+                // register account
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, Some(true));
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = 10 * YOCTO;
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake();
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = 0;
+                ctx.is_view = true;
+                testing_env!(ctx.clone());
+                let pool_balances = staking_pool.ops_stake_pool_balances();
+                println!("{}", serde_json::to_string_pretty(&pool_balances).unwrap());
+                assert_eq!(
+                    pool_balances,
+                    serde_json::from_str(
+                        r#"{
+  "total_staked": "10000000000000000000000000",
+  "total_stake_supply": "10000000000000000000000000",
+  "total_unstaked": "0",
+  "unstaked_liquidity": "0",
+  "treasury_balance": "0",
+  "current_contract_managed_total_balance": "13172980000000000000000000",
+  "last_contract_managed_total_balance": "13172980000000000000000000",
+  "earnings": "0"
+}"#
+                    )
+                    .unwrap()
+                );
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance() - *pool_balances.total_staked;
+                ctx.account_locked_balance = *pool_balances.total_staked;
+                ctx.attached_deposit = 1;
+                ctx.is_view = false;
+                testing_env!(ctx.clone());
+
+                let owner_balance = staking_pool
+                    .ops_stake_balance(to_valid_account_id(OWNER))
+                    .unwrap();
+                staking_pool.ops_stake_transfer_call(
+                    to_valid_account_id(&env::current_account_id()),
+                    owner_balance.staked.as_ref().unwrap().near_value,
+                    None,
+                    "".into(),
+                );
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.account_locked_balance = env::account_locked_balance();
+                ctx.attached_deposit = 0;
+                ctx.is_view = true;
+                testing_env!(ctx.clone());
+                let pool_balances = staking_pool.ops_stake_pool_balances();
+                println!("{}", serde_json::to_string_pretty(&pool_balances).unwrap());
+                assert_eq!(pool_balances.treasury_balance, YoctoNear::ZERO);
+                assert_eq!(
+                    staking_pool
+                        .ops_stake_balance(to_valid_account_id(&env::current_account_id()))
+                        .unwrap()
+                        .staked
+                        .unwrap()
+                        .stake,
+                    owner_balance.staked.as_ref().unwrap().stake
+                );
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.account_locked_balance = env::account_locked_balance();
+                ctx.attached_deposit = YOCTO;
+                ctx.is_view = false;
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake();
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs, vec![
+                    "[INFO] [EARNINGS] 1",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Deposit(YoctoNear(1))",
+                    "[INFO] [STAKE] near_amount=999999999999999999999999, stake_token_amount=999999999999999999999999",
+                    "[INFO] [FT_MINT] account: bob, amount: 999999999999999999999999",
+                    "[INFO] [FT_BURN] account: bob, amount: 7999999999999999999998",
+                    "[INFO] [FT_MINT] account: owner, amount: 7999999999999999999998",
+                    "[WARN] [STATUS_OFFLINE] ",
+                ]);
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.account_locked_balance = env::account_locked_balance();
+                ctx.attached_deposit = 0;
+                ctx.is_view = true;
+                testing_env!(ctx.clone());
+                let pool_balances = staking_pool.ops_stake_pool_balances();
+                println!("{}", serde_json::to_string_pretty(&pool_balances).unwrap());
+                // funds that were transferred over from the owner FT account now are picked up
+                // by the treasury
+                assert_eq!(
+                    pool_balances.treasury_balance,
+                    owner_balance.staked.as_ref().unwrap().near_value
+                );
+
+                println!(
+                    "stake_token_value = {}",
+                    staking_pool.ops_stake_token_value(None)
+                );
+
+                // Act
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.account_locked_balance = env::account_locked_balance();
+                ctx.attached_deposit = YOCTO;
+                ctx.is_view = false;
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake();
+
+                // Assert
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs, vec![
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Withdrawal(YoctoNear(1))",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Deposit(YoctoNear(1))",
+                    "[INFO] [STAKE] near_amount=1000000000000000000000000, stake_token_amount=1000000000000000000000000",
+                    "[INFO] [FT_MINT] account: bob, amount: 1000000000000000000000000",
+                    "[INFO] [FT_BURN] account: bob, amount: 7999999999999999999999",
+                    "[INFO] [FT_MINT] account: owner, amount: 7999999999999999999999",
+                    "[WARN] [STATUS_OFFLINE] ",
+                ]);
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.account_locked_balance = env::account_locked_balance();
+                ctx.attached_deposit = 0;
+                ctx.is_view = true;
+                testing_env!(ctx.clone());
+                let pool_balances = staking_pool.ops_stake_pool_balances();
+                println!("{}", serde_json::to_string_pretty(&pool_balances).unwrap());
+
+                // Act - stake again
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.account_locked_balance = env::account_locked_balance();
+                ctx.attached_deposit = YOCTO;
+                ctx.is_view = false;
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake();
+
+                // Assert
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.account_locked_balance = env::account_locked_balance();
+                ctx.attached_deposit = 0;
+                ctx.is_view = true;
+                testing_env!(ctx.clone());
+                let pool_balances = staking_pool.ops_stake_pool_balances();
+                println!("{}", serde_json::to_string_pretty(&pool_balances).unwrap());
+                assert_eq!(
+                    pool_balances,
+                    serde_json::from_str(
+                        r#"{
+  "total_staked": "13000000000000000000000000",
+  "total_stake_supply": "12999999999999999999999999",
+  "total_unstaked": "0",
+  "unstaked_liquidity": "0",
+  "treasury_balance": "80000000000000000000000",
+  "current_contract_managed_total_balance": "16172980000000000000000000",
+  "last_contract_managed_total_balance": "16172980000000000000000000",
+  "earnings": "0"
+}"#
+                    )
+                    .unwrap()
+                );
+
+                let treasury_balance = staking_pool
+                    .ops_stake_balance(to_valid_account_id(&env::current_account_id()))
+                    .unwrap();
+                println!(
+                    "treasury balance: {}",
+                    serde_json::to_string_pretty(&treasury_balance).unwrap()
+                );
+
+                // Act - stake again - simulate earnings
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance() + (YOCTO / 10);
+                ctx.account_locked_balance = env::account_locked_balance();
+                ctx.attached_deposit = YOCTO;
+                ctx.is_view = false;
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake();
+
+                // Assert
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs, vec![
+                    "[INFO] [EARNINGS] 100000000000000000000000",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Withdrawal(YoctoNear(1))",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Deposit(YoctoNear(1))",
+                    "[INFO] [STAKE] near_amount=1000000000000000000000000, stake_token_amount=992366412213740458015268",
+                    "[INFO] [FT_MINT] account: bob, amount: 992366412213740458015268",
+                    "[INFO] [FT_BURN] account: contract.near, amount: 610687022900763358778",
+                    "[INFO] [TREASURY_DIVIDEND] 615384615384615384615 yoctoNEAR / 610687022900763358778 yoctoSTAKE",
+                    "[INFO] [FT_BURN] account: bob, amount: 7938584808618916138812",
+                    "[INFO] [FT_MINT] account: owner, amount: 7938584808618916138812",
+                    "[WARN] [STATUS_OFFLINE] ",
+                ]);
+
+                let pool_balances_after_dividend_payout = staking_pool.ops_stake_pool_balances();
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&pool_balances_after_dividend_payout).unwrap()
+                );
+                let treasury_balance_after_dividend_paid = staking_pool
+                    .ops_stake_balance(to_valid_account_id(&env::current_account_id()))
+                    .unwrap();
+                println!(
+                    "treasury balance: {}",
+                    serde_json::to_string_pretty(&treasury_balance_after_dividend_paid).unwrap()
+                );
+                assert_eq!(
+                    *treasury_balance_after_dividend_paid
+                        .staked
+                        .as_ref()
+                        .unwrap()
+                        .stake,
+                    *treasury_balance.staked.as_ref().unwrap().stake - 610687022900763358778
+                );
+                assert_eq!(
+                    treasury_balance_after_dividend_paid,
+                    serde_json::from_str(
+                        r#"{
+  "storage_balance": {
+    "total": "3930000000000000000000",
+    "available": "0"
+  },
+  "staked": {
+    "stake": "79389312977099236641222",
+    "near_value": "80003491696309713462672"
+  },
+  "unstaked": null
+}"#
+                    )
+                    .unwrap()
+                );
+            }
+
+            #[test]
+            fn as_owner() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                let contract_managed_total_balance = State::contract_managed_total_balance();
+
+                let mut staking_pool = staking_pool();
+
+                let ft_stake = ft_stake();
+
+                ctx.account_balance = env::account_balance();
+                ctx.is_view = true;
+                testing_env!(ctx.clone());
+                let owner_balance = staking_pool
+                    .ops_stake_balance(to_valid_account_id(OWNER))
+                    .unwrap();
+
+                // Act
+                ctx.predecessor_account_id = OWNER.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = YOCTO;
+                ctx.is_view = false;
+                testing_env!(ctx.clone());
+                if let PromiseOrValue::Promise(_) = staking_pool.ops_stake() {
+                    panic!("expected promise");
+                }
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs, vec![
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Withdrawal(YoctoNear(9996819160000000000000000000))",
+                    "[INFO] [STAKE] near_amount=9997819160000000000000000000, stake_token_amount=9997819160000000000000000000",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                    "[INFO] [FT_MINT] account: owner, amount: 9997819160000000000000000000",
+                    "[WARN] [STATUS_OFFLINE] ",
+                ]);
+
+                let pool_balances = staking_pool.ops_stake_pool_balances();
+                assert_eq!(
+                    pool_balances.total_staked,
+                    owner_balance.storage_balance.available + YOCTO
+                );
+
+                // Assert
+                assert_eq!(staking_pool.ops_stake_token_value(None), YOCTO.into());
+                assert_eq!(
+                    *ft_stake.ft_balance_of(to_valid_account_id(OWNER)),
+                    *(owner_balance.storage_balance.available + YOCTO)
+                );
+                let state = StakingPoolComponent::state();
+                println!("{:#?}", *state);
+                assert_eq!(state.treasury_balance, YoctoNear::ZERO);
+
+                log_contract_managed_total_balance("after staking");
+
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = 0;
+                testing_env!(ctx.clone());
+                assert_eq!(
+                    contract_managed_total_balance
+                        + owner_balance.storage_balance.available
+                        + YOCTO,
+                    State::contract_managed_total_balance()
+                );
+                let stake_pool_balances = staking_pool.ops_stake_pool_balances();
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&stake_pool_balances).unwrap()
+                );
+                assert_eq!(stake_pool_balances.treasury_balance, YoctoNear::ZERO);
+                assert_eq!(
+                    stake_pool_balances.total_staked,
+                    staking_pool
+                        .ops_stake_balance(to_valid_account_id(OWNER))
+                        .as_ref()
+                        .unwrap()
+                        .staked
+                        .as_ref()
+                        .unwrap()
+                        .near_value
+                );
+                assert_eq!(stake_pool_balances.total_unstaked, YoctoNear::ZERO);
+                assert_eq!(stake_pool_balances.unstaked_liquidity, YoctoNear::ZERO);
+            }
         }
 
         #[cfg(test)]
@@ -3391,6 +3747,141 @@ last_contract_managed_total_balance             {}
                     )
                     .unwrap()
                 );
+            }
+
+            #[test]
+            fn as_owner() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                let contract_managed_total_balance = State::contract_managed_total_balance();
+
+                let mut staking_pool = staking_pool();
+
+                // start staking
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                assert!(staking_pool.ops_stake_status().is_online());
+
+                let ft_stake = ft_stake();
+
+                ctx.account_balance = env::account_balance();
+                ctx.is_view = true;
+                testing_env!(ctx.clone());
+                let owner_balance = staking_pool
+                    .ops_stake_balance(to_valid_account_id(OWNER))
+                    .unwrap();
+
+                // Act
+                ctx.predecessor_account_id = OWNER.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = YOCTO;
+                ctx.is_view = false;
+                testing_env!(ctx.clone());
+                if let PromiseOrValue::Value(_) = staking_pool.ops_stake() {
+                    panic!("expected promise");
+                }
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs, vec![
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Withdrawal(YoctoNear(9996819160000000000000000000))",
+                    "[INFO] [STAKE] near_amount=9997819160000000000000000000, stake_token_amount=9997819160000000000000000000",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                    "[INFO] [FT_MINT] account: owner, amount: 9997819160000000000000000000",
+                ]);
+
+                let pool_balances = staking_pool.ops_stake_pool_balances();
+                assert_eq!(
+                    pool_balances.total_staked,
+                    owner_balance.storage_balance.available + YOCTO
+                );
+
+                let receipts = deserialize_receipts();
+                assert_eq!(receipts.len(), 2);
+                {
+                    let receipt = &receipts[0];
+                    assert_eq!(receipt.receiver_id, env::current_account_id());
+                    assert_eq!(receipt.actions.len(), 1);
+                    match &receipt.actions[0] {
+                        Action::Stake(action) => {
+                            assert_eq!(
+                                action.stake,
+                                *staking_pool.ops_stake_pool_balances().total_staked
+                            );
+
+                            assert_eq!(
+                                action.public_key,
+                                "1".to_string()
+                                    + staking_pool
+                                        .ops_stake_public_key()
+                                        .to_string()
+                                        .split(":")
+                                        .last()
+                                        .unwrap()
+                            );
+                        }
+                        _ => panic!("expected StakeAction"),
+                    }
+                }
+                {
+                    let receipt = &receipts[1];
+                    assert_eq!(receipt.receiver_id, env::current_account_id());
+                    assert_eq!(receipt.actions.len(), 1);
+                    match &receipt.actions[0] {
+                        Action::FunctionCall(action) => {
+                            assert_eq!(action.method_name, "ops_stake_finalize");
+                            let args: StakeActionCallbackArgs =
+                                serde_json::from_str(&action.args).unwrap();
+                            assert_eq!(args.account_id, OWNER);
+                            assert_eq!(action.deposit, 0);
+                        }
+                        _ => panic!("expected StakeAction"),
+                    }
+                }
+
+                // Assert
+                assert_eq!(staking_pool.ops_stake_token_value(None), YOCTO.into());
+                assert_eq!(
+                    *ft_stake.ft_balance_of(to_valid_account_id(OWNER)),
+                    *(owner_balance.storage_balance.available + YOCTO)
+                );
+                let state = StakingPoolComponent::state();
+                println!("{:#?}", *state);
+                assert_eq!(state.treasury_balance, YoctoNear::ZERO);
+
+                log_contract_managed_total_balance("after staking");
+
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = 0;
+                testing_env!(ctx.clone());
+                assert_eq!(
+                    contract_managed_total_balance
+                        + owner_balance.storage_balance.available
+                        + YOCTO,
+                    State::contract_managed_total_balance()
+                );
+                let stake_pool_balances = staking_pool.ops_stake_pool_balances();
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&stake_pool_balances).unwrap()
+                );
+                assert_eq!(stake_pool_balances.treasury_balance, YoctoNear::ZERO);
+                assert_eq!(
+                    stake_pool_balances.total_staked,
+                    staking_pool
+                        .ops_stake_balance(to_valid_account_id(OWNER))
+                        .as_ref()
+                        .unwrap()
+                        .staked
+                        .as_ref()
+                        .unwrap()
+                        .near_value
+                );
+                assert_eq!(stake_pool_balances.total_unstaked, YoctoNear::ZERO);
+                assert_eq!(stake_pool_balances.unstaked_liquidity, YoctoNear::ZERO);
             }
         }
 
