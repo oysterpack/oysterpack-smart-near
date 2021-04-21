@@ -288,7 +288,12 @@ impl StakingPool for StakingPoolComponent {
             .account_manager
             .registered_account_near_data(&account_id);
 
-        Self::state_with_updated_earnings();
+        // this handles the initial edge case when there are earnings currently no stakers, i.e.,
+        // stake token total supply is zero. If there are no stakers, then earnings will not be
+        // staked in this staking transaction - earnings will be staked in the next transaction.
+        if self.stake_token.ft_total_supply() > TokenAmount::ZERO {
+            Self::state_with_updated_earnings();
+        }
 
         // stake the account's total available storage balance + attached deposit
         let (near_amount, stake_token_amount) = {
@@ -1187,6 +1192,168 @@ last_contract_managed_total_balance             {}
                 ctx.account_balance = env::account_balance();
                 testing_env!(ctx);
                 staking_pool.ops_stake();
+            }
+
+            /// When there is zero STAKE total supply, i.e., no stakers, then earnings will not be
+            /// processed, i.e., staked in the current staking transaction
+            #[test]
+            fn earnings_received_through_account_balance_increase_with_zero_total_stake_supply() {
+                // Arrange
+                let mut ctx = new_context(ACCOUNT);
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                let mut account_manager = account_manager();
+                let mut staking_pool = staking_pool();
+                let ft_stake = ft_stake();
+
+                // register account
+                ctx.account_balance = env::account_balance();
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, Some(true));
+
+                // simulate earnings received by increasing account balance
+                const EARNINGS: YoctoNear = YoctoNear(YOCTO);
+                ctx.account_balance = env::account_balance() + *EARNINGS;
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                // Act
+                let balances = if let PromiseOrValue::Value(balances) = staking_pool.ops_stake() {
+                    balances
+                } else {
+                    panic!("expected value")
+                };
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs, vec![
+                    "[INFO] [STAKE] near_amount=1000000000000000000000000, stake_token_amount=1000000000000000000000000",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                    "[INFO] [FT_MINT] account: bob, amount: 1000000000000000000000000",
+                    "[INFO] [FT_BURN] account: bob, amount: 8000000000000000000000",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                    "[INFO] [FT_MINT] account: owner, amount: 8000000000000000000000",
+                    "[WARN] [STATUS_OFFLINE] ",
+                ]);
+                println!("{}", serde_json::to_string_pretty(&balances).unwrap());
+                assert_eq!(
+                    *balances.staked.as_ref().unwrap().stake,
+                    992000000000000000000000
+                );
+                // when FT total supply is zero, then earnings are held and not staked
+                // earnings will be staked on the next staking action
+                assert_eq!(
+                    *balances.staked.as_ref().unwrap().near_value,
+                    1984000000000000000000000
+                );
+                // STAKE token value is 2 NEAR because of the earnings that have not yet been staked
+                assert_eq!(staking_pool.ops_stake_token_value(None), (2 * YOCTO).into());
+                assert_eq!(ft_stake.ft_total_supply(), YOCTO.into());
+                println!(
+                    "owner stake balances = {}",
+                    serde_json::to_string_pretty(
+                        &staking_pool.ops_stake_balance(to_valid_account_id(OWNER))
+                    )
+                    .unwrap()
+                );
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&staking_pool.ops_stake_pool_balances()).unwrap()
+                );
+
+                ctx.account_balance = env::account_balance() + *EARNINGS;
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                // Act - simulate more earnings on next stake
+                let balances = if let PromiseOrValue::Value(balances) = staking_pool.ops_stake() {
+                    balances
+                } else {
+                    panic!("expected Value")
+                };
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs, vec![
+                    "[INFO] [EARNINGS] 2000000000000000000000000",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Deposit(YoctoNear(1))",
+                    "[INFO] [STAKE] near_amount=999999999999999999999999, stake_token_amount=333333333333333333333333",
+                    "[INFO] [FT_MINT] account: bob, amount: 333333333333333333333333",
+                    "[INFO] [FT_BURN] account: bob, amount: 2666666666666666666666",
+                    "[INFO] [FT_MINT] account: owner, amount: 2666666666666666666666",
+                    "[WARN] [STATUS_OFFLINE] ",
+                ]);
+
+                {
+                    println!(
+                        "account {}",
+                        serde_json::to_string_pretty(&balances).unwrap()
+                    );
+
+                    assert_eq!(
+                        *balances.staked.as_ref().unwrap().stake,
+                        1322666666666666666666667
+                    );
+                    assert_eq!(
+                        *balances.staked.as_ref().unwrap().near_value,
+                        3968000000000000000000001
+                    );
+                }
+
+                ctx.account_balance = env::account_balance();
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = 0;
+                ctx.is_view = true;
+                testing_env!(ctx.clone());
+
+                // Assert - account STAKE NEAR balances sum up to the total staked balance
+                {
+                    let owner_stake_balances = staking_pool
+                        .ops_stake_balance(to_valid_account_id(OWNER))
+                        .unwrap();
+                    println!(
+                        "owner_stake_balances {}",
+                        serde_json::to_string_pretty(&owner_stake_balances).unwrap()
+                    );
+                    let stake_pool_balances = staking_pool.ops_stake_pool_balances();
+                    println!(
+                        "stake_pool_balances {}",
+                        serde_json::to_string_pretty(&stake_pool_balances).unwrap()
+                    );
+                    assert_eq!(
+                        stake_pool_balances.total_staked,
+                        balances.staked.as_ref().unwrap().near_value
+                            + owner_stake_balances.staked.as_ref().unwrap().near_value
+                    );
+                }
+
+                {
+                    let stake_token_value = staking_pool.ops_stake_token_value(None);
+                    println!("stake_token_value = {}", stake_token_value);
+                    let stake_total_supply = ft_stake.ft_total_supply();
+                    println!("ft_total_supply = {}", stake_total_supply);
+                    let owner_stake_balance = staking_pool
+                        .ops_stake_balance(to_valid_account_id(OWNER))
+                        .unwrap();
+                    println!(
+                        "owner stake balances = {}",
+                        serde_json::to_string_pretty(&owner_stake_balance).unwrap()
+                    );
+                    let stake_pool_balances = staking_pool.ops_stake_pool_balances();
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&stake_pool_balances).unwrap()
+                    );
+                    // since all earnings are staked, then the total STAKE supply value should match
+                    // the total staked balance
+                    assert_eq!(
+                        staking_pool.ops_stake_token_value(Some(stake_total_supply)),
+                        stake_pool_balances.total_staked,
+                    );
+                }
             }
 
             #[test]
