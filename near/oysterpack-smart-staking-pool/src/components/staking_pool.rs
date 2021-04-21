@@ -309,6 +309,11 @@ impl StakingPool for StakingPoolComponent {
             (near - remainder, stake)
         };
 
+        println!(
+            "*** near_amount={}, stake_token_amount={}",
+            near_amount, stake_token_amount
+        );
+
         if near_amount == YoctoNear::ZERO {
             // INVARIANT CHECK: if `near_amount` is zero, then `stake_token_amount` should be zero
             assert_eq!(stake_token_amount, TokenAmount::ZERO);
@@ -2798,7 +2803,6 @@ last_contract_managed_total_balance             {}
 
                 assert_eq!(staking_pool.ops_stake_token_value(None), (3 * YOCTO).into());
 
-                // Act
                 ctx.predecessor_account_id = ACCOUNT.to_string();
                 ctx.account_balance = env::account_balance();
                 ctx.attached_deposit = YOCTO;
@@ -2815,6 +2819,40 @@ last_contract_managed_total_balance             {}
                     *staking_pool.ops_stake_pool_balances().total_staked,
                     (5 * YOCTO) - 2
                 );
+                println!(
+                    "ops_stake_token_value = {}",
+                    staking_pool.ops_stake_token_value(None)
+                );
+                assert_eq!(
+                    staking_pool
+                        .ops_stake_balance(to_valid_account_id(ACCOUNT))
+                        .unwrap()
+                        .storage_balance
+                        .available,
+                    2.into()
+                );
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = 0;
+                ctx.is_view = false;
+                testing_env!(ctx.clone());
+                if let PromiseOrValue::Value(balances) = staking_pool.ops_stake() {
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+                    assert_eq!(
+                        logs,
+                        vec![
+                            "[INFO] [ACCOUNT_STORAGE_CHANGED] Withdrawal(YoctoNear(2))",
+                            "[INFO] [ACCOUNT_STORAGE_CHANGED] Deposit(YoctoNear(2))",
+                            "[INFO] [NOT_ENOUGH_TO_STAKE] ",
+                        ]
+                    );
+
+                    assert_eq!(balances.storage_balance.available, 2.into());
+                } else {
+                    panic!("expected value")
+                }
             }
         }
 
