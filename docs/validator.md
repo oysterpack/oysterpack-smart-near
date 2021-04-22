@@ -1,7 +1,7 @@
 ## Running a Validator Node on testnet
 - https://docs.near.org/docs/validator/staking
 ```shell
-STAKING_POOL=dev-1618763984966-3812063
+STAKING_POOL=dev-1618770943926-8326158
 NEARCORE=~/Documents/projects/github/near/nearcore
 
 nearup run testnet --binary-path $NEARCORE/target/release --account-id $STAKING_POOL

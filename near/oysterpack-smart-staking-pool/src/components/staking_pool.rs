@@ -799,7 +799,7 @@ impl StakingPoolComponent {
 }
 
 impl StakingPoolComponent {
-    /// compute how gas this function call requires to complete and give the remainder of the gas to
+    /// compute how much gas this function call requires to complete and give the remainder of the gas to
     /// the callback
     fn callback_gas() -> Gas {
         let transaction_gas_fees = Gas::compute(vec![
