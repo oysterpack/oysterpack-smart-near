@@ -4303,6 +4303,92 @@ last_contract_managed_total_balance             {}
                     }
                 }
             }
+
+            #[test]
+            #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED]")]
+            fn account_not_registered() {
+                // Arrange
+                let mut ctx = new_context(ACCOUNT);
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                let mut staking_pool = staking_pool();
+
+                // start staking
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                assert!(staking_pool.ops_stake_status().is_online());
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                testing_env!(ctx);
+                staking_pool.ops_unstake(None);
+            }
+
+            #[test]
+            #[should_panic(expected = "[ERR] [INSUFFICIENT_FUNDS] STAKE balance is zero")]
+            fn zero_stake_balance_and_unstake_specified_amount() {
+                // Arrange
+                let mut ctx = new_context(ACCOUNT);
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                let mut staking_pool = staking_pool();
+                let mut account_manager = account_manager();
+
+                // start staking
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                assert!(staking_pool.ops_stake_status().is_online());
+
+                // register account
+                ctx.account_balance = env::account_balance();
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, Some(true));
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                testing_env!(ctx);
+                staking_pool.ops_unstake(Some(YOCTO.into()));
+            }
+
+            #[test]
+            fn zero_stake_balance_and_unstake_all() {
+                // Arrange
+                let mut ctx = new_context(ACCOUNT);
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                let mut staking_pool = staking_pool();
+                let mut account_manager = account_manager();
+
+                // start staking
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                assert!(staking_pool.ops_stake_status().is_online());
+
+                // register account
+                ctx.account_balance = env::account_balance();
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, Some(true));
+
+                // Act
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                testing_env!(ctx);
+                if let PromiseOrValue::Value(balances) = staking_pool.ops_unstake(None) {
+                    assert!(balances.staked.is_none());
+                } else {
+                    panic!("expected value")
+                }
+            }
         }
 
         #[cfg(test)]
