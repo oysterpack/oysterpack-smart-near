@@ -331,9 +331,16 @@ impl StakingPool for StakingPoolComponent {
         let stake_balance = self
             .stake_token
             .ft_balance_of(to_valid_account_id(&account_id));
+        if stake_balance == TokenAmount::ZERO {
+            if amount.is_none() {
+                return self.registered_stake_account_balance(&account_id);
+            }
+            ERR_INSUFFICIENT_FUNDS.panic_with_message("STAKE balance is zero");
+            unreachable!()
+        }
         let stake_near_value = self.stake_near_value_rounded_down(stake_balance);
         let (near_amount, stake_token_amount) = match amount {
-            None => (stake_near_value, stake_balance),
+            None => (stake_near_value, stake_balance), // unstake all
             Some(near_amount) => {
                 ERR_INSUFFICIENT_FUNDS.assert(|| stake_near_value >= near_amount);
                 // we round up the number of STAKE tokens to ensure that we never overdraw from the
@@ -2414,6 +2421,74 @@ last_contract_managed_total_balance             {}
                     } else {
                         panic!("expected value")
                     }
+                } else {
+                    panic!("expected value")
+                }
+            }
+
+            #[test]
+            #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED]")]
+            fn account_not_registered() {
+                // Arrange
+                let mut ctx = new_context(ACCOUNT);
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                let mut staking_pool = staking_pool();
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                testing_env!(ctx);
+                staking_pool.ops_unstake(None);
+            }
+
+            #[test]
+            #[should_panic(expected = "[ERR] [INSUFFICIENT_FUNDS] STAKE balance is zero")]
+            fn zero_stake_balance_and_unstake_specified_amount() {
+                // Arrange
+                let mut ctx = new_context(ACCOUNT);
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                let mut staking_pool = staking_pool();
+                let mut account_manager = account_manager();
+
+                // register account
+                ctx.account_balance = env::account_balance();
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, Some(true));
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                testing_env!(ctx);
+                staking_pool.ops_unstake(Some(YOCTO.into()));
+            }
+
+            #[test]
+            fn zero_stake_balance_and_unstake_all() {
+                // Arrange
+                let mut ctx = new_context(ACCOUNT);
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                let mut staking_pool = staking_pool();
+                let mut account_manager = account_manager();
+
+                // register account
+                ctx.account_balance = env::account_balance();
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, Some(true));
+
+                // Act
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                testing_env!(ctx);
+                if let PromiseOrValue::Value(balances) = staking_pool.ops_unstake(None) {
+                    assert!(balances.staked.is_none());
                 } else {
                     panic!("expected value")
                 }

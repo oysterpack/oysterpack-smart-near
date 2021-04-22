@@ -90,6 +90,10 @@ impl ErrorConst {
         env::panic(self.to_string().as_bytes())
     }
 
+    pub fn panic_with_message<Msg: Display>(&self, msg: Msg) {
+        self.0.error(msg).panic()
+    }
+
     pub fn assert<F>(&self, check: F)
     where
         F: FnOnce() -> bool,
