@@ -1846,6 +1846,7 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
                 account_manager.storage_deposit(None, Some(true));
 
+                // stake 10 NEAR
                 ctx.predecessor_account_id = ACCOUNT.to_string();
                 ctx.account_balance = env::account_balance();
                 ctx.attached_deposit = 10 * YOCTO;
@@ -1878,13 +1879,12 @@ last_contract_managed_total_balance             {}
                     .unwrap()
                 );
 
+                // transfer STAKE from the owner to the treasurys
                 ctx.predecessor_account_id = ACCOUNT.to_string();
-                ctx.account_balance = env::account_balance() - *pool_balances.total_staked;
-                ctx.account_locked_balance = *pool_balances.total_staked;
+                ctx.account_balance = env::account_balance();
                 ctx.attached_deposit = 1;
                 ctx.is_view = false;
                 testing_env!(ctx.clone());
-
                 let owner_balance = staking_pool
                     .ops_stake_balance(to_valid_account_id(OWNER))
                     .unwrap();
@@ -1906,7 +1906,11 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
                 let pool_balances = staking_pool.ops_stake_pool_balances();
                 println!("{}", serde_json::to_string_pretty(&pool_balances).unwrap());
+                // the staking pool will not become aware of the new STAKE that the owner transferred
+                // over until a stake transaction is processed - thus the current treasury balance
+                // should still be zero
                 assert_eq!(pool_balances.treasury_balance, YoctoNear::ZERO);
+                // confirms that the STAKE was transferred from the owner to the treasury STAKE account
                 assert_eq!(
                     staking_pool
                         .ops_stake_balance(to_valid_account_id(&env::current_account_id()))
@@ -1917,6 +1921,7 @@ last_contract_managed_total_balance             {}
                     owner_balance.staked.as_ref().unwrap().stake
                 );
 
+                // stake
                 ctx.predecessor_account_id = ACCOUNT.to_string();
                 ctx.account_balance = env::account_balance();
                 ctx.account_locked_balance = env::account_locked_balance();
@@ -1927,8 +1932,11 @@ last_contract_managed_total_balance             {}
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
                 assert_eq!(logs, vec![
+                    // 1 yoctoNEAR was earned from the 1 yoctoNEAR attached deposit from the FT transfer
                     "[INFO] [EARNINGS] 1",
-                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Deposit(YoctoNear(1))",
+                    // the STAKE NEAR value has increased but because of rounding, 1 yoctoNEAR could
+                    // be staked and is deposited into the storage balance
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Deposit(YoctoNear(1))",                    
                     "[INFO] [STAKE] near_amount=999999999999999999999999, stake_token_amount=999999999999999999999999",
                     "[INFO] [FT_MINT] account: bob, amount: 999999999999999999999999",
                     "[INFO] [FT_BURN] account: bob, amount: 7999999999999999999998",
@@ -1955,11 +1963,13 @@ last_contract_managed_total_balance             {}
                     "stake_token_value = {}",
                     staking_pool.ops_stake_token_value(None)
                 );
+                // the 1 yoctoNEAR that was earned was too low to affect the STAKE NEAR value because
+                // the returned value is rounded down
+                assert_eq!(staking_pool.ops_stake_token_value(None), YOCTO.into());
 
-                // Act
+                // Act - with no new earnings
                 ctx.predecessor_account_id = ACCOUNT.to_string();
                 ctx.account_balance = env::account_balance();
-                ctx.account_locked_balance = env::account_locked_balance();
                 ctx.attached_deposit = YOCTO;
                 ctx.is_view = false;
                 testing_env!(ctx.clone());
@@ -1969,6 +1979,9 @@ last_contract_managed_total_balance             {}
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
                 assert_eq!(logs, vec![
+                    // the 1 NEAR + 1 yoctoNEAR from the account's storage available balance was staked
+                    // but because the STAKE NEAR value is slightly higher than 1, 1 yoctoNEAR could
+                    // not be staked because of rounding and is returned back to the account storage balance
                     "[INFO] [ACCOUNT_STORAGE_CHANGED] Withdrawal(YoctoNear(1))",
                     "[INFO] [ACCOUNT_STORAGE_CHANGED] Deposit(YoctoNear(1))",
                     "[INFO] [STAKE] near_amount=1000000000000000000000000, stake_token_amount=1000000000000000000000000",
@@ -1987,10 +2000,9 @@ last_contract_managed_total_balance             {}
                 let pool_balances = staking_pool.ops_stake_pool_balances();
                 println!("{}", serde_json::to_string_pretty(&pool_balances).unwrap());
 
-                // Act - stake again
+                // Act - stake again with no new earning
                 ctx.predecessor_account_id = ACCOUNT.to_string();
                 ctx.account_balance = env::account_balance();
-                ctx.account_locked_balance = env::account_locked_balance();
                 ctx.attached_deposit = YOCTO;
                 ctx.is_view = false;
                 testing_env!(ctx.clone());
@@ -1999,6 +2011,15 @@ last_contract_managed_total_balance             {}
                 // Assert
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
+                assert_eq!(logs, vec![
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Withdrawal(YoctoNear(1))",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Deposit(YoctoNear(1))",
+                    "[INFO] [STAKE] near_amount=1000000000000000000000000, stake_token_amount=1000000000000000000000000",
+                    "[INFO] [FT_MINT] account: bob, amount: 1000000000000000000000000",
+                    "[INFO] [FT_BURN] account: bob, amount: 7999999999999999999999",
+                    "[INFO] [FT_MINT] account: owner, amount: 7999999999999999999999",
+                    "[WARN] [STATUS_OFFLINE] ",
+                ]);
 
                 ctx.predecessor_account_id = ACCOUNT.to_string();
                 ctx.account_balance = env::account_balance();
@@ -2032,11 +2053,18 @@ last_contract_managed_total_balance             {}
                     "treasury balance: {}",
                     serde_json::to_string_pretty(&treasury_balance).unwrap()
                 );
+                assert_eq!(
+                    *treasury_balance.staked.as_ref().unwrap().stake,
+                    *(staking_pool.ops_stake_fee() * (10 * YOCTO))
+                );
+                assert_eq!(
+                    treasury_balance.staked.as_ref().unwrap().near_value,
+                    staking_pool.ops_stake_fee() * (10 * YOCTO)
+                );
 
-                // Act - stake again - simulate earnings
+                // Act - stake again - with new earnings - 0.1 NEAR
                 ctx.predecessor_account_id = ACCOUNT.to_string();
                 ctx.account_balance = env::account_balance() + (YOCTO / 10);
-                ctx.account_locked_balance = env::account_locked_balance();
                 ctx.attached_deposit = YOCTO;
                 ctx.is_view = false;
                 testing_env!(ctx.clone());
@@ -2060,9 +2088,28 @@ last_contract_managed_total_balance             {}
 
                 let pool_balances_after_dividend_payout = staking_pool.ops_stake_pool_balances();
                 println!(
-                    "{}",
+                    "pool_balances_after_dividend_payout {}",
                     serde_json::to_string_pretty(&pool_balances_after_dividend_payout).unwrap()
                 );
+                // treasury balance is slight increased because after the treasury dividend is burned
+                // the STAKE value increases
+                assert_eq!(
+                    pool_balances_after_dividend_payout,
+                    serde_json::from_str(
+                        r#"{
+  "total_staked": "14100000000000000000000000",
+  "total_stake_supply": "13991755725190839694656489",
+  "total_unstaked": "0",
+  "unstaked_liquidity": "0",
+  "treasury_balance": "80003491696309713462672",
+  "current_contract_managed_total_balance": "17272980000000000000000000",
+  "last_contract_managed_total_balance": "17272980000000000000000000",
+  "earnings": "0"
+}"#
+                    )
+                    .unwrap()
+                );
+
                 let treasury_balance_after_dividend_paid = staking_pool
                     .ops_stake_balance(to_valid_account_id(&env::current_account_id()))
                     .unwrap();
