@@ -344,7 +344,7 @@ impl StakingPool for StakingPoolComponent {
             Some(near_amount) => {
                 ERR_INSUFFICIENT_FUNDS.assert(|| stake_near_value >= near_amount);
                 // we round up the number of STAKE tokens to ensure that we never overdraw from the
-                // staked balance - this is more than compensated for by the treasury dividend
+                // staked balance - this is more than compensated for by transaction fee earnings
                 let stake_token_amount = self.near_stake_value_rounded_up(near_amount);
                 ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE
                     .assert(|| stake_balance >= stake_token_amount);
