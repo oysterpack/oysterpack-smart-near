@@ -360,7 +360,7 @@ impl StakingPool for StakingPoolComponent {
         State::decr_total_staked_balance(near_amount);
         State::incr_total_unstaked_balance(near_amount);
         self.stake_token.ft_burn(&account_id, stake_token_amount);
-        self.credit_unstaked_amount(&account_id, near_amount);
+        self.credit_account_unstaked_balance(&account_id, near_amount);
 
         let state = Self::state();
         match state.status {
@@ -977,7 +977,7 @@ impl StakingPoolComponent {
         state
     }
 
-    fn credit_unstaked_amount(&self, account_id: &str, amount: YoctoNear) {
+    fn credit_account_unstaked_balance(&self, account_id: &str, amount: YoctoNear) {
         let mut account = self.account_manager.registered_account_data(&account_id);
         account.unstaked_balances.credit_unstaked(amount);
         account.save();
