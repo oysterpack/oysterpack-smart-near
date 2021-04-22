@@ -609,7 +609,7 @@ impl StakingPoolComponent {
 
 impl StakeActionCallbacks for StakingPoolComponent {
     fn ops_stake_finalize(&mut self, account_id: AccountId) -> StakeAccountBalances {
-        let state = self.state_with_updated_earnings();
+        let state = Self::state();
         if state.status.is_online() && !is_promise_success() {
             Self::stop_staking(OfflineReason::StakeActionFailed);
         }
@@ -4731,94 +4731,6 @@ last_contract_managed_total_balance             {}
                             let state_after_callback = staking_pool.state_with_updated_earnings();
                             assert_eq!(
                                 state_before_callback.last_contract_managed_total_balance,
-                                state_after_callback.last_contract_managed_total_balance
-                            );
-                        }
-                        _ => panic!("expected function call"),
-                    }
-                }
-
-                #[test]
-                fn promise_success_with_some_earnings() {
-                    // Arrange
-                    let mut ctx = new_context(ACCOUNT);
-                    ctx.predecessor_account_id = OWNER.to_string();
-                    testing_env!(ctx.clone());
-
-                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
-
-                    let mut account_manager = account_manager();
-                    let mut staking_pool = staking_pool();
-
-                    // start staking
-                    ctx.predecessor_account_id = OWNER.to_string();
-                    ctx.account_balance = env::account_balance();
-                    testing_env!(ctx.clone());
-                    staking_pool
-                        .ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
-                    assert!(staking_pool.ops_stake_status().is_online());
-
-                    // register account
-                    ctx.predecessor_account_id = ACCOUNT.to_string();
-                    ctx.account_balance = env::account_balance();
-                    ctx.attached_deposit = YOCTO;
-                    testing_env!(ctx.clone());
-                    account_manager.storage_deposit(None, Some(true));
-
-                    // stake
-                    ctx.account_balance = env::account_balance();
-                    ctx.attached_deposit = YOCTO;
-                    testing_env!(ctx.clone());
-                    staking_pool.ops_stake();
-
-                    let logs = test_utils::get_logs();
-                    println!("{:#?}", logs);
-
-                    let receipts = deserialize_receipts();
-                    match &receipts[1].actions[0] {
-                        Action::FunctionCall(action) => {
-                            let args: StakeActionCallbackArgs =
-                                serde_json::from_str(&action.args).unwrap();
-
-                            let state_before_callback = {
-                                ctx.predecessor_account_id = (&receipts[1]).receiver_id.to_string();
-                                ctx.account_balance = env::account_balance()
-                                    - *staking_pool.ops_stake_pool_balances().total_staked;
-                                ctx.account_locked_balance =
-                                    *staking_pool.ops_stake_pool_balances().total_staked;
-                                ctx.attached_deposit = 0;
-                                testing_env!(ctx.clone());
-                                staking_pool.state_with_updated_earnings()
-                            };
-
-                            let earnings = 1000;
-                            ctx.predecessor_account_id = (&receipts[1]).receiver_id.to_string();
-                            ctx.account_balance = env::account_balance();
-                            ctx.account_locked_balance = env::account_locked_balance() + earnings;
-                            ctx.attached_deposit = 0;
-                            testing_env_with_promise_result_success(ctx.clone());
-                            // Act
-                            let balances = staking_pool.ops_stake_finalize(args.account_id.clone());
-                            println!("{}", serde_json::to_string_pretty(&balances).unwrap());
-                            assert_eq!(
-                                balances,
-                                staking_pool
-                                    .ops_stake_balance(to_valid_account_id(&args.account_id))
-                                    .unwrap()
-                            );
-                            assert!(
-                                *balances.staked.as_ref().unwrap().near_value
-                                    > *balances.staked.as_ref().unwrap().stake
-                            );
-                            assert_eq!(
-                                *balances.staked.as_ref().unwrap().near_value,
-                                992000000000000000000992
-                            );
-
-                            let state_after_callback = StakingPoolComponent::state();
-                            assert_eq!(
-                                state_before_callback.last_contract_managed_total_balance
-                                    + earnings,
                                 state_after_callback.last_contract_managed_total_balance
                             );
                         }
