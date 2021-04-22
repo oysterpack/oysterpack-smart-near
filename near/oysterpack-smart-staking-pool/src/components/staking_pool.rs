@@ -326,7 +326,7 @@ impl StakingPool for StakingPoolComponent {
         let account_id = env::predecessor_account_id();
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(&account_id));
 
-        self.state_with_updated_earnings();
+        let state = self.state_with_updated_earnings();
 
         let stake_balance = self
             .stake_token
@@ -362,11 +362,13 @@ impl StakingPool for StakingPoolComponent {
         self.stake_token.ft_burn(&account_id, stake_token_amount);
         self.credit_account_unstaked_balance(&account_id, near_amount);
 
-        let state = Self::state();
         match state.status {
             Status::Online => {
-                let promise =
-                    Self::create_stake_workflow(*state, &account_id, "ops_stake_finalize");
+                let promise = Self::create_stake_workflow(
+                    state.stake_public_key,
+                    &account_id,
+                    "ops_stake_finalize",
+                );
                 PromiseOrValue::Promise(promise)
             }
             Status::Offline(_) => {
@@ -780,7 +782,7 @@ impl StakingPoolComponent {
 
         match state.status {
             Status::Online => PromiseOrValue::Promise(Self::create_stake_workflow(
-                *state,
+                state.stake_public_key,
                 account_id,
                 "ops_stake_finalize",
             )),
@@ -983,11 +985,13 @@ impl StakingPoolComponent {
         account.save();
     }
 
-    fn create_stake_workflow(state: State, account_id: &str, callback: &str) -> Promise {
-        let stake = Promise::new(env::current_account_id()).stake(
-            *State::total_staked_balance(),
-            state.stake_public_key.into(),
-        );
+    fn create_stake_workflow(
+        stake_public_key: PublicKey,
+        account_id: &str,
+        callback: &str,
+    ) -> Promise {
+        let stake = Promise::new(env::current_account_id())
+            .stake(*State::total_staked_balance(), stake_public_key.into());
         let finalize = json_function_callback(
             callback,
             Some(StakeActionCallbackArgs {
