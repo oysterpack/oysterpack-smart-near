@@ -2497,6 +2497,74 @@ last_contract_managed_total_balance             {}
                     panic!("expected value")
                 }
             }
+
+            #[test]
+            fn unstake_with_earnings_received() {
+                // Arrange
+                let mut ctx = new_context(ACCOUNT);
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                let mut account_manager = account_manager();
+                let mut staking_pool = staking_pool();
+                assert!(!staking_pool.ops_stake_status().is_online());
+
+                // register account
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, Some(true));
+
+                // stake
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                let staked_balance =
+                    if let PromiseOrValue::Value(balance) = staking_pool.ops_stake() {
+                        let staking_fee = staking_pool.ops_stake_fee() * YOCTO;
+                        assert_eq!(
+                            balance.staked.as_ref().unwrap().near_value,
+                            (YOCTO - *staking_fee).into()
+                        );
+                        balance
+                    } else {
+                        panic!("expected value")
+                    };
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+
+                // Act
+                const EARNINGS: YoctoNear = YoctoNear(YOCTO);
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance() + *EARNINGS;
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                if let PromiseOrValue::Value(balance) = staking_pool.ops_unstake(None) {
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+                    assert_eq!(logs, vec![
+                        "[INFO] [EARNINGS] 1000000000000000000000000",
+                        "[INFO] [UNSTAKE] near_amount=1984000000000000000000000, stake_token_amount=992000000000000000000000",
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-104)",
+                        "[INFO] [FT_BURN] account: bob, amount: 992000000000000000000000",
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(184)",
+                        "[WARN] [STATUS_OFFLINE] ",
+                    ]);
+
+                    let unstaked_near_value = staking_pool
+                        .ops_stake_token_value(Some(staked_balance.staked.as_ref().unwrap().stake));
+                    assert_eq!(
+                        balance.unstaked.as_ref().unwrap().total,
+                        unstaked_near_value
+                    );
+                } else {
+                    panic!("expected value")
+                }
+            }
         }
 
         #[cfg(test)]
