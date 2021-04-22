@@ -767,20 +767,10 @@ impl StakingPoolComponent {
             "near_amount={}, stake_token_amount={}",
             near_amount, stake_token_amount
         ));
-        // update balances
-        let state = {
-            let mut state = Self::state();
-            State::incr_total_staked_balance(near_amount);
-            state.last_contract_managed_total_balance += near_amount;
-            state.save();
-            state
-        };
-        let state = self.process_stake_transaction_finances(
-            state,
-            account_id,
-            near_amount,
-            stake_token_amount,
-        );
+
+        let state =
+            self.process_stake_transaction_finances(account_id, near_amount, stake_token_amount);
+
         match state.status {
             Status::Online => PromiseOrValue::Promise(Self::create_stake_workflow(
                 *state,
@@ -898,23 +888,23 @@ impl StakingPoolComponent {
         )
     }
 
-    /// - mints STAKE
+    /// - credit total staked balance and contract managed total balance with the staked amount
+    /// - mints STAKE on the account for amount staked
     /// - pays treasury dividend
     ///   - update treasury balance
     /// - collects staking fee
     ///
-    /// ## Notes
-    /// After minting, the STAKE supply increases, which balances out the increase in staked NEAR.
-    ///
-    /// When earnings were applied, the STAKE token value
-    /// was elevated, and the amount of staked tokens minted were based on the elevated level.
+    /// Returns the updated state after saving it to storage.
     fn process_stake_transaction_finances(
         &mut self,
-        mut state: ComponentState<State>,
         account_id: &str,
         amount: YoctoNear,
         stake_token_amount: TokenAmount,
     ) -> ComponentState<State> {
+        let mut state = Self::state();
+        State::incr_total_staked_balance(amount);
+        state.last_contract_managed_total_balance += amount;
+
         // stake_token_amount will be ZERO if this is a funds distribution
         // - see [`Treasury::ops_stake_treasury_distribution`]
         if stake_token_amount > TokenAmount::ZERO {
@@ -2175,6 +2165,7 @@ last_contract_managed_total_balance             {}
                 }
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
+                // no staking fee should be charged to the owner
                 assert_eq!(logs, vec![
                     "[INFO] [ACCOUNT_STORAGE_CHANGED] Withdrawal(YoctoNear(9996819160000000000000000000))",
                     "[INFO] [STAKE] near_amount=9997819160000000000000000000, stake_token_amount=9997819160000000000000000000",
