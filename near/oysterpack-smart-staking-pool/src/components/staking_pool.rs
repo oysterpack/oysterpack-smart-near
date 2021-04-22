@@ -326,7 +326,9 @@ impl StakingPool for StakingPoolComponent {
         let account_id = env::predecessor_account_id();
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(&account_id));
 
-        let state = self.state_with_updated_earnings();
+        let mut state = self.state_with_updated_earnings();
+        state.treasury_balance = self.pay_dividend(state.treasury_balance);
+        state.save();
 
         let stake_balance = self
             .stake_token
@@ -431,7 +433,10 @@ impl StakingPool for StakingPoolComponent {
             Promise::new(env::predecessor_account_id()).transfer(*amount);
         }
 
-        self.state_with_updated_earnings();
+        let mut state = self.state_with_updated_earnings();
+        state.treasury_balance = self.pay_dividend(state.treasury_balance);
+        state.save();
+
         match amount {
             // withdraw all available
             None => {
@@ -682,8 +687,9 @@ impl Treasury for StakingPoolComponent {
 
         AccountManager::register_account_if_not_exists(&owner_account_id);
 
-        let mut state = Self::state();
-        self.pay_dividend(state.treasury_balance);
+        let mut state = self.state_with_updated_earnings();
+        state.treasury_balance = self.pay_dividend(state.treasury_balance);
+        state.save();
 
         let treasury_account = env::current_account_id();
         let (amount, stake) = {
