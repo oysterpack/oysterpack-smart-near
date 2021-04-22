@@ -368,11 +368,7 @@ impl StakingPool for StakingPoolComponent {
 
         match state.status {
             Status::Online => {
-                let promise = Self::create_stake_workflow(
-                    state.stake_public_key,
-                    &account_id,
-                    "ops_stake_finalize",
-                );
+                let promise = Self::create_stake_workflow(state.stake_public_key, &account_id);
                 PromiseOrValue::Promise(promise)
             }
             Status::Offline(_) => {
@@ -793,7 +789,6 @@ impl StakingPoolComponent {
             Status::Online => PromiseOrValue::Promise(Self::create_stake_workflow(
                 state.stake_public_key,
                 account_id,
-                "ops_stake_finalize",
             )),
             Status::Offline(_) => {
                 LOG_EVENT_STATUS_OFFLINE.log("");
@@ -994,15 +989,11 @@ impl StakingPoolComponent {
         account.save();
     }
 
-    fn create_stake_workflow(
-        stake_public_key: PublicKey,
-        account_id: &str,
-        callback: &str,
-    ) -> Promise {
+    fn create_stake_workflow(stake_public_key: PublicKey, account_id: &str) -> Promise {
         let stake = Promise::new(env::current_account_id())
             .stake(*State::total_staked_balance(), stake_public_key.into());
         let finalize = json_function_callback(
-            callback,
+            "ops_stake_finalize",
             Some(StakeActionCallbackArgs {
                 account_id: account_id.to_string(),
             }),
