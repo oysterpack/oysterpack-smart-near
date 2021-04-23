@@ -10,9 +10,9 @@ pub trait Treasury {
     /// This enables external sources of revenue to be deposited into the treasury.
     ///
     /// ## Notes
-    /// The entire deposit is staked. When minting STAKE, the conversion from NEAR -> STAKE is rounded
-    /// down. Thus, the NEAR deposit remainder will also get staked, effectively distributing the
-    /// funds to the current stakers.
+    /// - The entire deposit is staked. When minting STAKE, the conversion from NEAR -> STAKE is rounded
+    ///   down. Thus, the NEAR deposit remainder will also get staked, effectively distributing the
+    ///   funds to the current stakers.
     ///
     /// ## Panics
     /// if no deposit is attached
@@ -24,6 +24,10 @@ pub trait Treasury {
     /// STAKE owners. As a side effect this will also boost the dividend yield.
     ///
     /// This enables external sources of revenue to be distributed to STAKE owners.
+    ///
+    /// ## Notes
+    /// An alternative way to make a distribution is to transfer STAKE to the treasury account
+    /// directly, i.e., via the [`oysterpack_smart_fungible_token::FungibleToken::ft_transfer`] API
     ///
     /// ## Panics
     /// if no deposit is attached

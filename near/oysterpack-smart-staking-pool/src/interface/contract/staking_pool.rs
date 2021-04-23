@@ -123,8 +123,8 @@ pub trait StakingPool {
 
     /// converts the specified NEAR amount to STAKE and transfers the funds to the specified receiver
     /// account
-    /// - proxies [`FungibleToken::ft_transfer`] as a convenience method that enables the staker
-    ///   to transfer STAKE by specifying the transfer amount in NEAR vs in STAKE
+    /// - proxies [`oysterpack_smart_fungible_token::FungibleToken::ft_transfer`] as a convenience
+    ///   method that enables the staker to transfer STAKE by specifying the transfer amount in NEAR vs in STAKE
     /// - returns the amount of STAKE tokens that were transferred based on the current STAKE token value
     ///
     /// ## NOTES
@@ -140,8 +140,8 @@ pub trait StakingPool {
 
     /// converts the specified NEAR amount to STAKE and transfers the funds to the specified receiver
     /// account via the FT transfer call mechanism
-    /// - proxies [`FungibleToken::ft_transfer_call`] a convenience method that enables the staker to
-    ///   transfer STAKE by specifying the transfer amount in NEAR vs in STAKE
+    /// - proxies [`oysterpack_smart_fungible_token::FungibleToken::ft_transfer_call`] a convenience
+    ///   method that enables the staker to transfer STAKE by specifying the transfer amount in NEAR vs in STAKE
     /// - returns the amount of STAKE tokens that were transferred
     ///
     /// ## NOTES
