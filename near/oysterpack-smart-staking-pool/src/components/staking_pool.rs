@@ -319,9 +319,7 @@ impl StakingPool for StakingPoolComponent {
         let account_id = env::predecessor_account_id();
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(&account_id));
 
-        let mut state = self.state_with_updated_earnings();
-        state.treasury_balance = self.pay_dividend(state.treasury_balance);
-        state.save();
+        let state = self.state_with_updated_earnings();
 
         let stake_balance = self
             .stake_token
@@ -375,9 +373,7 @@ impl StakingPool for StakingPoolComponent {
         let account_id = env::predecessor_account_id();
         ERR_ACCOUNT_NOT_REGISTERED.assert(|| self.account_manager.account_exists(&account_id));
 
-        let mut state = self.state_with_updated_earnings();
-        state.treasury_balance = self.pay_dividend(state.treasury_balance);
-        state.save();
+        self.state_with_updated_earnings();
 
         match self.account_manager.load_account_data(&account_id) {
             // account has no unstaked funds to restake
@@ -432,9 +428,8 @@ impl StakingPool for StakingPoolComponent {
             Promise::new(env::predecessor_account_id()).transfer(*amount);
         }
 
-        let mut state = self.state_with_updated_earnings();
-        state.treasury_balance = self.pay_dividend(state.treasury_balance);
-        state.save();
+        // earnings are updated to ensure updated balances are returned
+        self.state_with_updated_earnings();
 
         match amount {
             // withdraw all available
@@ -667,7 +662,6 @@ impl Treasury for StakingPoolComponent {
         ERR_NEAR_DEPOSIT_REQUIRED.assert(|| deposit > YoctoNear::ZERO);
 
         let mut state = self.state_with_updated_earnings();
-        state.treasury_balance = self.pay_dividend(state.treasury_balance);
         let stake = self.near_stake_value_rounded_down(deposit);
         state.treasury_balance += deposit;
         state.save();
@@ -701,8 +695,6 @@ impl Treasury for StakingPoolComponent {
         AccountManager::register_account_if_not_exists(&owner_account_id);
 
         let mut state = self.state_with_updated_earnings();
-        state.treasury_balance = self.pay_dividend(state.treasury_balance);
-        state.save();
 
         let treasury_account = env::current_account_id();
         let (amount, stake) = {
@@ -885,38 +877,6 @@ impl StakingPoolComponent {
         (treasury_stake_balance, treasury_near_value)
     }
 
-    /// returns the current treasury balance after paying the dividend - which means the treasury
-    /// NEAR value still increases overtime because after paying the dividend, STAKE value goes up
-    /// and the new treasury balance is based on the new STAKE value
-    fn pay_dividend(&mut self, treasury_balance: YoctoNear) -> YoctoNear {
-        let (treasury_stake_balance, current_treasury_near_value) = self.treasury_stake_balance();
-        if treasury_balance == YoctoNear::ZERO {
-            // then this seeds the treasury balance
-            return current_treasury_near_value;
-        }
-
-        let treasury_staking_earnings = current_treasury_near_value
-            .saturating_sub(*treasury_balance)
-            .into();
-        let treasury_staking_earnings_stake_value =
-            self.near_stake_value_rounded_down(treasury_staking_earnings);
-        if treasury_staking_earnings_stake_value == TokenAmount::ZERO {
-            return current_treasury_near_value;
-        }
-
-        self.stake_token.ft_burn(
-            &env::current_account_id(),
-            treasury_staking_earnings_stake_value,
-        );
-        LOG_EVENT_TREASURY_DIVIDEND.log(format!(
-            "{} yoctoNEAR / {} yoctoSTAKE",
-            treasury_staking_earnings, treasury_staking_earnings_stake_value
-        ));
-        self.stake_near_value_rounded_down(
-            treasury_stake_balance - treasury_staking_earnings_stake_value,
-        )
-    }
-
     /// - credit total staked balance and contract managed total balance with the staked amount
     /// - mints STAKE on the account for amount staked
     /// - pays treasury dividend
@@ -939,9 +899,6 @@ impl StakingPoolComponent {
         if stake_token_amount > TokenAmount::ZERO {
             self.stake_token.ft_mint(&account_id, stake_token_amount);
         }
-
-        // if treasury received staking rewards, then pay out the dividend
-        state.treasury_balance = self.pay_dividend(state.treasury_balance);
 
         // collect staking fee - treasury and owner accounts do not get charged staking fees
         let owner_id = ContractOwnershipComponent.ops_owner();
@@ -976,6 +933,42 @@ impl StakingPoolComponent {
     }
 
     pub(crate) fn state_with_updated_earnings(&mut self) -> ComponentState<State> {
+        /// returns the current treasury balance after paying the dividend - which means the treasury
+        /// NEAR value still increases overtime because after paying the dividend, STAKE value goes up
+        /// and the new treasury balance is based on the new STAKE value
+        fn pay_treasury_dividend(
+            this: &mut StakingPoolComponent,
+            treasury_balance: YoctoNear,
+        ) -> YoctoNear {
+            let (treasury_stake_balance, current_treasury_near_value) =
+                this.treasury_stake_balance();
+            if treasury_balance == YoctoNear::ZERO {
+                // then this seeds the treasury balance
+                return current_treasury_near_value;
+            }
+
+            let treasury_staking_earnings = current_treasury_near_value
+                .saturating_sub(*treasury_balance)
+                .into();
+            let treasury_staking_earnings_stake_value =
+                this.near_stake_value_rounded_down(treasury_staking_earnings);
+            if treasury_staking_earnings_stake_value == TokenAmount::ZERO {
+                return current_treasury_near_value;
+            }
+
+            this.stake_token.ft_burn(
+                &env::current_account_id(),
+                treasury_staking_earnings_stake_value,
+            );
+            LOG_EVENT_TREASURY_DIVIDEND.log(format!(
+                "{} yoctoNEAR / {} yoctoSTAKE",
+                treasury_staking_earnings, treasury_staking_earnings_stake_value
+            ));
+            this.stake_near_value_rounded_down(
+                treasury_stake_balance - treasury_staking_earnings_stake_value,
+            )
+        }
+
         let mut state = Self::state();
 
         // If there are no stakers,i.e., STAKE total supply is zero, then earnings will not be
@@ -995,6 +988,7 @@ impl StakingPoolComponent {
             State::incr_total_staked_balance(earnings);
         }
         state.last_contract_managed_total_balance = contract_managed_total_balance;
+        state.treasury_balance = pay_treasury_dividend(self, state.treasury_balance);
         state.save();
         state
     }
@@ -2092,14 +2086,14 @@ last_contract_managed_total_balance             {}
                 println!("{:#?}", logs);
                 assert_eq!(logs, vec![
                     "[INFO] [EARNINGS] 100000000000000000000000",
-                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Withdrawal(YoctoNear(1))",
-                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Deposit(YoctoNear(1))",
-                    "[INFO] [STAKE] near_amount=1000000000000000000000000, stake_token_amount=992366412213740458015268",
-                    "[INFO] [FT_MINT] account: bob, amount: 992366412213740458015268",
                     "[INFO] [FT_BURN] account: contract.near, amount: 610687022900763358778",
                     "[INFO] [TREASURY_DIVIDEND] 615384615384615384615 yoctoNEAR / 610687022900763358778 yoctoSTAKE",
-                    "[INFO] [FT_BURN] account: bob, amount: 7938584808618916138812",
-                    "[INFO] [FT_MINT] account: owner, amount: 7938584808618916138812",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Withdrawal(YoctoNear(1))",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Deposit(YoctoNear(1))",
+                    "[INFO] [STAKE] near_amount=1000000000000000000000000, stake_token_amount=992319794883748033331391",
+                    "[INFO] [FT_MINT] account: bob, amount: 992319794883748033331391",
+                    "[INFO] [FT_BURN] account: bob, amount: 7938558359069984266651",
+                    "[INFO] [FT_MINT] account: owner, amount: 7938558359069984266651",
                     "[WARN] [STATUS_OFFLINE] ",
                 ]);
 
@@ -2115,10 +2109,10 @@ last_contract_managed_total_balance             {}
                     serde_json::from_str(
                         r#"{
   "total_staked": "14100000000000000000000000",
-  "total_stake_supply": "13991755725190839694656489",
+  "total_stake_supply": "13991709107860847269972612",
   "total_unstaked": "0",
   "unstaked_liquidity": "0",
-  "treasury_balance": "80003491696309713462672",
+  "treasury_balance": "80003758250534376247857",
   "current_contract_managed_total_balance": "17272980000000000000000000",
   "last_contract_managed_total_balance": "17272980000000000000000000",
   "earnings": "0"
@@ -2152,7 +2146,7 @@ last_contract_managed_total_balance             {}
   },
   "staked": {
     "stake": "79389312977099236641222",
-    "near_value": "80003491696309713462672"
+    "near_value": "80003758250534376247857"
   },
   "unstaked": null
 }"#
@@ -4223,14 +4217,14 @@ last_contract_managed_total_balance             {}
                 println!("{:#?}", logs);
                 assert_eq!(logs, vec![
                     "[INFO] [EARNINGS] 100000000000000000000000",
-                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Withdrawal(YoctoNear(1))",
-                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Deposit(YoctoNear(1))",
-                    "[INFO] [STAKE] near_amount=1000000000000000000000000, stake_token_amount=992366412213740458015268",
-                    "[INFO] [FT_MINT] account: bob, amount: 992366412213740458015268",
                     "[INFO] [FT_BURN] account: contract.near, amount: 610687022900763358778",
                     "[INFO] [TREASURY_DIVIDEND] 615384615384615384615 yoctoNEAR / 610687022900763358778 yoctoSTAKE",
-                    "[INFO] [FT_BURN] account: bob, amount: 7938584808618916138812",
-                    "[INFO] [FT_MINT] account: owner, amount: 7938584808618916138812",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Withdrawal(YoctoNear(1))",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Deposit(YoctoNear(1))",
+                    "[INFO] [STAKE] near_amount=1000000000000000000000000, stake_token_amount=992319794883748033331391",
+                    "[INFO] [FT_MINT] account: bob, amount: 992319794883748033331391",
+                    "[INFO] [FT_BURN] account: bob, amount: 7938558359069984266651",
+                    "[INFO] [FT_MINT] account: owner, amount: 7938558359069984266651",
                 ]);
 
                 let pool_balances_after_dividend_payout = staking_pool.ops_stake_pool_balances();
@@ -4263,7 +4257,7 @@ last_contract_managed_total_balance             {}
   },
   "staked": {
     "stake": "79389312977099236641222",
-    "near_value": "80003491696309713462672"
+    "near_value": "80003758250534376247857"
   },
   "unstaked": null
 }"#
@@ -5654,7 +5648,7 @@ last_contract_managed_total_balance             {}
                 if let PromiseOrValue::Value(_) = staking_pool.ops_restake(None) {
                     panic!("expected value")
                 }
-                let balances = staking_pool
+                let balance = staking_pool
                     .ops_stake_balance(to_valid_account_id(ACCOUNT))
                     .unwrap();
                 let logs = test_utils::get_logs();
