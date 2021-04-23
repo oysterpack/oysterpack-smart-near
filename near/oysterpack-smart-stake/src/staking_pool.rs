@@ -55,6 +55,13 @@ impl StakingPool for Contract {
         Self::staking_pool().ops_stake_token_value(amount)
     }
 
+    fn ops_stake_token_value_with_updated_earnings(
+        &mut self,
+        amount: Option<TokenAmount>,
+    ) -> YoctoNear {
+        Self::staking_pool().ops_stake_token_value_with_updated_earnings(amount)
+    }
+
     fn ops_stake_status(&self) -> Status {
         Self::staking_pool().ops_stake_status()
     }

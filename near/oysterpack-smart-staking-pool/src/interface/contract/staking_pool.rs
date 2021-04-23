@@ -152,7 +152,22 @@ pub trait StakingPool {
 
     /// returns the current NEAR value for the specified amount
     /// - if no amount is specified, then the value for 1 STAKE token will be returned
+    /// - value includes estimated earnings minus dividend payouts
+    /// - if you need the most accurate STAKE token value, then use `[Self::ops_stake_token_value_with_updated_earnings`],
+    ///   which is not a view method
     fn ops_stake_token_value(&self, amount: Option<TokenAmount>) -> YoctoNear;
+
+    /// Collects earnings and pays dividend before computing and returning the STAKE token value.
+    ///
+    /// To avoid gas fees to get a STAKE token estimate minus dividends you can use [`Self::`ops_stake_token_value].
+    ///
+    /// ## NOTES
+    /// Calling this consecutive times should return an increasing STAKE token value because the
+    /// transaction gas fees earned from this call are applied on the next.
+    fn ops_stake_token_value_with_updated_earnings(
+        &mut self,
+        amount: Option<TokenAmount>,
+    ) -> YoctoNear;
 
     fn ops_stake_status(&self) -> Status;
 

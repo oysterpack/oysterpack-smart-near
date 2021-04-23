@@ -494,6 +494,14 @@ impl StakingPool for StakingPoolComponent {
         )
     }
 
+    fn ops_stake_token_value_with_updated_earnings(
+        &mut self,
+        amount: Option<TokenAmount>,
+    ) -> YoctoNear {
+        self.state_with_updated_earnings();
+        self.stake_near_value_rounded_down(amount.unwrap_or(YOCTO.into()))
+    }
+
     fn ops_stake_status(&self) -> Status {
         Self::state().status
     }
