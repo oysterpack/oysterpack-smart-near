@@ -4,7 +4,7 @@ use crate::{
     Treasury, ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE, ERR_STAKE_ACTION_FAILED, LOG_EVENT_EARNINGS,
     LOG_EVENT_LIQUIDITY, LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE,
     LOG_EVENT_STATUS_ONLINE, LOG_EVENT_TREASURY_DEPOSIT, LOG_EVENT_TREASURY_DIVIDEND,
-    LOG_EVENT_UNSTAKE, PERMISSION_TREASURER,
+    LOG_EVENT_UNSTAKE, MAX_STAKING_FEE, PERMISSION_TREASURER,
 };
 use oysterpack_smart_account_management::{
     components::account_management::AccountManagementComponent, AccountDataObject, AccountMetrics,
@@ -621,11 +621,11 @@ impl StakingPoolComponent {
     }
 
     fn update_staking_fee(fee: BasisPoints) {
-        const MAX_STAKING_FEE: BasisPoints = BasisPoints(1000); // 10%
         ERR_INVALID.assert(
             || fee <= MAX_STAKING_FEE,
             || "max staking fee is 1000 BPS (10%)",
         );
+        ERR_INVALID.assert(|| *fee > 0, || "min staking fee is 1 BPS (0.01%)");
         let mut state = Self::state();
         state.staking_fee = fee;
         state.save();
@@ -6942,6 +6942,44 @@ last_contract_managed_total_balance             {}
             use super::*;
 
             #[test]
+            #[should_panic(expected = "[ERR] [NOT_AUTHORIZED]")]
+            fn not_as_operator() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                let mut staking_pool = staking_pool();
+                let mut account_manager = account_manager();
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, None);
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = 0;
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+            }
+
+            #[test]
+            #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED]")]
+            fn account_not_registered() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                let mut staking_pool = staking_pool();
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = 0;
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+            }
+
+            #[test]
             fn initial_startup_with_zero_staked() {
                 // Arrange
                 let mut ctx = new_context(OWNER);
@@ -7120,6 +7158,44 @@ last_contract_managed_total_balance             {}
         #[cfg(test)]
         mod tests_stop_staking {
             use super::*;
+
+            #[test]
+            #[should_panic(expected = "[ERR] [NOT_AUTHORIZED]")]
+            fn not_as_operator() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                let mut staking_pool = staking_pool();
+                let mut account_manager = account_manager();
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, None);
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = 0;
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StopStaking);
+            }
+
+            #[test]
+            #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED]")]
+            fn account_not_registered() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                let mut staking_pool = staking_pool();
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = 0;
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StopStaking);
+            }
 
             #[test]
             fn start_then_stop_with_zero_staked_balance() {
@@ -7357,6 +7433,128 @@ last_contract_managed_total_balance             {}
                         _ => panic!("expected StakeAction"),
                     }
                 }
+            }
+        }
+
+        #[cfg(test)]
+        mod tests_update_public_key {
+            use super::*;
+
+            #[test]
+            fn update_public_key_when_pool_offline() {
+                let pk1: PublicKey = serde_json::from_str(
+                    r#""ed25519:AC1pVDXsE8sZiLAqLTDa3sD8DH74U5yUDaYKWeBwwyJj""#,
+                )
+                .unwrap();
+
+                let pk2: PublicKey = serde_json::from_str(
+                    r#""ed25519:AC1pVDXsE8sZiLAqLTDa3sD8DH74U5yUDaYKWeBwwyJp""#,
+                )
+                .unwrap();
+
+                // Arrange
+                let ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                let mut staking_pool = staking_pool();
+
+                testing_env!(ctx.clone());
+                staking_pool
+                    .ops_stake_operator_command(StakingPoolOperatorCommand::UpdatePublicKey(pk1));
+                assert_eq!(staking_pool.ops_stake_public_key(), pk1);
+
+                testing_env!(ctx.clone());
+                staking_pool
+                    .ops_stake_operator_command(StakingPoolOperatorCommand::UpdatePublicKey(pk2));
+                assert_eq!(staking_pool.ops_stake_public_key(), pk2);
+            }
+
+            #[test]
+            #[should_panic(
+                expected = "[ERR] [ILLEGAL_STATE] staking pool must be offline to update the staking public key"
+            )]
+            fn update_public_key_when_pool_online() {
+                let pk1: PublicKey = serde_json::from_str(
+                    r#""ed25519:AC1pVDXsE8sZiLAqLTDa3sD8DH74U5yUDaYKWeBwwyJj""#,
+                )
+                .unwrap();
+
+                // Arrange
+                let ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                let mut staking_pool = staking_pool();
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+
+                testing_env!(ctx.clone());
+                staking_pool
+                    .ops_stake_operator_command(StakingPoolOperatorCommand::UpdatePublicKey(pk1));
+            }
+        }
+
+        #[cfg(test)]
+        mod tests_update_staking_fee {
+            use super::*;
+
+            #[test]
+            fn update_fee() {
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                let mut staking_pool = staking_pool();
+                let fee = staking_pool.ops_stake_fee();
+                staking_pool.ops_stake_operator_command(
+                    StakingPoolOperatorCommand::UpdateStakingFee((*fee + 1).into()),
+                );
+                assert_eq!(*staking_pool.ops_stake_fee(), *fee + 1);
+
+                staking_pool.ops_stake_operator_command(
+                    StakingPoolOperatorCommand::UpdateStakingFee(MAX_STAKING_FEE),
+                );
+                assert_eq!(staking_pool.ops_stake_fee(), MAX_STAKING_FEE);
+            }
+
+            #[test]
+            #[should_panic(expected = "[ERR] [INVALID] max staking fee is 1000 BPS (10%)")]
+            fn update_fee_above_max() {
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                let mut staking_pool = staking_pool();
+                staking_pool.ops_stake_operator_command(
+                    StakingPoolOperatorCommand::UpdateStakingFee((*MAX_STAKING_FEE + 1).into()),
+                );
+            }
+
+            #[test]
+            #[should_panic(expected = "[ERR] [INVALID] min staking fee is 1 BPS (0.01%)")]
+            fn update_fee_to_zero() {
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                let mut staking_pool = staking_pool();
+                staking_pool.ops_stake_operator_command(
+                    StakingPoolOperatorCommand::UpdateStakingFee((0).into()),
+                );
             }
         }
     }

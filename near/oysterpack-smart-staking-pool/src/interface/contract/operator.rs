@@ -23,6 +23,9 @@ pub enum StakingPoolOperatorCommand {
     UpdateStakingFee(BasisPoints),
 }
 
+/// 10%
+pub const MAX_STAKING_FEE: BasisPoints = BasisPoints(1000);
+
 #[cfg(test)]
 mod tests {
     use super::*;
