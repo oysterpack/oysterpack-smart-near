@@ -4,7 +4,7 @@ use oysterpack_smart_near::near_sdk::{
     serde::{Deserialize, Serialize},
 };
 use std::fmt::{self, Display, Formatter};
-use std::ops::{Deref, DerefMut, Sub};
+use std::ops::{Add, AddAssign, Deref, DerefMut, Sub, SubAssign};
 
 #[derive(
     BorshDeserialize,
@@ -58,5 +58,25 @@ impl Sub<TokenAmount> for TokenAmount {
 
     fn sub(self, rhs: TokenAmount) -> Self::Output {
         (*self - *rhs).into()
+    }
+}
+
+impl SubAssign<TokenAmount> for TokenAmount {
+    fn sub_assign(&mut self, rhs: TokenAmount) {
+        **self -= *rhs;
+    }
+}
+
+impl Add<TokenAmount> for TokenAmount {
+    type Output = TokenAmount;
+
+    fn add(self, rhs: TokenAmount) -> Self::Output {
+        (*self + *rhs).into()
+    }
+}
+
+impl AddAssign<TokenAmount> for TokenAmount {
+    fn add_assign(&mut self, rhs: TokenAmount) {
+        **self += *rhs;
     }
 }

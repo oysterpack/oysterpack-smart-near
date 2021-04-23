@@ -127,6 +127,9 @@ pub trait StakingPool {
     ///   to transfer STAKE by specifying the transfer amount in NEAR vs in STAKE
     /// - returns the amount of STAKE tokens that were transferred based on the current STAKE token value
     ///
+    /// ## NOTES
+    /// - earnings are applied before the transfer
+    ///
     /// `#[payable]`
     fn ops_stake_transfer(
         &mut self,
@@ -140,6 +143,9 @@ pub trait StakingPool {
     /// - proxies [`FungibleToken::ft_transfer_call`] a convenience method that enables the staker to
     ///   transfer STAKE by specifying the transfer amount in NEAR vs in STAKE
     /// - returns the amount of STAKE tokens that were transferred
+    ///
+    /// ## NOTES
+    /// - earnings are applied before the transfer
     ///
     /// `#[payable]`
     fn ops_stake_transfer_call(

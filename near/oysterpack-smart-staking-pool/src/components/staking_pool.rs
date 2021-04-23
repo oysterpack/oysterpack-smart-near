@@ -7568,4 +7568,184 @@ last_contract_managed_total_balance             {}
             }
         }
     }
+
+    #[cfg(test)]
+    mod tests_ft_transfer {
+        use super::*;
+
+        #[test]
+        fn transfer_with_earnings_received() {
+            // Arrange
+            let mut ctx = new_context(OWNER);
+            testing_env!(ctx.clone());
+
+            deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+            let mut staking_pool = staking_pool();
+            let mut account_manager = account_manager();
+
+            // register account
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.account_balance = env::account_balance();
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx.clone());
+            account_manager.storage_deposit(None, Some(true));
+
+            // register account
+            ctx.predecessor_account_id = "alice".to_string();
+            ctx.account_balance = env::account_balance();
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx.clone());
+            account_manager.storage_deposit(None, Some(true));
+
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.account_balance = env::account_balance();
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx.clone());
+            let initial_balance = if let PromiseOrValue::Value(balance) = staking_pool.ops_stake() {
+                balance
+            } else {
+                panic!("expected vale")
+            };
+
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.account_balance = env::account_balance() + YOCTO;
+            ctx.attached_deposit = 1;
+            testing_env!(ctx.clone());
+            let transfer_amount =
+                staking_pool.ops_stake_transfer(to_valid_account_id("alice"), YOCTO.into(), None);
+
+            let logs = test_utils::get_logs();
+            println!("{:#?}", logs);
+            assert_eq!(
+                logs,
+                vec![
+                    "[INFO] [EARNINGS] 1000000000000000000000000",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                ]
+            );
+
+            ctx.account_balance = env::account_balance();
+            ctx.attached_deposit = 0;
+            ctx.is_view = true;
+            testing_env!(ctx.clone());
+
+            println!("transfer_amount={}", transfer_amount);
+            assert_eq!(
+                staking_pool.ops_stake_token_value(Some(transfer_amount)),
+                YOCTO.into()
+            );
+
+            assert_eq!(
+                staking_pool
+                    .stake_token
+                    .ft_balance_of(to_valid_account_id("alice")),
+                transfer_amount
+            );
+
+            assert_eq!(
+                staking_pool
+                    .ops_stake_balance(to_valid_account_id(ACCOUNT))
+                    .as_ref()
+                    .unwrap()
+                    .staked
+                    .as_ref()
+                    .unwrap()
+                    .stake
+                    + transfer_amount,
+                initial_balance.staked.as_ref().unwrap().stake
+            )
+        }
+
+        #[test]
+        fn transfer_call_with_earnings_received() {
+            // Arrange
+            let mut ctx = new_context(OWNER);
+            testing_env!(ctx.clone());
+
+            deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+            let mut staking_pool = staking_pool();
+            let mut account_manager = account_manager();
+
+            // register account
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.account_balance = env::account_balance();
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx.clone());
+            account_manager.storage_deposit(None, Some(true));
+
+            // register account
+            ctx.predecessor_account_id = "alice".to_string();
+            ctx.account_balance = env::account_balance();
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx.clone());
+            account_manager.storage_deposit(None, Some(true));
+
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.account_balance = env::account_balance();
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx.clone());
+            let initial_balance = if let PromiseOrValue::Value(balance) = staking_pool.ops_stake() {
+                balance
+            } else {
+                panic!("expected vale")
+            };
+
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.account_balance = env::account_balance() + YOCTO;
+            ctx.attached_deposit = 1;
+            testing_env!(ctx.clone());
+            staking_pool.ops_stake_transfer_call(
+                to_valid_account_id("alice"),
+                YOCTO.into(),
+                None,
+                TransferCallMessage("".to_string()),
+            );
+
+            let logs = test_utils::get_logs();
+            println!("{:#?}", logs);
+            assert_eq!(
+                logs,
+                vec![
+                    "[INFO] [EARNINGS] 1000000000000000000000000",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                ]
+            );
+
+            let receipts = deserialize_receipts();
+            assert_eq!(receipts.len(), 2);
+
+            ctx.account_balance = env::account_balance();
+            ctx.attached_deposit = 0;
+            ctx.is_view = true;
+            testing_env!(ctx.clone());
+
+            let transfer_amount = TokenAmount::from(YOCTO / 2);
+            assert_eq!(
+                staking_pool.ops_stake_token_value(Some(transfer_amount)),
+                YOCTO.into()
+            );
+
+            assert_eq!(
+                staking_pool
+                    .stake_token
+                    .ft_balance_of(to_valid_account_id("alice")),
+                transfer_amount
+            );
+
+            assert_eq!(
+                staking_pool
+                    .ops_stake_balance(to_valid_account_id(ACCOUNT))
+                    .as_ref()
+                    .unwrap()
+                    .staked
+                    .as_ref()
+                    .unwrap()
+                    .stake
+                    + transfer_amount,
+                initial_balance.staked.as_ref().unwrap().stake
+            );
+        }
+    }
 }
