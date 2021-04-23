@@ -19,6 +19,7 @@ use oysterpack_smart_fungible_token::{
     components::fungible_token::FungibleTokenComponent, FungibleToken, Memo, TokenAmount,
     TokenService, TransferCallMessage, TransferReceiver,
 };
+use oysterpack_smart_near::domain::TGas;
 use oysterpack_smart_near::{
     asserts::{ERR_ILLEGAL_STATE, ERR_INSUFFICIENT_FUNDS, ERR_INVALID, ERR_NEAR_DEPOSIT_REQUIRED},
     component::{Component, ComponentState, Deploy},
@@ -560,7 +561,7 @@ impl StakingPoolComponent {
                     "ops_stake_stop_finalize",
                     Option::<()>::None,
                     YoctoNear::ZERO,
-                    StakingPoolComponent::callback_gas(),
+                    Self::callback_gas(),
                 ));
         }
 
@@ -621,13 +622,19 @@ impl StakingPoolComponent {
 
 impl StakeActionCallbacks for StakingPoolComponent {
     fn ops_stake_finalize(&mut self, account_id: AccountId) -> StakeAccountBalances {
+        // we get the balance here first because if the stake action fails, then we want to minimize
+        // the amount of work done after the promise workflow is created to stop staking because
+        // the gas supplied to the callback takes the rest of the gas minus 5 TGas to compete this call
+        let balance = self
+            .ops_stake_balance(to_valid_account_id(&account_id))
+            .unwrap();
+
         let state = Self::state();
         if state.status.is_online() && !is_promise_success() {
             Self::stop_staking(OfflineReason::StakeActionFailed);
         }
 
-        self.ops_stake_balance(to_valid_account_id(&account_id))
-            .unwrap()
+        balance
     }
 
     fn ops_stake_start_finalize(&mut self) {
@@ -799,62 +806,58 @@ impl StakingPoolComponent {
 }
 
 impl StakingPoolComponent {
-    /// compute how much gas this function call requires to complete and give the remainder of the gas to
-    /// the callback
+    /// compute how much gas this function call requires to complete and give the remainder of the
+    /// gas to the callback
+    ///
+    /// TODO: measure gas required by callbacks if stake action fails, which is the worse case scenario
     fn callback_gas() -> Gas {
-        let transaction_gas_fees = Gas::compute(vec![
-            (
-                TransactionResource::ActionReceipt(SenderIsReceiver(true)),
-                2, // stake + callback
-            ),
-            (
-                TransactionResource::Action(ActionType::Stake(SenderIsReceiver(true))),
-                1,
-            ),
-            (
-                TransactionResource::Action(ActionType::FunctionCall(
-                    SenderIsReceiver(true),
-                    ByteLen(512),
-                )),
-                1,
-            ),
-            (
-                TransactionResource::DataReceipt(SenderIsReceiver(true), ByteLen(0)),
-                1,
-            ),
-        ]);
+        let gas_for_receipts = {
+            const RECEIPT: TransactionResource =
+                TransactionResource::ActionReceipt(SenderIsReceiver(true));
+            const STAKE_ACTION: TransactionResource =
+                TransactionResource::Action(ActionType::Stake(SenderIsReceiver(true)));
+            const FUNC_CALL: TransactionResource = TransactionResource::Action(
+                ActionType::FunctionCall(SenderIsReceiver(true), ByteLen(512)),
+            );
+            const DATA_RECEIPT: TransactionResource =
+                TransactionResource::DataReceipt(SenderIsReceiver(true), ByteLen(200));
+            Gas::compute(vec![
+                (RECEIPT, 2), // stake action + callback
+                (STAKE_ACTION, 1),
+                (FUNC_CALL, 1),
+                (DATA_RECEIPT, 1),
+            ])
+        };
 
-        const GAS_REQUIRED_TO_COMPLETE_THIS_CALL: u64 = 5 * TERA;
-        let gas = (env::prepaid_gas() - env::used_gas())
-            .saturating_sub(*transaction_gas_fees)
-            .saturating_sub(GAS_REQUIRED_TO_COMPLETE_THIS_CALL)
+        const GAS_FOR_COMPLETING_THIS_CALL: u64 = 5 * TERA;
+        let gas: Gas = (env::prepaid_gas()
+            - env::used_gas()
+            - *gas_for_receipts
+            - GAS_FOR_COMPLETING_THIS_CALL)
             .into();
 
-        let min_callback_gas = Self::min_callback_gas();
-        ERR_INVALID.assert(
-            || gas >= min_callback_gas,
-            || {
-                let min_required_gas = *min_callback_gas
-                    + env::used_gas()
-                    + *transaction_gas_fees
-                    + GAS_REQUIRED_TO_COMPLETE_THIS_CALL;
-                format!(
-                    "not enough gas was attached - min required gas is {} TGas",
-                    min_required_gas / TERA + 1
-                )
-            },
-        );
+        // make sure there is enough gas for the callback
+        // - because of NEAR's async nature, if there is not enough gas, then this transaction will
+        //   commit its state, but the callback will fail - thus its better to fail fast and let
+        //   the user know to retry with more gas
+        {
+            const CALLBACK_COMPUTE_GAS: TGas = TGas(10);
+            let min_callback_gas = gas_for_receipts + CALLBACK_COMPUTE_GAS;
+            ERR_INVALID.assert(
+                || gas >= min_callback_gas,
+                || {
+                    let min_required_gas = env::used_gas()
+                        + *gas_for_receipts
+                        + GAS_FOR_COMPLETING_THIS_CALL
+                        + *min_callback_gas;
+                    format!(
+                        "not enough gas was attached - min required gas is {} TGas",
+                        min_required_gas / TERA + 1
+                    )
+                },
+            );
+        }
         gas
-    }
-
-    // TODO: check actual gas usage on deployed contract
-    fn min_callback_gas() -> Gas {
-        const COMPUTE: Gas = Gas(5 * TERA);
-        const RECEIPT: TransactionResource =
-            TransactionResource::ActionReceipt(SenderIsReceiver(true));
-        const STAKE_ACTION: TransactionResource =
-            TransactionResource::Action(ActionType::Stake(SenderIsReceiver(true)));
-        Gas::compute(vec![(RECEIPT, 1), (STAKE_ACTION, 1)]) + COMPUTE
     }
 
     fn treasurer_permission(&self) -> Permission {
