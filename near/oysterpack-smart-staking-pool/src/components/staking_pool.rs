@@ -3773,6 +3773,73 @@ last_contract_managed_total_balance             {}
                 }
             }
         }
+
+        #[test]
+        fn ops_stake_token_value_with_updated_earnings() {
+            // Arrange
+            let mut ctx = new_context(ACCOUNT);
+            ctx.predecessor_account_id = OWNER.to_string();
+            testing_env!(ctx.clone());
+
+            deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+            let mut account_manager = account_manager();
+            let mut staking_pool = staking_pool();
+            assert!(!staking_pool.ops_stake_status().is_online());
+
+            // register account
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.account_balance = env::account_balance();
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx.clone());
+            account_manager.storage_deposit(None, Some(true));
+
+            assert_eq!(
+                staking_pool.ops_stake_token_value_with_updated_earnings(None),
+                YOCTO.into()
+            );
+            assert_eq!(
+                staking_pool.ops_stake_token_value_with_updated_earnings(None),
+                staking_pool.ops_stake_token_value(None)
+            );
+
+            // stake
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.account_balance = env::account_balance();
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx.clone());
+
+            staking_pool.ops_stake();
+
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.account_balance = env::account_balance();
+            ctx.attached_deposit = 0;
+            testing_env!(ctx.clone());
+
+            assert_eq!(
+                staking_pool.ops_stake_token_value_with_updated_earnings(None),
+                YOCTO.into()
+            );
+            assert_eq!(
+                staking_pool.ops_stake_token_value_with_updated_earnings(None),
+                staking_pool.ops_stake_token_value(None)
+            );
+
+            // simulate earnings
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.account_balance = env::account_balance() + YOCTO;
+            ctx.attached_deposit = 0;
+            testing_env!(ctx.clone());
+
+            assert_eq!(
+                staking_pool.ops_stake_token_value_with_updated_earnings(None),
+                (2 * YOCTO).into()
+            );
+
+            let logs = test_utils::get_logs();
+            println!("{:#?}", logs);
+            assert_eq!(logs, vec!["[INFO] [EARNINGS] 1000000000000000000000000",]);
+        }
     }
 
     #[cfg(test)]
