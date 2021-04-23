@@ -547,11 +547,22 @@ impl StakingPoolOperator for StakingPoolComponent {
 }
 
 impl StakingPoolComponent {
+    /// we always try to stop, even if the pool is already offline
+    /// - for example, if the staking public key is invalid, then the stake action would fail
     fn stop_staking(reason: OfflineReason) {
+        if let OfflineReason::StakeActionFailed = reason {
+            ERR_STAKE_ACTION_FAILED.log("");
+        }
+
         // update status to offline
         let mut state = Self::state();
-        state.status = Status::Offline(reason);
-        state.save();
+        if state.status.is_online() {
+            state.status = Status::Offline(reason);
+            state.save();
+            LOG_EVENT_STATUS_OFFLINE.log(reason);
+        } else {
+            LOG_EVENT_STATUS_OFFLINE.log(format!("{} - but was already offline", reason));
+        }
 
         // unstake all
         if env::account_locked_balance() > 0 {
@@ -561,25 +572,22 @@ impl StakingPoolComponent {
                     "ops_stake_stop_finalize",
                     Option::<()>::None,
                     YoctoNear::ZERO,
-                    Self::callback_gas(),
+                    Self::compute_callback_gas(
+                        Gas(5 * TERA),
+                        Self::staking_workflow_receipts_gas(),
+                    ),
                 ));
         }
-
-        // log
-        if let OfflineReason::StakeActionFailed = reason {
-            ERR_STAKE_ACTION_FAILED.log("");
-        }
-        LOG_EVENT_STATUS_OFFLINE.log(reason);
     }
 
     fn start_staking(&mut self) {
         let mut state = self.state_with_updated_earnings();
         if let Status::Offline(_) = state.status {
             // update status
-            {
-                state.status = Status::Online;
-                state.save();
-            }
+            state.status = Status::Online;
+            state.save();
+
+            LOG_EVENT_STATUS_ONLINE.log("");
 
             // stake
             let total_staked_balance = State::total_staked_balance();
@@ -590,11 +598,11 @@ impl StakingPoolComponent {
                         "ops_stake_start_finalize",
                         Option::<()>::None,
                         YoctoNear::ZERO,
-                        Self::callback_gas(),
+                        Self::callback_gas_with_check_for_enough_gas(),
                     ));
             }
-
-            LOG_EVENT_STATUS_ONLINE.log("");
+        } else {
+            LOG_EVENT_STATUS_ONLINE.log("already online");
         }
     }
 
@@ -629,8 +637,7 @@ impl StakeActionCallbacks for StakingPoolComponent {
             .ops_stake_balance(to_valid_account_id(&account_id))
             .unwrap();
 
-        let state = Self::state();
-        if state.status.is_online() && !is_promise_success() {
+        if Self::state().status.is_online() && !is_promise_success() {
             Self::stop_staking(OfflineReason::StakeActionFailed);
         }
 
@@ -806,58 +813,62 @@ impl StakingPoolComponent {
 }
 
 impl StakingPoolComponent {
-    /// compute how much gas this function call requires to complete and give the remainder of the
-    /// gas to the callback
-    ///
-    /// TODO: measure gas required by callbacks if stake action fails, which is the worse case scenario
-    fn callback_gas() -> Gas {
-        let gas_for_receipts = {
-            const RECEIPT: TransactionResource =
-                TransactionResource::ActionReceipt(SenderIsReceiver(true));
-            const STAKE_ACTION: TransactionResource =
-                TransactionResource::Action(ActionType::Stake(SenderIsReceiver(true)));
-            const FUNC_CALL: TransactionResource = TransactionResource::Action(
-                ActionType::FunctionCall(SenderIsReceiver(true), ByteLen(512)),
-            );
-            const DATA_RECEIPT: TransactionResource =
-                TransactionResource::DataReceipt(SenderIsReceiver(true), ByteLen(200));
-            Gas::compute(vec![
-                (RECEIPT, 2), // stake action + callback
-                (STAKE_ACTION, 1),
-                (FUNC_CALL, 1),
-                (DATA_RECEIPT, 1),
-            ])
-        };
-
-        const GAS_FOR_COMPLETING_THIS_CALL: u64 = 5 * TERA;
-        let gas: Gas = (env::prepaid_gas()
-            - env::used_gas()
-            - *gas_for_receipts
-            - GAS_FOR_COMPLETING_THIS_CALL)
-            .into();
+    /// invokes `Self::compute_callback_gas`, but also checks that enough gas is attached for the
+    /// callback
+    fn callback_gas_with_check_for_enough_gas() -> Gas {
+        let staking_workflow_receipts_gas = Self::staking_workflow_receipts_gas();
+        let gas: Gas = Self::compute_callback_gas(Gas(5 * TERA), staking_workflow_receipts_gas);
 
         // make sure there is enough gas for the callback
         // - because of NEAR's async nature, if there is not enough gas, then this transaction will
         //   commit its state, but the callback will fail - thus its better to fail fast and let
         //   the user know to retry with more gas
-        {
-            const CALLBACK_COMPUTE_GAS: TGas = TGas(10);
-            let min_callback_gas = gas_for_receipts + CALLBACK_COMPUTE_GAS;
-            ERR_INVALID.assert(
-                || gas >= min_callback_gas,
-                || {
-                    let min_required_gas = env::used_gas()
-                        + *gas_for_receipts
-                        + GAS_FOR_COMPLETING_THIS_CALL
-                        + *min_callback_gas;
-                    format!(
-                        "not enough gas was attached - min required gas is {} TGas",
-                        min_required_gas / TERA + 1
-                    )
-                },
-            );
-        }
+        const CALLBACK_COMPUTE_GAS: TGas = TGas(10);
+        let min_callback_gas = staking_workflow_receipts_gas + CALLBACK_COMPUTE_GAS;
+        ERR_INVALID.assert(
+            || gas >= min_callback_gas,
+            || {
+                let min_required_gas = env::used_gas()
+                    + *staking_workflow_receipts_gas
+                    + *TGas(5) // gas required to complete this call
+                    + *min_callback_gas;
+                format!(
+                    "not enough gas was attached - min required gas is {} TGas",
+                    min_required_gas / TERA + 1 // round up 1 TGas
+                )
+            },
+        );
+
         gas
+    }
+
+    /// computes how much gas will be required to complete this call given the remaining compute
+    /// and receipts this call will create
+    ///
+    /// ## Args
+    /// `gas_for_remaining_compute` - how much compute gas is needed for the remaining work in this call
+    /// `gas_for_receipts` - how much gas is required to create any remaining receipts
+    fn compute_callback_gas(gas_for_remaining_compute: Gas, gas_for_receipts: Gas) -> Gas {
+        (env::prepaid_gas() - env::used_gas() - *gas_for_receipts - *gas_for_remaining_compute)
+            .into()
+    }
+
+    fn staking_workflow_receipts_gas() -> Gas {
+        const RECEIPT: TransactionResource =
+            TransactionResource::ActionReceipt(SenderIsReceiver(true));
+        const STAKE_ACTION: TransactionResource =
+            TransactionResource::Action(ActionType::Stake(SenderIsReceiver(true)));
+        const FUNC_CALL: TransactionResource = TransactionResource::Action(
+            ActionType::FunctionCall(SenderIsReceiver(true), ByteLen(512)),
+        );
+        const DATA_RECEIPT: TransactionResource =
+            TransactionResource::DataReceipt(SenderIsReceiver(true), ByteLen(200));
+        Gas::compute(vec![
+            (RECEIPT, 2), // stake action + callback
+            (STAKE_ACTION, 1),
+            (FUNC_CALL, 1),
+            (DATA_RECEIPT, 1),
+        ])
     }
 
     fn treasurer_permission(&self) -> Permission {
@@ -1003,7 +1014,7 @@ impl StakingPoolComponent {
                 account_id: account_id.to_string(),
             }),
             YoctoNear::ZERO,
-            Self::callback_gas(),
+            Self::callback_gas_with_check_for_enough_gas(),
         );
         stake.then(finalize)
     }
@@ -5761,7 +5772,7 @@ last_contract_managed_total_balance             {}
 
                     let receipts = deserialize_receipts();
                     if i == 1 {
-                        assert!(logs.is_empty());
+                        assert_eq!(logs, vec!["[INFO] [STATUS_ONLINE] already online",]);
                         assert!(receipts.is_empty());
                     }
                 }
@@ -5968,7 +5979,10 @@ last_contract_managed_total_balance             {}
                 assert!(!staking_pool.ops_stake_status().is_online());
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
-                assert_eq!(logs, vec!["[WARN] [STATUS_OFFLINE] Stopped",]);
+                assert_eq!(
+                    logs,
+                    vec!["[WARN] [STATUS_OFFLINE] Stopped - but was already offline",]
+                );
 
                 let receipts = deserialize_receipts();
                 assert_eq!(receipts.len(), 2);
