@@ -419,6 +419,7 @@ impl StakingPool for StakingPoolComponent {
                 unstaked_balances.save();
             }
             State::decr_total_unstaked_balance(amount);
+            // debit contract managed total balance
             {
                 let mut state = StakingPoolComponent::state();
                 state.last_contract_managed_total_balance -= amount;
