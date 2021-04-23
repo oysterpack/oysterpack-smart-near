@@ -7743,6 +7743,25 @@ last_contract_managed_total_balance             {}
                         }
                     }
                 }
+
+                #[test]
+                #[should_panic(expected = "[ERR] [NEAR_DEPOSIT_REQUIRED] ")]
+                fn zero_attached_deposit() {
+                    // Arrange
+                    let mut ctx = new_context(OWNER);
+                    testing_env!(ctx.clone());
+
+                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                    let mut staking_pool = staking_pool();
+
+                    // Act
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    ctx.attached_deposit = 0;
+                    ctx.account_balance = env::account_balance();
+                    testing_env!(ctx.clone());
+                    staking_pool.ops_stake_treasury_deposit();
+                }
             }
 
             #[cfg(test)]
@@ -7829,6 +7848,25 @@ last_contract_managed_total_balance             {}
                             _ => panic!("expected StakeAction"),
                         }
                     }
+                }
+
+                #[test]
+                #[should_panic(expected = "[ERR] [NEAR_DEPOSIT_REQUIRED] ")]
+                fn zero_attached_deposit() {
+                    // Arrange
+                    let mut ctx = new_context(OWNER);
+                    testing_env!(ctx.clone());
+
+                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                    let mut staking_pool = staking_pool();
+
+                    // Act
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    ctx.attached_deposit = 0;
+                    ctx.account_balance = env::account_balance();
+                    testing_env!(ctx.clone());
+                    staking_pool.ops_stake_treasury_distribution();
                 }
             }
         }
