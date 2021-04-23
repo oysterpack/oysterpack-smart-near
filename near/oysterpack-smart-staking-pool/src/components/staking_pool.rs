@@ -2906,6 +2906,44 @@ last_contract_managed_total_balance             {}
                     _ => panic!("expected transfer action"),
                 }
             }
+
+            #[test]
+            #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED] ")]
+            fn withdraw_all_not_registered() {
+                // Arrange
+                let mut ctx = new_context(ACCOUNT);
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                let mut staking_pool = staking_pool();
+                assert!(!staking_pool.ops_stake_status().is_online());
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                testing_env!(ctx);
+                staking_pool.ops_stake_withdraw(None);
+            }
+
+            #[test]
+            #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED] ")]
+            fn withdraw_some_not_registered() {
+                // Arrange
+                let mut ctx = new_context(ACCOUNT);
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                let mut staking_pool = staking_pool();
+                assert!(!staking_pool.ops_stake_status().is_online());
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                testing_env!(ctx);
+                staking_pool.ops_stake_withdraw(Some(YOCTO.into()));
+            }
         }
 
         #[cfg(test)]
@@ -5151,6 +5189,52 @@ last_contract_managed_total_balance             {}
                     }
                     _ => panic!("expected transfer action"),
                 }
+            }
+
+            #[test]
+            #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED] ")]
+            fn withdraw_all_not_registered() {
+                // Arrange
+                let mut ctx = new_context(ACCOUNT);
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                let mut staking_pool = staking_pool();
+                // start staking
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                assert!(staking_pool.ops_stake_status().is_online());
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                testing_env!(ctx);
+                staking_pool.ops_stake_withdraw(None);
+            }
+
+            #[test]
+            #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED] ")]
+            fn withdraw_some_not_registered() {
+                // Arrange
+                let mut ctx = new_context(ACCOUNT);
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                let mut staking_pool = staking_pool();
+                // start staking
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                assert!(staking_pool.ops_stake_status().is_online());
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                testing_env!(ctx);
+                staking_pool.ops_stake_withdraw(Some(YOCTO.into()));
             }
         }
 
