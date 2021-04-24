@@ -756,12 +756,19 @@ impl Treasury for StakingPoolComponent {
 
 impl TransferReceiver for StakingPoolComponent {
     /// updates the treasury balance
+    ///
+    /// ## Panics
+    /// If not called as self, i.e., by the STAKE pool contract
     fn ft_on_transfer(
         &mut self,
         _sender_id: ValidAccountId,
         _amount: TokenAmount,
         _msg: TransferCallMessage,
     ) -> PromiseOrValue<TokenAmount> {
+        ERR_NOT_AUTHORIZED.assert_with_message(
+            || env::predecessor_account_id() == env::current_account_id(),
+            || "this method can only be invoked by the STAKE pool contract internally",
+        );
         let mut state = self.state_with_updated_earnings();
         let treasury_stake_balance = self
             .stake_token
@@ -8902,6 +8909,98 @@ last_contract_managed_total_balance             {}
                     .stake
                     + transfer_amount,
                 initial_balance.staked.as_ref().unwrap().stake
+            );
+        }
+
+        #[test]
+        fn ft_on_transfer() {
+            // Arrange
+            let mut ctx = new_context(OWNER);
+            testing_env!(ctx.clone());
+
+            deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+            let mut staking_pool = staking_pool();
+            let mut account_manager = account_manager();
+
+            // register account
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.account_balance = env::account_balance();
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx.clone());
+            account_manager.storage_deposit(None, Some(true));
+
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.account_balance = env::account_balance();
+            ctx.attached_deposit = 10 * YOCTO;
+            testing_env!(ctx.clone());
+            staking_pool.ops_stake();
+
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.account_balance = env::account_balance();
+            ctx.attached_deposit = 1;
+            testing_env!(ctx.clone());
+            let msg = TransferCallMessage("".to_string());
+            staking_pool.ops_stake_transfer_call(
+                to_valid_account_id(&env::current_account_id()),
+                YOCTO.into(),
+                None,
+                msg.clone(),
+            );
+
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.account_balance = env::account_balance();
+            ctx.attached_deposit = 0;
+            testing_env!(ctx.clone());
+            assert_eq!(
+                staking_pool.ops_stake_pool_balances().treasury_balance,
+                YoctoNear::ZERO
+            );
+
+            ctx.predecessor_account_id = env::current_account_id();
+            ctx.account_balance = env::account_balance();
+            ctx.attached_deposit = 0;
+            testing_env!(ctx.clone());
+            if let PromiseOrValue::Value(refund) =
+                staking_pool.ft_on_transfer(to_valid_account_id(ACCOUNT), YOCTO.into(), msg)
+            {
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(
+                    logs,
+                    vec![
+                        "[INFO] [EARNINGS] 1",
+                        "[INFO] [TREASURY_DEPOSIT] treasury balance = 1000000000000000000000000",
+                    ]
+                );
+
+                assert_eq!(refund, TokenAmount::ZERO);
+
+                assert_eq!(
+                    staking_pool.ops_stake_pool_balances().treasury_balance,
+                    YOCTO.into()
+                );
+            } else {
+                panic!("expected value");
+            }
+        }
+
+        #[test]
+        #[should_panic(
+            expected = "[ERR] [NOT_AUTHORIZED] this method can only be invoked by the STAKE pool contract internally"
+        )]
+        fn ft_on_transfer_not_invoked_by_self() {
+            // Arrange
+            let ctx = new_context(OWNER);
+            testing_env!(ctx.clone());
+
+            deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+            let mut staking_pool = staking_pool();
+            staking_pool.ft_on_transfer(
+                to_valid_account_id(ACCOUNT),
+                YOCTO.into(),
+                TransferCallMessage("".to_string()),
             );
         }
     }

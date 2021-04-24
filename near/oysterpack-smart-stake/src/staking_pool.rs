@@ -129,3 +129,16 @@ impl Treasury for Contract {
         Self::staking_pool().ops_stake_is_treasurer(account_id)
     }
 }
+
+#[near_bindgen]
+impl TransferReceiver for Contract {
+    #[private]
+    fn ft_on_transfer(
+        &mut self,
+        sender_id: ValidAccountId,
+        amount: TokenAmount,
+        msg: TransferCallMessage,
+    ) -> PromiseOrValue<TokenAmount> {
+        Self::staking_pool().ft_on_transfer(sender_id, amount, msg)
+    }
+}
