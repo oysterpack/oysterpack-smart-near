@@ -2930,6 +2930,100 @@ last_contract_managed_total_balance             {}
             }
 
             #[test]
+            fn withdraw_available_using_up_all_liquidity() {
+                // Arrange
+                let mut ctx = new_context(ACCOUNT);
+                ctx.predecessor_account_id = OWNER.to_string();
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+
+                let mut account_manager = account_manager();
+                let mut staking_pool = staking_pool();
+                assert!(!staking_pool.ops_stake_status().is_online());
+
+                // register accounts
+                ctx.account_balance = env::account_balance();
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, Some(true));
+                account_manager.storage_deposit(None, Some(false));
+
+                ctx.account_balance = env::account_balance();
+                ctx.predecessor_account_id = "alice".to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, Some(true));
+
+                // stake storage deposit
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = 0;
+                testing_env!(ctx.clone());
+                if let PromiseOrValue::Value(_) = staking_pool.ops_stake() {
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+                } else {
+                    panic!("expected value");
+                }
+
+                // unstake all
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = 0;
+                testing_env!(ctx.clone());
+                if let PromiseOrValue::Value(_) = staking_pool.ops_unstake(None) {
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+                } else {
+                    panic!("expected value");
+                }
+
+                let balances_before_withdrawal = staking_pool
+                    .ops_stake_balance(to_valid_account_id(ACCOUNT))
+                    .unwrap();
+
+                // Add liquidity
+                ctx.predecessor_account_id = "alice".to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = YOCTO / 2;
+                testing_env!(ctx.clone());
+                staking_pool.ops_stake();
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+
+                // Act
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = 0;
+                ctx.epoch_height = env::epoch_height() + 4;
+                testing_env!(ctx.clone());
+                let balances = staking_pool.ops_stake_withdraw(None);
+
+                // Assert
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(
+                    logs,
+                    vec![
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(-184)",
+                        "[INFO] [LIQUIDITY] removed=500000000000000000000000, total=0",
+                    ]
+                );
+
+                assert!(balances.unstaked.is_none());
+
+                let receipts = deserialize_receipts();
+                assert_eq!(receipts.len(), 1);
+                match &receipts[0].actions[0] {
+                    Action::Transfer(action) => {
+                        assert_eq!(action.deposit, 992000000000000000000000);
+                    }
+                    _ => panic!("expected transfer action"),
+                }
+            }
+
+            #[test]
             fn withdraw_all() {
                 // Arrange
                 let mut ctx = new_context(ACCOUNT);
