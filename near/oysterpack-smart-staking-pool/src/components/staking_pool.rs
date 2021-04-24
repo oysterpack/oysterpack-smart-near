@@ -735,14 +735,22 @@ impl Treasury for StakingPoolComponent {
         }
     }
 
-    fn ops_stake_treasury_grant_treasurer(&mut self, account_id: ValidAccountId) {
+    fn ops_stake_grant_treasurer(&mut self, account_id: ValidAccountId) {
         self.account_manager
             .ops_permissions_grant(account_id, self.treasurer_permission().into());
     }
 
-    fn ops_stake_treasury_revoke_treasurer(&mut self, account_id: ValidAccountId) {
+    fn ops_stake_revoke_treasurer(&mut self, account_id: ValidAccountId) {
         self.account_manager
             .ops_permissions_revoke(account_id, self.treasurer_permission().into());
+    }
+
+    fn ops_stake_is_treasurer(&mut self, account_id: ValidAccountId) -> bool {
+        self.account_manager
+            .load_account_near_data(account_id.as_ref())
+            .map_or(false, |account| {
+                account.contains_permissions(self.treasurer_permission().into())
+            })
     }
 }
 
@@ -7931,7 +7939,7 @@ last_contract_managed_total_balance             {}
                     ctx.predecessor_account_id = OWNER.to_string();
                     ctx.attached_deposit = 0;
                     testing_env!(ctx.clone());
-                    staking_pool.ops_stake_treasury_grant_treasurer(to_valid_account_id(ACCOUNT));
+                    staking_pool.ops_stake_grant_treasurer(to_valid_account_id(ACCOUNT));
 
                     ctx.predecessor_account_id = ACCOUNT.to_string();
                     testing_env!(ctx.clone());
@@ -7970,7 +7978,7 @@ last_contract_managed_total_balance             {}
                     ctx.account_balance = env::account_balance();
                     ctx.attached_deposit = 0;
                     testing_env!(ctx.clone());
-                    staking_pool.ops_stake_treasury_grant_treasurer(to_valid_account_id(ACCOUNT));
+                    staking_pool.ops_stake_grant_treasurer(to_valid_account_id(ACCOUNT));
 
                     ctx.predecessor_account_id = ACCOUNT.to_string();
                     ctx.account_balance = env::account_balance();
@@ -8023,7 +8031,7 @@ last_contract_managed_total_balance             {}
                     ctx.account_balance = env::account_balance();
                     ctx.attached_deposit = 0;
                     testing_env!(ctx.clone());
-                    staking_pool.ops_stake_treasury_grant_treasurer(to_valid_account_id(ACCOUNT));
+                    staking_pool.ops_stake_grant_treasurer(to_valid_account_id(ACCOUNT));
 
                     ctx.predecessor_account_id = ACCOUNT.to_string();
                     ctx.account_balance = env::account_balance();
@@ -8196,6 +8204,33 @@ last_contract_managed_total_balance             {}
                     testing_env!(ctx.clone());
                     staking_pool.ops_stake_treasury_transfer_to_owner(Some((YOCTO + 1).into()));
                 }
+            }
+
+            #[test]
+            fn treasurer_access_control() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                let mut staking_pool = staking_pool();
+                let mut account_manager = account_manager();
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, None);
+
+                ctx.predecessor_account_id = OWNER.to_string();
+                ctx.attached_deposit = 0;
+                testing_env!(ctx.clone());
+                assert!(!staking_pool.ops_stake_is_treasurer(to_valid_account_id(ACCOUNT)));
+
+                staking_pool.ops_stake_grant_treasurer(to_valid_account_id(ACCOUNT));
+                assert!(staking_pool.ops_stake_is_treasurer(to_valid_account_id(ACCOUNT)));
+
+                staking_pool.ops_stake_revoke_treasurer(to_valid_account_id(ACCOUNT));
+                assert!(!staking_pool.ops_stake_is_treasurer(to_valid_account_id(ACCOUNT)));
             }
         }
     }

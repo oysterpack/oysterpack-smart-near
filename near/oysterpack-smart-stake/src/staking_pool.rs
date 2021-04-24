@@ -117,11 +117,11 @@ impl Treasury for Contract {
         Self::staking_pool().ops_stake_treasury_transfer_to_owner(amount);
     }
 
-    fn ops_stake_treasury_grant_treasurer(&mut self, account_id: ValidAccountId) {
-        Self::staking_pool().ops_stake_treasury_grant_treasurer(account_id);
+    fn ops_stake_grant_treasurer(&mut self, account_id: ValidAccountId) {
+        Self::staking_pool().ops_stake_grant_treasurer(account_id);
     }
 
-    fn ops_stake_treasury_revoke_treasurer(&mut self, account_id: ValidAccountId) {
-        Self::staking_pool().ops_stake_treasury_revoke_treasurer(account_id);
+    fn ops_stake_revoke_treasurer(&mut self, account_id: ValidAccountId) {
+        Self::staking_pool().ops_stake_revoke_treasurer(account_id);
     }
 }

@@ -52,14 +52,17 @@ pub trait Treasury {
     /// ## Panics
     /// - if not invoked by admin
     /// - if specified account is not registered
-    fn ops_stake_treasury_grant_treasurer(&mut self, account_id: ValidAccountId);
+    fn ops_stake_grant_treasurer(&mut self, account_id: ValidAccountId);
 
     /// revokes treasurer permission to specified account
     ///
     /// ## Panics
     /// - if not invoked by admin
     /// - if specified account is not registered
-    fn ops_stake_treasury_revoke_treasurer(&mut self, account_id: ValidAccountId);
+    fn ops_stake_revoke_treasurer(&mut self, account_id: ValidAccountId);
+
+    /// revokes treasurer permission to specified account
+    fn ops_stake_is_treasurer(&mut self, account_id: ValidAccountId) -> bool;
 }
 
 pub const PERMISSION_TREASURER: &str = "treasurer";
