@@ -488,17 +488,13 @@ impl StakingPool for StakingPoolComponent {
     }
 
     fn ops_stake_token_value(&self, amount: Option<TokenAmount>) -> YoctoNear {
-        let state = Self::state();
         self.compute_stake_near_value_rounded_down(
             amount.unwrap_or(YOCTO.into()),
-            State::total_staked_balance() + state.check_for_earnings_in_view_mode(),
+            State::total_staked_balance() + Self::state().check_for_earnings_in_view_mode(),
         )
     }
 
-    fn ops_stake_token_value_with_updated_earnings(
-        &mut self,
-        amount: Option<TokenAmount>,
-    ) -> YoctoNear {
+    fn ops_stake_token_value_with_earnings(&mut self, amount: Option<TokenAmount>) -> YoctoNear {
         self.state_with_updated_earnings();
         self.stake_near_value_rounded_down(amount.unwrap_or(YOCTO.into()))
     }
@@ -3795,11 +3791,11 @@ last_contract_managed_total_balance             {}
             account_manager.storage_deposit(None, Some(true));
 
             assert_eq!(
-                staking_pool.ops_stake_token_value_with_updated_earnings(None),
+                staking_pool.ops_stake_token_value_with_earnings(None),
                 YOCTO.into()
             );
             assert_eq!(
-                staking_pool.ops_stake_token_value_with_updated_earnings(None),
+                staking_pool.ops_stake_token_value_with_earnings(None),
                 staking_pool.ops_stake_token_value(None)
             );
 
@@ -3817,11 +3813,11 @@ last_contract_managed_total_balance             {}
             testing_env!(ctx.clone());
 
             assert_eq!(
-                staking_pool.ops_stake_token_value_with_updated_earnings(None),
+                staking_pool.ops_stake_token_value_with_earnings(None),
                 YOCTO.into()
             );
             assert_eq!(
-                staking_pool.ops_stake_token_value_with_updated_earnings(None),
+                staking_pool.ops_stake_token_value_with_earnings(None),
                 staking_pool.ops_stake_token_value(None)
             );
 
@@ -3832,7 +3828,7 @@ last_contract_managed_total_balance             {}
             testing_env!(ctx.clone());
 
             assert_eq!(
-                staking_pool.ops_stake_token_value_with_updated_earnings(None),
+                staking_pool.ops_stake_token_value_with_earnings(None),
                 (2 * YOCTO).into()
             );
 
@@ -8014,7 +8010,7 @@ last_contract_managed_total_balance             {}
             );
 
             // process earnings
-            staking_pool.ops_stake_token_value_with_updated_earnings(None);
+            staking_pool.ops_stake_token_value_with_earnings(None);
 
             // Assert - earnings have now been deposited into the treasury for the dividend
             let pool_balances = staking_pool.ops_stake_pool_balances();
@@ -8044,7 +8040,7 @@ last_contract_managed_total_balance             {}
             println!("{}", serde_json::to_string_pretty(&pool_balances).unwrap());
 
             // process earnings
-            staking_pool.ops_stake_token_value_with_updated_earnings(None);
+            staking_pool.ops_stake_token_value_with_earnings(None);
 
             // Assert - 2nd transfer was treated as a distribution, i.e., transferred STAKE was burned
             let logs = test_utils::get_logs();

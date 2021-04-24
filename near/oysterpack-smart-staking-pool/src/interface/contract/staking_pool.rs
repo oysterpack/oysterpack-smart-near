@@ -170,10 +170,7 @@ pub trait StakingPool {
     /// ## NOTES
     /// Calling this consecutive times should return an increasing STAKE token value because the
     /// transaction gas fees earned from this call are applied on the next.
-    fn ops_stake_token_value_with_updated_earnings(
-        &mut self,
-        amount: Option<TokenAmount>,
-    ) -> YoctoNear;
+    fn ops_stake_token_value_with_earnings(&mut self, amount: Option<TokenAmount>) -> YoctoNear;
 
     fn ops_stake_status(&self) -> Status;
 
