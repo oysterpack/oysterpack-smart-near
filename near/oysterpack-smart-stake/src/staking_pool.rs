@@ -124,4 +124,8 @@ impl Treasury for Contract {
     fn ops_stake_revoke_treasurer(&mut self, account_id: ValidAccountId) {
         Self::staking_pool().ops_stake_revoke_treasurer(account_id);
     }
+
+    fn ops_stake_is_treasurer(&mut self, account_id: ValidAccountId) -> bool {
+        Self::staking_pool().ops_stake_is_treasurer(account_id)
+    }
 }

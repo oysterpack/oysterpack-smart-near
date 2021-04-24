@@ -1,3 +1,12 @@
+## Workspace setup
+```shell
+# used for project build
+cargo install --force cargo-make
+
+# required to get test code coverage working in CLion
+cargo install --force grcov
+```
+
 ## How To Build Project 
 - [cargo-make][1] is used to manage the project builds
 
