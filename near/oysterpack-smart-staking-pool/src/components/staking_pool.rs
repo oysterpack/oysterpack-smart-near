@@ -8,8 +8,8 @@ use crate::{
 };
 use oysterpack_smart_account_management::{
     components::account_management::AccountManagementComponent, AccountDataObject, AccountMetrics,
-    AccountRepository, Permission, StorageManagement, ERR_ACCOUNT_NOT_REGISTERED,
-    ERR_NOT_AUTHORIZED,
+    AccountRepository, Permission, PermissionsManagement, StorageManagement,
+    ERR_ACCOUNT_NOT_REGISTERED, ERR_NOT_AUTHORIZED,
 };
 use oysterpack_smart_contract::{
     components::contract_ownership::ContractOwnershipComponent, BalanceId, ContractNearBalances,
@@ -733,6 +733,16 @@ impl Treasury for StakingPoolComponent {
             state.treasury_balance -= amount;
             state.save();
         }
+    }
+
+    fn ops_stake_treasury_grant_treasurer(&mut self, account_id: ValidAccountId) {
+        self.account_manager
+            .ops_permissions_grant(account_id, self.treasurer_permission().into());
+    }
+
+    fn ops_stake_treasury_revoke_treasurer(&mut self, account_id: ValidAccountId) {
+        self.account_manager
+            .ops_permissions_revoke(account_id, self.treasurer_permission().into());
     }
 }
 
@@ -7863,6 +7873,135 @@ last_contract_managed_total_balance             {}
                     ctx.account_balance = env::account_balance();
                     testing_env!(ctx.clone());
                     staking_pool.ops_stake_treasury_distribution();
+                }
+            }
+
+            #[cfg(test)]
+            mod tests_transfer_to_owner {
+                use super::*;
+
+                #[test]
+                #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED]")]
+                fn not_registered() {
+                    let mut ctx = new_context(OWNER);
+                    testing_env!(ctx.clone());
+
+                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    let mut staking_pool = staking_pool();
+
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    testing_env!(ctx.clone());
+                    staking_pool.ops_stake_treasury_transfer_to_owner(None);
+                }
+
+                #[test]
+                #[should_panic(expected = "[ERR] [NOT_AUTHORIZED]")]
+                fn not_authorized() {
+                    let mut ctx = new_context(OWNER);
+                    testing_env!(ctx.clone());
+
+                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    let mut staking_pool = staking_pool();
+                    let mut account_manager = account_manager();
+
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    ctx.attached_deposit = YOCTO;
+                    testing_env!(ctx.clone());
+                    account_manager.storage_deposit(None, None);
+
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    testing_env!(ctx.clone());
+                    staking_pool.ops_stake_treasury_transfer_to_owner(None);
+                }
+
+                #[test]
+                fn as_treasurer_transfer_all_with_empty_treasury() {
+                    let mut ctx = new_context(OWNER);
+                    testing_env!(ctx.clone());
+
+                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    let mut staking_pool = staking_pool();
+                    let mut account_manager = account_manager();
+
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    ctx.attached_deposit = YOCTO;
+                    testing_env!(ctx.clone());
+                    account_manager.storage_deposit(None, None);
+
+                    ctx.predecessor_account_id = OWNER.to_string();
+                    ctx.attached_deposit = 0;
+                    testing_env!(ctx.clone());
+                    staking_pool.ops_stake_treasury_grant_treasurer(to_valid_account_id(ACCOUNT));
+
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    testing_env!(ctx.clone());
+                    staking_pool.ops_stake_treasury_transfer_to_owner(None);
+                }
+
+                #[test]
+                fn as_owner_transfer_all_with_empty_treasury() {
+                    let mut ctx = new_context(OWNER);
+                    testing_env!(ctx.clone());
+
+                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    let mut staking_pool = staking_pool();
+
+                    ctx.predecessor_account_id = OWNER.to_string();
+                    testing_env!(ctx.clone());
+                    staking_pool.ops_stake_treasury_transfer_to_owner(None);
+                }
+
+                #[test]
+                fn as_treasurer_transfer_all() {
+                    let mut ctx = new_context(OWNER);
+                    testing_env!(ctx.clone());
+
+                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    let mut staking_pool = staking_pool();
+                    let mut account_manager = account_manager();
+
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    ctx.account_balance = env::account_balance();
+                    ctx.attached_deposit = YOCTO;
+                    testing_env!(ctx.clone());
+                    account_manager.storage_deposit(None, None);
+
+                    ctx.predecessor_account_id = OWNER.to_string();
+                    ctx.account_balance = env::account_balance();
+                    ctx.attached_deposit = 0;
+                    testing_env!(ctx.clone());
+                    staking_pool.ops_stake_treasury_grant_treasurer(to_valid_account_id(ACCOUNT));
+
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    ctx.account_balance = env::account_balance();
+                    ctx.attached_deposit = YOCTO;
+                    testing_env!(ctx.clone());
+                    staking_pool.ops_stake_treasury_deposit();
+
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    ctx.account_balance = env::account_balance();
+                    ctx.attached_deposit = 0;
+                    testing_env!(ctx.clone());
+                    let pool_balances = staking_pool.ops_stake_pool_balances();
+                    println!("{}", serde_json::to_string_pretty(&pool_balances).unwrap());
+                    assert_eq!(pool_balances.treasury_balance, YOCTO.into());
+                    let owner_balance = staking_pool
+                        .ops_stake_balance(to_valid_account_id(OWNER))
+                        .unwrap();
+                    assert!(owner_balance.staked.is_none());
+
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    ctx.account_balance = env::account_balance();
+                    testing_env!(ctx.clone());
+                    staking_pool.ops_stake_treasury_transfer_to_owner(None);
+
+                    let pool_balances = staking_pool.ops_stake_pool_balances();
+                    println!("{}", serde_json::to_string_pretty(&pool_balances).unwrap());
+                    assert_eq!(pool_balances.treasury_balance, YoctoNear::ZERO);
+                    let owner_balance = staking_pool
+                        .ops_stake_balance(to_valid_account_id(OWNER))
+                        .unwrap();
+                    assert_eq!(owner_balance.staked.as_ref().unwrap().stake, YOCTO.into());
                 }
             }
         }

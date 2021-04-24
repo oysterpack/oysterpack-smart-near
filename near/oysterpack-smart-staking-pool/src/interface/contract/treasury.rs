@@ -1,5 +1,6 @@
 use crate::StakeAccountBalances;
 use oysterpack_smart_near::domain::YoctoNear;
+use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
 use oysterpack_smart_near::near_sdk::PromiseOrValue;
 
 /// # **Contract Interface**: Staking Pool Treasury API
@@ -45,6 +46,20 @@ pub trait Treasury {
     /// - requires [`PERMISSION_TREASURER`] permission or the owner
     /// - if there are insufficient funds   
     fn ops_stake_treasury_transfer_to_owner(&mut self, amount: Option<YoctoNear>);
+
+    /// grants treasurer permission to specified account
+    ///
+    /// ## Panics
+    /// - if not invoked by admin
+    /// - if specified account is not registered
+    fn ops_stake_treasury_grant_treasurer(&mut self, account_id: ValidAccountId);
+
+    /// revokes treasurer permission to specified account
+    ///
+    /// ## Panics
+    /// - if not invoked by admin
+    /// - if specified account is not registered
+    fn ops_stake_treasury_revoke_treasurer(&mut self, account_id: ValidAccountId);
 }
 
 pub const PERMISSION_TREASURER: &str = "treasurer";
