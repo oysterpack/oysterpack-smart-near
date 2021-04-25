@@ -1,3 +1,4 @@
+use crate::Fees;
 use oysterpack_smart_near::domain::{BasisPoints, PublicKey};
 use oysterpack_smart_near::near_sdk::serde::{Deserialize, Serialize};
 
@@ -20,11 +21,11 @@ pub enum StakingPoolOperatorCommand {
     /// the staking pool public key can only be changed while the staking pool is offline
     UpdatePublicKey(PublicKey),
     /// max fee is 1000 BPS (10%)
-    UpdateStakingFee(BasisPoints),
+    UpdateFees(Fees),
 }
 
 /// 10%
-pub const MAX_STAKING_FEE: BasisPoints = BasisPoints(1000);
+pub const MAX_FEE: BasisPoints = BasisPoints(1000);
 
 #[cfg(test)]
 mod tests {

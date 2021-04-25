@@ -8,7 +8,7 @@ use near_sdk::{
     },
     serde_json,
 };
-use std::ops::Mul;
+use std::ops::{Add, AddAssign, Mul};
 use std::{
     fmt::{self, Display, Formatter},
     ops::{Deref, DerefMut},
@@ -142,6 +142,34 @@ impl Mul<BasisPoints> for YoctoNear {
         (U256::from(*rhs) * U256::from(*self) / U256::from(10000))
             .as_u128()
             .into()
+    }
+}
+
+impl Add for BasisPoints {
+    type Output = Self;
+
+    fn add(self, rhs: BasisPoints) -> Self::Output {
+        (*self + *rhs).into()
+    }
+}
+
+impl AddAssign for BasisPoints {
+    fn add_assign(&mut self, rhs: Self) {
+        **self += *rhs;
+    }
+}
+
+impl Add<u16> for BasisPoints {
+    type Output = Self;
+
+    fn add(self, rhs: u16) -> Self::Output {
+        (*self + rhs).into()
+    }
+}
+
+impl AddAssign<u16> for BasisPoints {
+    fn add_assign(&mut self, rhs: u16) {
+        **self += rhs;
     }
 }
 

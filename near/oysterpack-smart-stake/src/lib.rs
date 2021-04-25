@@ -16,8 +16,10 @@ use near_sdk::{
     json_types::ValidAccountId,
     near_bindgen, PanicOnDefault,
 };
-use oysterpack_smart_account_management::components::account_management::AccountManagementComponentConfig;
-use oysterpack_smart_account_management::{AccountRepository, StorageUsageBounds};
+use oysterpack_smart_account_management::{
+    components::account_management::AccountManagementComponentConfig, AccountRepository,
+    StorageUsageBounds,
+};
 use oysterpack_smart_contract::{
     components::contract_operator::ContractOperatorComponent, ContractOperator,
 };
@@ -28,8 +30,10 @@ use oysterpack_smart_fungible_token::components::fungible_token::{
     FungibleTokenComponent, FungibleTokenConfig,
 };
 use oysterpack_smart_fungible_token::*;
-use oysterpack_smart_near::component::{Deploy, ManagesAccountData};
-use oysterpack_smart_near::domain::PublicKey;
+use oysterpack_smart_near::{
+    component::{Deploy, ManagesAccountData},
+    domain::PublicKey,
+};
 use oysterpack_smart_staking_pool::components::staking_pool::{
     StakingPoolComponent, StakingPoolComponentConfig,
 };
@@ -82,6 +86,7 @@ impl Contract {
         StakingPoolComponent::deploy(StakingPoolComponentConfig {
             stake_public_key,
             staking_fee: None,
+            earnings_fee: None,
         });
 
         Self

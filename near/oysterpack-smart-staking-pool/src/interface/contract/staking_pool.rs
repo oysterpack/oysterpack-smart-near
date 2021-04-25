@@ -1,7 +1,7 @@
-use crate::Status;
-use crate::{StakeAccountBalances, StakingPoolBalances};
+use crate::{Fees, StakeAccountBalances, StakingPoolBalances, StakingPoolOperator};
+use crate::{Status, Treasury};
 use oysterpack_smart_fungible_token::{Memo, TokenAmount, TransferCallMessage};
-use oysterpack_smart_near::domain::{BasisPoints, PublicKey, YoctoNear};
+use oysterpack_smart_near::domain::{PublicKey, YoctoNear};
 use oysterpack_smart_near::near_sdk::json_types::ValidAccountId;
 use oysterpack_smart_near::near_sdk::{Promise, PromiseOrValue};
 use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
@@ -23,16 +23,18 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 ///    until EPOCH 7.
 /// 3. Staking adds liquidity for withdrawing unstaked NEAR that is locked on a first come, first
 ///    withdraw basis.
-/// 4. Transaction fee based model
-///    - instead of charging delegators a percentage of the staking rewards, a transaction fee based
-///      model is used:
-///      - configurable staking fee (0.8%)
-///    - fees are deposited in the staking pool treasury fund
+/// 4. More flexible commercial model supporting 2 types of fees that can be combined
+///    - staking fee - upfront 1 time fee that is charged based on percentage of NEAR staked
+///      - defaults to 80 BPS (0.8%)
+///    - earnings fee - charged as a percentage of earnings
+///      - default to 0 BPS
 /// 5. Profit sharing through dividends
 ///    - staking rewards earned by the treasury are distributed as dividends by burning STAKE tokens,
 ///      which boosts the yield, i.e., STAKE token value
-///    - dividends are paid out on each staking event, i.e., if the treasury has received staking
-///      rewards since the last staking, then the STAKE token equivalent will be burned
+///    - dividends are paid out on each staking/unstaking/withdrawal event, i.e., if the treasury
+///      has received staking rewards since the last staking, then the STAKE token equivalent will be burned
+/// 6. Earnings revenue distributions
+///    - earnings can be distributed via ['Treasury::ops_stake_treasury_distribution']
 ///
 /// The staking pool is integrated with the storage management API:
 /// - accounts must be registered with the contract in order to stake
@@ -45,7 +47,7 @@ use oysterpack_smart_near::{ErrCode, ErrorConst, Level, LogEvent};
 /// - STAKE received through transfer calls are treated as treasury deposits, i.e., the treasury
 ///   balance will be updated to reflect the deposit.
 ///
-pub trait StakingPool {
+pub trait StakingPool: Treasury + StakingPoolOperator {
     /// Consolidates the account's storage balance with the STAKE token balance
     ///
     /// Returns None if the account is not registered with the contract
@@ -176,7 +178,7 @@ pub trait StakingPool {
 
     fn ops_stake_pool_balances(&self) -> StakingPoolBalances;
 
-    fn ops_stake_fee(&self) -> BasisPoints;
+    fn ops_stake_fees(&self) -> Fees;
 
     fn ops_stake_public_key(&self) -> PublicKey;
 }

@@ -1,9 +1,9 @@
 use crate::*;
 use near_sdk::near_bindgen;
-use oysterpack_smart_near::domain::{BasisPoints, YoctoNear};
+use oysterpack_smart_near::domain::YoctoNear;
 use oysterpack_smart_near::near_sdk::{AccountId, Promise, PromiseOrValue};
 use oysterpack_smart_staking_pool::{
-    StakeAccountBalances, StakeActionCallbacks, StakingPool, StakingPoolBalances,
+    Fees, StakeAccountBalances, StakeActionCallbacks, StakingPool, StakingPoolBalances,
     StakingPoolOperator, StakingPoolOperatorCommand, Status, Treasury,
 };
 
@@ -67,8 +67,8 @@ impl StakingPool for Contract {
         Self::staking_pool().ops_stake_pool_balances()
     }
 
-    fn ops_stake_fee(&self) -> BasisPoints {
-        Self::staking_pool().ops_stake_fee()
+    fn ops_stake_fees(&self) -> Fees {
+        Self::staking_pool().ops_stake_fees()
     }
 
     fn ops_stake_public_key(&self) -> PublicKey {

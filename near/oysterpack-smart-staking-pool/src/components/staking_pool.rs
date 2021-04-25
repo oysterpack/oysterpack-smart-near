@@ -1,10 +1,11 @@
 use crate::{
-    OfflineReason, StakeAccountBalances, StakeAccountData, StakeActionCallbacks, StakedBalance,
-    StakingPool, StakingPoolBalances, StakingPoolOperator, StakingPoolOperatorCommand, Status,
-    Treasury, ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE, ERR_STAKE_ACTION_FAILED, LOG_EVENT_EARNINGS,
-    LOG_EVENT_LIQUIDITY, LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE,
+    Fees, OfflineReason, StakeAccountBalances, StakeAccountData, StakeActionCallbacks,
+    StakedBalance, StakingPool, StakingPoolBalances, StakingPoolOperator,
+    StakingPoolOperatorCommand, Status, Treasury, ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE,
+    ERR_STAKE_ACTION_FAILED, LOG_EVENT_EARNINGS, LOG_EVENT_LIQUIDITY,
+    LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE,
     LOG_EVENT_STATUS_ONLINE, LOG_EVENT_TREASURY_DEPOSIT, LOG_EVENT_TREASURY_DIVIDEND,
-    LOG_EVENT_UNSTAKE, MAX_STAKING_FEE, PERMISSION_TREASURER,
+    LOG_EVENT_UNSTAKE, MAX_FEE, PERMISSION_TREASURER,
 };
 use oysterpack_smart_account_management::{
     components::account_management::AccountManagementComponent, AccountDataObject, AccountMetrics,
@@ -76,7 +77,10 @@ impl Component for StakingPoolComponent {
 pub struct State {
     /// validator public key used for staking
     pub stake_public_key: PublicKey,
+    /// fee charged when staking funds
     pub staking_fee: BasisPoints,
+    /// fee charged based on earnings
+    pub earnings_fee: BasisPoints,
 
     pub status: Status,
 
@@ -221,6 +225,7 @@ impl Deploy for StakingPoolComponent {
             stake_public_key: config.stake_public_key,
             status: Status::Offline(OfflineReason::Stopped),
             staking_fee: config.staking_fee.unwrap_or(80.into()),
+            earnings_fee: config.earnings_fee.unwrap_or(0.into()),
             treasury_balance: YoctoNear::ZERO,
             last_contract_managed_total_balance: State::contract_managed_total_balance(),
         };
@@ -236,6 +241,7 @@ impl Deploy for StakingPoolComponent {
 pub struct StakingPoolComponentConfig {
     pub stake_public_key: PublicKey,
     pub staking_fee: Option<BasisPoints>,
+    pub earnings_fee: Option<BasisPoints>,
 }
 
 impl StakingPool for StakingPoolComponent {
@@ -510,8 +516,12 @@ impl StakingPool for StakingPoolComponent {
         )
     }
 
-    fn ops_stake_fee(&self) -> BasisPoints {
-        Self::state().staking_fee
+    fn ops_stake_fees(&self) -> Fees {
+        let state = Self::state();
+        Fees {
+            staking_fee: state.staking_fee,
+            earnings_fee: state.earnings_fee,
+        }
     }
 
     fn ops_stake_public_key(&self) -> PublicKey {
@@ -529,7 +539,7 @@ impl StakingPoolOperator for StakingPoolComponent {
             StakingPoolOperatorCommand::UpdatePublicKey(public_key) => {
                 Self::update_public_key(public_key)
             }
-            StakingPoolOperatorCommand::UpdateStakingFee(fee) => Self::update_staking_fee(fee),
+            StakingPoolOperatorCommand::UpdateFees(fees) => Self::update_staking_fees(fees),
         }
     }
 }
@@ -604,14 +614,22 @@ impl StakingPoolComponent {
         state.save();
     }
 
-    fn update_staking_fee(fee: BasisPoints) {
+    fn update_staking_fees(fees: Fees) {
         ERR_INVALID.assert(
-            || fee <= MAX_STAKING_FEE,
+            || fees.staking_fee <= MAX_FEE,
             || "max staking fee is 1000 BPS (10%)",
         );
-        ERR_INVALID.assert(|| *fee > 0, || "min staking fee is 1 BPS (0.01%)");
+        ERR_INVALID.assert(
+            || fees.earnings_fee <= MAX_FEE,
+            || "max earnings fee is 1000 BPS (10%)",
+        );
+        ERR_INVALID.assert(
+            || *fees.staking_fee > 0 || *fees.earnings_fee > 0,
+            || "min fee is 1 BPS (0.01%) for at least 1 fee type",
+        );
         let mut state = Self::state();
-        state.staking_fee = fee;
+        state.staking_fee = fees.staking_fee;
+        state.earnings_fee = fees.earnings_fee;
         state.save();
     }
 }
@@ -1005,12 +1023,35 @@ impl StakingPoolComponent {
         let earnings: YoctoNear = contract_managed_total_balance
             .saturating_sub(*state.last_contract_managed_total_balance)
             .into();
-        if earnings > YoctoNear::ZERO {
+        let owner_earnings = if earnings > YoctoNear::ZERO {
             LOG_EVENT_EARNINGS.log(earnings);
-            State::incr_total_staked_balance(earnings);
-        }
+
+            if state.earnings_fee > BasisPoints::ZERO {
+                let owner_earnings = state.earnings_fee * earnings;
+                // distributes earnings minus owner earnings
+                State::incr_total_staked_balance(earnings - owner_earnings);
+                owner_earnings
+            } else {
+                State::incr_total_staked_balance(earnings);
+                YoctoNear::ZERO
+            }
+        } else {
+            YoctoNear::ZERO
+        };
+
         state.last_contract_managed_total_balance = contract_managed_total_balance;
         state.treasury_balance = pay_treasury_dividend(self, state.treasury_balance);
+
+        // mint owner earnings only after rest of earnings are first distributed
+        if owner_earnings > YoctoNear::ZERO {
+            let owner_stake_earnings = self.near_stake_value_rounded_down(owner_earnings);
+            if owner_stake_earnings > TokenAmount::ZERO {
+                let owner_id = ContractOwnershipComponent.ops_owner();
+                self.stake_token.ft_mint(&owner_id, owner_stake_earnings);
+            }
+            State::incr_total_staked_balance(owner_earnings);
+        }
+
         state.save();
         state
     }
@@ -1176,6 +1217,7 @@ mod tests_staking_pool {
         StakingPoolComponent::deploy(StakingPoolComponentConfig {
             stake_public_key,
             staking_fee: None,
+            earnings_fee: None,
         });
     }
 
@@ -1469,8 +1511,8 @@ last_contract_managed_total_balance             {}
                     println!("{:#?}", logs);
 
                     println!("{}", serde_json::to_string_pretty(&balances).unwrap());
-                    let staking_fee =
-                        staking_pool.ops_stake_fee() * staking_pool.ops_stake_token_value(None);
+                    let staking_fee = staking_pool.ops_stake_fees().staking_fee
+                        * staking_pool.ops_stake_token_value(None);
                     assert!(balances.unstaked.is_none());
                     match balances.staked.as_ref() {
                         Some(stake) => {
@@ -1497,7 +1539,7 @@ last_contract_managed_total_balance             {}
                         "[INFO] [FT_MINT] account: owner, amount: 8000000000000000000000",
                         "[WARN] [STATUS_OFFLINE] ",
                     ]);
-                    let staking_fee = staking_pool.ops_stake_fee() * YOCTO;
+                    let staking_fee = staking_pool.ops_stake_fees().staking_fee * YOCTO;
                     assert_eq!(staking_pool.ops_stake_token_value(None), YOCTO.into());
                     assert_eq!(
                         ft_stake.ft_balance_of(to_valid_account_id(ACCOUNT)),
@@ -1586,7 +1628,7 @@ last_contract_managed_total_balance             {}
                     println!("{:#?}", logs);
 
                     println!("{}", serde_json::to_string_pretty(&balances).unwrap());
-                    let staking_fee = staking_pool.ops_stake_fee() * YOCTO;
+                    let staking_fee = staking_pool.ops_stake_fees().staking_fee * YOCTO;
                     assert!(balances.unstaked.is_none());
                     match balances.staked.as_ref() {
                         Some(stake) => {
@@ -1614,7 +1656,7 @@ last_contract_managed_total_balance             {}
                         "[INFO] [FT_MINT] account: owner, amount: 8000000000000000000000",
                         "[WARN] [STATUS_OFFLINE] ",
                     ]);
-                    let staking_fee = staking_pool.ops_stake_fee() * YOCTO;
+                    let staking_fee = staking_pool.ops_stake_fees().staking_fee * YOCTO;
                     assert_eq!(staking_pool.ops_stake_token_value(None), YOCTO.into());
                     assert_eq!(
                         ft_stake.ft_balance_of(to_valid_account_id(ACCOUNT)),
@@ -2088,11 +2130,11 @@ last_contract_managed_total_balance             {}
                 );
                 assert_eq!(
                     *treasury_balance.staked.as_ref().unwrap().stake,
-                    *(staking_pool.ops_stake_fee() * (10 * YOCTO))
+                    *(staking_pool.ops_stake_fees().staking_fee * (10 * YOCTO))
                 );
                 assert_eq!(
                     treasury_balance.staked.as_ref().unwrap().near_value,
-                    staking_pool.ops_stake_fee() * (10 * YOCTO)
+                    staking_pool.ops_stake_fees().staking_fee * (10 * YOCTO)
                 );
 
                 // Act - stake again - with new earnings - 0.1 NEAR
@@ -2557,7 +2599,7 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
                 let staked_balance =
                     if let PromiseOrValue::Value(balance) = staking_pool.ops_stake() {
-                        let staking_fee = staking_pool.ops_stake_fee() * YOCTO;
+                        let staking_fee = staking_pool.ops_stake_fees().staking_fee * YOCTO;
                         assert_eq!(
                             balance.staked.as_ref().unwrap().near_value,
                             (YOCTO - *staking_fee).into()
@@ -2625,7 +2667,7 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
                 let staked_balance =
                     if let PromiseOrValue::Value(balance) = staking_pool.ops_stake() {
-                        let staking_fee = staking_pool.ops_stake_fee() * YOCTO;
+                        let staking_fee = staking_pool.ops_stake_fees().staking_fee * YOCTO;
                         assert_eq!(
                             balance.staked.as_ref().unwrap().near_value,
                             (YOCTO - *staking_fee).into()
@@ -3593,7 +3635,7 @@ last_contract_managed_total_balance             {}
                         balances.unstaked.as_ref().unwrap().total,
                         balances_before_restaking.unstaked.as_ref().unwrap().total - 1000
                     );
-                    let staking_fee = staking_pool.ops_stake_fee() * 1000;
+                    let staking_fee = staking_pool.ops_stake_fees().staking_fee * 1000;
                     assert_eq!(
                         balances.staked.as_ref().unwrap().near_value,
                         (1000 - *staking_fee).into()
@@ -3712,7 +3754,7 @@ last_contract_managed_total_balance             {}
 
                     println!("{}", serde_json::to_string_pretty(&balances).unwrap());
                     assert!(balances.unstaked.is_none());
-                    let staking_fee = staking_pool.ops_stake_fee()
+                    let staking_fee = staking_pool.ops_stake_fees().staking_fee
                         * balance_before_restaking.unstaked.as_ref().unwrap().total;
                     assert_eq!(
                         balances.staked.as_ref().unwrap().near_value,
@@ -4139,7 +4181,7 @@ last_contract_managed_total_balance             {}
                     "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
                     "[INFO] [FT_MINT] account: owner, amount: 8000000000000000000000",
                 ]);
-                let staking_fee = staking_pool.ops_stake_fee() * YOCTO;
+                let staking_fee = staking_pool.ops_stake_fees().staking_fee * YOCTO;
                 assert_eq!(staking_pool.ops_stake_token_value(None), YOCTO.into());
                 assert_eq!(
                     ft_stake.ft_balance_of(to_valid_account_id(ACCOUNT)),
@@ -4230,7 +4272,7 @@ last_contract_managed_total_balance             {}
                     let logs = test_utils::get_logs();
                     println!("{:#?}", logs);
 
-                    let staking_fee = staking_pool.ops_stake_fee() * YOCTO;
+                    let staking_fee = staking_pool.ops_stake_fees().staking_fee * YOCTO;
 
                     let balances = staking_pool
                         .ops_stake_balance(to_valid_account_id(ACCOUNT))
@@ -4254,7 +4296,7 @@ last_contract_managed_total_balance             {}
                         "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
                         "[INFO] [FT_MINT] account: owner, amount: 8000000000000000000000",
                     ]);
-                    let staking_fee = staking_pool.ops_stake_fee() * YOCTO;
+                    let staking_fee = staking_pool.ops_stake_fees().staking_fee * YOCTO;
                     assert_eq!(staking_pool.ops_stake_token_value(None), YOCTO.into());
                     assert_eq!(
                         ft_stake.ft_balance_of(to_valid_account_id(ACCOUNT)),
@@ -5558,7 +5600,7 @@ last_contract_managed_total_balance             {}
                     .ops_stake_balance(to_valid_account_id(ACCOUNT))
                     .unwrap();
 
-                let staking_fee = staking_pool.ops_stake_fee() * YOCTO;
+                let staking_fee = staking_pool.ops_stake_fees().staking_fee * YOCTO;
                 assert_eq!(
                     staked_balance.staked.as_ref().unwrap().near_value,
                     (YOCTO - *staking_fee).into()
@@ -5646,7 +5688,7 @@ last_contract_managed_total_balance             {}
                     .ops_stake_balance(to_valid_account_id(ACCOUNT))
                     .unwrap();
 
-                let staking_fee = staking_pool.ops_stake_fee() * YOCTO;
+                let staking_fee = staking_pool.ops_stake_fees().staking_fee * YOCTO;
                 assert_eq!(
                     staked_balance.staked.as_ref().unwrap().near_value,
                     (YOCTO - *staking_fee).into()
@@ -6501,7 +6543,7 @@ last_contract_managed_total_balance             {}
                     balances.unstaked.as_ref().unwrap().total,
                     balances_before_restaking.unstaked.as_ref().unwrap().total - 1000
                 );
-                let staking_fee = staking_pool.ops_stake_fee() * 1000;
+                let staking_fee = staking_pool.ops_stake_fees().staking_fee * 1000;
                 assert_eq!(
                     balances.staked.as_ref().unwrap().near_value,
                     (1000 - *staking_fee).into()
@@ -6631,7 +6673,7 @@ last_contract_managed_total_balance             {}
                     .unwrap();
                 println!("{}", serde_json::to_string_pretty(&balances).unwrap());
                 assert!(balances.unstaked.is_none());
-                let staking_fee = staking_pool.ops_stake_fee()
+                let staking_fee = staking_pool.ops_stake_fees().staking_fee
                     * balance_before_restaking.unstaked.as_ref().unwrap().total;
                 assert_eq!(
                     balances.staked.as_ref().unwrap().near_value,
@@ -7878,16 +7920,19 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
 
                 let mut staking_pool = staking_pool();
-                let fee = staking_pool.ops_stake_fee();
-                staking_pool.ops_stake_operator_command(
-                    StakingPoolOperatorCommand::UpdateStakingFee((*fee + 1).into()),
+                let mut fees = staking_pool.ops_stake_fees();
+                fees.staking_fee += 1;
+                staking_pool
+                    .ops_stake_operator_command(StakingPoolOperatorCommand::UpdateFees(fees));
+                assert_eq!(
+                    *staking_pool.ops_stake_fees().staking_fee,
+                    *fees.staking_fee
                 );
-                assert_eq!(*staking_pool.ops_stake_fee(), *fee + 1);
 
-                staking_pool.ops_stake_operator_command(
-                    StakingPoolOperatorCommand::UpdateStakingFee(MAX_STAKING_FEE),
-                );
-                assert_eq!(staking_pool.ops_stake_fee(), MAX_STAKING_FEE);
+                fees.staking_fee = MAX_FEE;
+                staking_pool
+                    .ops_stake_operator_command(StakingPoolOperatorCommand::UpdateFees(fees));
+                assert_eq!(staking_pool.ops_stake_fees().staking_fee, MAX_FEE);
             }
 
             #[test]
@@ -7902,13 +7947,18 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
 
                 let mut staking_pool = staking_pool();
-                staking_pool.ops_stake_operator_command(
-                    StakingPoolOperatorCommand::UpdateStakingFee((*MAX_STAKING_FEE + 1).into()),
-                );
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::UpdateFees(
+                    Fees {
+                        staking_fee: (*MAX_FEE + 1).into(),
+                        earnings_fee: 0.into(),
+                    },
+                ));
             }
 
             #[test]
-            #[should_panic(expected = "[ERR] [INVALID] min staking fee is 1 BPS (0.01%)")]
+            #[should_panic(
+                expected = "[ERR] [INVALID] min fee is 1 BPS (0.01%) for at least 1 fee type"
+            )]
             fn update_fee_to_zero() {
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
@@ -7919,9 +7969,12 @@ last_contract_managed_total_balance             {}
                 testing_env!(ctx.clone());
 
                 let mut staking_pool = staking_pool();
-                staking_pool.ops_stake_operator_command(
-                    StakingPoolOperatorCommand::UpdateStakingFee((0).into()),
-                );
+                staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::UpdateFees(
+                    Fees {
+                        earnings_fee: 0.into(),
+                        staking_fee: 0.into(),
+                    },
+                ));
             }
         }
     }
