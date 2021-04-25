@@ -504,22 +504,10 @@ impl StakingPool for StakingPoolComponent {
     }
 
     fn ops_stake_pool_balances(&self) -> StakingPoolBalances {
-        let state = StakingPoolComponent::state();
-        let current_contract_managed_total_balance =
-            State::contract_managed_total_balance_in_view_mode();
-        StakingPoolBalances {
-            total_staked: State::total_staked_balance(),
-            total_stake_supply: self.stake_token.ft_total_supply(),
-            total_unstaked: State::total_unstaked_balance(),
-            unstaked_liquidity: State::liquidity(),
-            treasury_balance: state.treasury_balance,
-
-            current_contract_managed_total_balance,
-            last_contract_managed_total_balance: state.last_contract_managed_total_balance,
-            earnings: current_contract_managed_total_balance
-                .saturating_sub(*state.last_contract_managed_total_balance)
-                .into(),
-        }
+        StakingPoolBalances::new(
+            *StakingPoolComponent::state(),
+            self.stake_token.ft_total_supply(),
+        )
     }
 
     fn ops_stake_fee(&self) -> BasisPoints {
@@ -677,11 +665,16 @@ impl Treasury for StakingPoolComponent {
 
     fn ops_stake_treasury_distribution(&mut self) {
         let deposit = YoctoNear::from(env::attached_deposit());
-        ERR_NEAR_DEPOSIT_REQUIRED.assert(|| deposit > YoctoNear::ZERO);
-
-        self.state_with_updated_earnings();
-        State::add_liquidity(deposit);
-        self.stake(&env::current_account_id(), deposit, TokenAmount::ZERO);
+        let total_staked_balance_before_earnings = State::total_staked_balance();
+        let state = self.state_with_updated_earnings();
+        if deposit > YoctoNear::ZERO {
+            State::add_liquidity(deposit);
+            self.stake(&env::current_account_id(), deposit, TokenAmount::ZERO);
+        } else if state.status.is_online() {
+            if State::total_staked_balance() > total_staked_balance_before_earnings {
+                Self::create_stake_workflow(state.stake_public_key, &env::current_account_id());
+            }
+        }
     }
 
     fn ops_stake_treasury_transfer_to_owner(&mut self, amount: Option<YoctoNear>) {
@@ -910,8 +903,6 @@ impl StakingPoolComponent {
 
     /// - credit total staked balance and contract managed total balance with the staked amount
     /// - mints STAKE on the account for amount staked
-    /// - pays treasury dividend
-    ///   - update treasury balance
     /// - collects staking fee
     ///
     /// Returns the updated state after saving it to storage.
@@ -8227,15 +8218,131 @@ last_contract_managed_total_balance             {}
                 }
 
                 #[test]
-                #[should_panic(expected = "[ERR] [NEAR_DEPOSIT_REQUIRED] ")]
-                fn zero_attached_deposit() {
+                fn zero_attached_deposit_with_earnings_with_zero_total_supply() {
                     // Arrange
                     let mut ctx = new_context(OWNER);
                     testing_env!(ctx.clone());
 
                     deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
-
                     let mut staking_pool = staking_pool();
+
+                    // start staking
+                    ctx.predecessor_account_id = OWNER.to_string();
+                    testing_env!(ctx.clone());
+                    staking_pool
+                        .ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                    assert!(staking_pool.ops_stake_status().is_online());
+
+                    // Act
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    ctx.attached_deposit = 0;
+                    ctx.account_balance = env::account_balance() + YOCTO;
+                    testing_env!(ctx.clone());
+                    staking_pool.ops_stake_treasury_distribution();
+
+                    // Assert - when STAKE total supply is zero, then earnings are not distribute and
+                    // we expect no stake action
+                    assert!(test_utils::get_logs().is_empty());
+                    assert!(deserialize_receipts().is_empty());
+                }
+
+                #[test]
+                fn zero_attached_deposit_with_earnings_with_nonzero_total_supply() {
+                    // Arrange
+                    let mut ctx = new_context(OWNER);
+                    testing_env!(ctx.clone());
+
+                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    let mut staking_pool = staking_pool();
+
+                    // start staking
+                    ctx.predecessor_account_id = OWNER.to_string();
+                    testing_env!(ctx.clone());
+                    staking_pool
+                        .ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                    assert!(staking_pool.ops_stake_status().is_online());
+
+                    // register account
+                    let mut account_manager = account_manager();
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    ctx.attached_deposit = YOCTO;
+                    ctx.account_balance = env::account_balance();
+                    testing_env!(ctx.clone());
+                    account_manager.storage_deposit(None, None);
+
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    ctx.attached_deposit = YOCTO;
+                    ctx.account_balance = env::account_balance();
+                    testing_env!(ctx.clone());
+                    staking_pool.ops_stake();
+
+                    // Act
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    ctx.attached_deposit = 0;
+                    ctx.account_balance = env::account_balance() + YOCTO;
+                    testing_env!(ctx.clone());
+                    staking_pool.ops_stake_treasury_distribution();
+
+                    let logs = test_utils::get_logs();
+                    println!("{:#?}", logs);
+                    assert_eq!(logs, vec!["[INFO] [EARNINGS] 1000000000000000000000000",]);
+
+                    let receipts = deserialize_receipts();
+                    assert_eq!(receipts.len(), 2);
+                    {
+                        let receipt = &receipts[0];
+                        assert_eq!(receipt.receiver_id, env::current_account_id());
+                        match &receipt.actions[0] {
+                            Action::Stake(action) => {
+                                assert_eq!(action.stake, *State::total_staked_balance());
+                            }
+                            _ => panic!("expected Stake"),
+                        }
+                    }
+                    {
+                        let receipt = &receipts[1];
+                        assert_eq!(receipt.receiver_id, env::current_account_id());
+                        match &receipt.actions[0] {
+                            Action::FunctionCall(action) => {
+                                assert_eq!(action.method_name, "ops_stake_finalize");
+                                let args: StakeActionCallbackArgs =
+                                    serde_json::from_str(&action.args).unwrap();
+                                assert_eq!(args.account_id, env::current_account_id());
+                            }
+                            _ => panic!("expected FunctionCall"),
+                        }
+                    }
+                }
+
+                #[test]
+                fn zero_attached_deposit_with_zero_earnings_with_nonzero_total_supply() {
+                    // Arrange
+                    let mut ctx = new_context(OWNER);
+                    testing_env!(ctx.clone());
+
+                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    let mut staking_pool = staking_pool();
+
+                    // start staking
+                    ctx.predecessor_account_id = OWNER.to_string();
+                    testing_env!(ctx.clone());
+                    staking_pool
+                        .ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
+                    assert!(staking_pool.ops_stake_status().is_online());
+
+                    // register account
+                    let mut account_manager = account_manager();
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    ctx.attached_deposit = YOCTO;
+                    ctx.account_balance = env::account_balance();
+                    testing_env!(ctx.clone());
+                    account_manager.storage_deposit(None, None);
+
+                    ctx.predecessor_account_id = ACCOUNT.to_string();
+                    ctx.attached_deposit = YOCTO;
+                    ctx.account_balance = env::account_balance();
+                    testing_env!(ctx.clone());
+                    staking_pool.ops_stake();
 
                     // Act
                     ctx.predecessor_account_id = ACCOUNT.to_string();
@@ -8243,6 +8350,9 @@ last_contract_managed_total_balance             {}
                     ctx.account_balance = env::account_balance();
                     testing_env!(ctx.clone());
                     staking_pool.ops_stake_treasury_distribution();
+
+                    assert!(test_utils::get_logs().is_empty());
+                    assert!(deserialize_receipts().is_empty());
                 }
             }
 

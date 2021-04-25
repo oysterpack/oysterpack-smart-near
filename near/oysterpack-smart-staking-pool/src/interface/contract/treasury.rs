@@ -27,11 +27,9 @@ pub trait Treasury {
     /// This enables external sources of revenue to be distributed to STAKE owners.
     ///
     /// ## Notes
-    /// An alternative way to make a distribution is to transfer STAKE to the treasury account
-    /// directly, i.e., via the [`oysterpack_smart_fungible_token::FungibleToken::ft_transfer`] API
-    ///
-    /// ## Panics
-    /// if no deposit is attached
+    /// - An alternative way to make a distribution is to transfer STAKE to the treasury account
+    ///   directly, i.e., via the [`oysterpack_smart_fungible_token::FungibleToken::ft_transfer`] API
+    /// - if no deposit is made, then any collected earnings will simply be staked
     ///
     /// `#[payable]`
     fn ops_stake_treasury_distribution(&mut self);
