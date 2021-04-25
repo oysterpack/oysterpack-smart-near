@@ -1044,6 +1044,8 @@ impl StakingPoolComponent {
 
         // mint owner earnings only after rest of earnings are first distributed
         if owner_earnings > YoctoNear::ZERO {
+            // NOTE: because of rounding down, there might be some earnings that can't be converted
+            // into STAKE, which will end up being distributed into the pool
             let owner_stake_earnings = self.near_stake_value_rounded_down(owner_earnings);
             if owner_stake_earnings > TokenAmount::ZERO {
                 let owner_id = ContractOwnershipComponent.ops_owner();
@@ -9165,6 +9167,130 @@ last_contract_managed_total_balance             {}
                 YOCTO.into(),
                 TransferCallMessage("".to_string()),
             );
+        }
+    }
+
+    #[cfg(test)]
+    mod tests_fees {
+        use super::*;
+
+        #[test]
+        fn with_zero_staking_fee_nonzero_earnings_fee_with_zero_stake_supply() {
+            let mut ctx = new_context(OWNER);
+            testing_env!(ctx.clone());
+
+            deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+            let mut staking_pool = staking_pool();
+
+            staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::UpdateFees(Fees {
+                staking_fee: 0.into(),
+                earnings_fee: 100.into(),
+            }));
+
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.account_balance = env::account_balance() + YOCTO;
+            ctx.attached_deposit = 0;
+            testing_env!(ctx.clone());
+            let stake_token_value = staking_pool.ops_stake_token_value_with_earnings(None);
+
+            // Assert - no earnings are distributed
+            assert!(test_utils::get_logs().is_empty());
+
+            assert_eq!(stake_token_value, YOCTO.into());
+        }
+
+        #[test]
+        fn with_zero_staking_fee_nonzero_earnings_fee_with_some_stake_supply() {
+            let mut ctx = new_context(OWNER);
+            testing_env!(ctx.clone());
+
+            deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+            let mut staking_pool = staking_pool();
+            let mut account_manager = account_manager();
+
+            staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::UpdateFees(Fees {
+                staking_fee: 0.into(),
+                earnings_fee: 100.into(),
+            }));
+
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.account_balance = env::account_balance();
+            ctx.attached_deposit = YOCTO;
+            testing_env!(ctx.clone());
+            account_manager.storage_deposit(None, None);
+
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.account_balance = env::account_balance();
+            ctx.attached_deposit = 0;
+            testing_env!(ctx.clone());
+            staking_pool.ops_stake();
+
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.account_balance = env::account_balance() + YOCTO;
+            testing_env!(ctx.clone());
+            let stake_token_value = staking_pool.ops_stake_token_value_with_earnings(None);
+            println!("stake_token_value = {}", stake_token_value);
+
+            // Assert
+            let logs = test_utils::get_logs();
+            println!("{:#?}", logs);
+            assert_eq!(
+                logs,
+                vec![
+                    "[INFO] [EARNINGS] 1000000000000000000000000",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                    "[INFO] [FT_MINT] account: owner, amount: 5015281435196141122921",
+                ]
+            );
+
+            ctx.predecessor_account_id = ACCOUNT.to_string();
+            ctx.account_balance = env::account_balance();
+            testing_env!(ctx.clone());
+            let owner_earnings = staking_pool.ops_stake_fees().earnings_fee * YOCTO;
+            let (_owner_earnings, remainder) = staking_pool.near_to_stake(owner_earnings);
+            assert_eq!(
+                staking_pool
+                    .ops_stake_balance(to_valid_account_id(OWNER))
+                    .as_ref()
+                    .unwrap()
+                    .staked
+                    .as_ref()
+                    .unwrap()
+                    .near_value,
+                owner_earnings - remainder
+            );
+        }
+
+        #[test]
+        #[should_panic(expected = "[ERR] [INVALID] max earnings fee is 1000 BPS (10%)")]
+        fn update_to_above_max_earnings_fee() {
+            let ctx = new_context(OWNER);
+            testing_env!(ctx.clone());
+
+            deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+            let mut staking_pool = staking_pool();
+
+            staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::UpdateFees(Fees {
+                staking_fee: 0.into(),
+                earnings_fee: MAX_FEE + 1,
+            }));
+        }
+
+        #[test]
+        #[should_panic(
+            expected = "[ERR] [INVALID] min fee is 1 BPS (0.01%) for at least 1 fee type"
+        )]
+        fn update_to_zero_fees() {
+            let ctx = new_context(OWNER);
+            testing_env!(ctx.clone());
+
+            deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+            let mut staking_pool = staking_pool();
+
+            staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::UpdateFees(Fees {
+                staking_fee: 0.into(),
+                earnings_fee: 0.into(),
+            }));
         }
     }
 }
