@@ -30,6 +30,7 @@ use oysterpack_smart_fungible_token::components::fungible_token::{
     FungibleTokenComponent, FungibleTokenConfig,
 };
 use oysterpack_smart_fungible_token::*;
+use oysterpack_smart_near::domain::BasisPoints;
 use oysterpack_smart_near::{
     component::{Deploy, ManagesAccountData},
     domain::PublicKey,
@@ -48,8 +49,14 @@ pub struct Contract;
 #[near_bindgen]
 impl Contract {
     /// If owner is not specified, then predecessor Account ID will be set as the contract owner.
+    /// - owner account is granted admin permission
     #[init]
-    pub fn deploy(owner: Option<ValidAccountId>, stake_public_key: PublicKey) -> Self {
+    pub fn deploy(
+        stake_public_key: PublicKey,
+        owner: Option<ValidAccountId>,
+        staking_fee: Option<BasisPoints>,
+        earnings_fee: Option<BasisPoints>,
+    ) -> Self {
         let owner = owner.unwrap_or_else(|| env::predecessor_account_id().try_into().unwrap());
         ContractOwnershipComponent::deploy(owner.clone());
 
@@ -85,8 +92,8 @@ impl Contract {
 
         StakingPoolComponent::deploy(StakingPoolComponentConfig {
             stake_public_key,
-            staking_fee: None,
-            earnings_fee: None,
+            staking_fee,
+            earnings_fee,
         });
 
         Self
