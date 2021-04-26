@@ -152,6 +152,17 @@ pub fn deserialize_receipts() -> Vec<Receipt> {
         .collect()
 }
 
+pub fn get_receipts() -> Vec<Receipt> {
+    get_created_receipts()
+        .iter()
+        .map(|receipt| {
+            let json = serde_json::to_string_pretty(receipt).unwrap();
+            let receipt: Receipt = serde_json::from_str(&json).unwrap();
+            receipt
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
