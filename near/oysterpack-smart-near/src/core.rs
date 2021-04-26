@@ -22,5 +22,13 @@ use std::convert::TryFrom;
 
 /// Panics if `account_id` is not valid
 pub fn to_valid_account_id(account_id: &str) -> ValidAccountId {
-    ValidAccountId::try_from(account_id).unwrap()
+    match ValidAccountId::try_from(account_id) {
+        Ok(account_id) => account_id,
+        Err(_) => {
+            ERR_INVALID_ACCOUNT_ID.panic_with_message(account_id);
+            unreachable!();
+        }
+    }
 }
+
+pub const ERR_INVALID_ACCOUNT_ID: ErrorConst = ErrorConst(ErrCode("INVALID_ACCOUNT_ID"), "");
