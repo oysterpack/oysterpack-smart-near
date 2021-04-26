@@ -170,8 +170,10 @@ struct OnDeployArgs {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use near_sdk::serde_json;
-    use oysterpack_smart_near_test::*;
+    use oysterpack_smart_near_test::{
+        near_sdk::{serde_json, test_utils},
+        *,
+    };
 
     fn staking_public_key() -> PublicKey {
         serde_json::from_str("\"ed25519:GTi3gtSio5ZYYKTT8WVovqJEob6KqdmkTi8KqGSfwqdm\"").unwrap()
@@ -271,6 +273,48 @@ mod tests {
                 }
                 _ => panic!("expected FunctionCall"),
             }
+        }
+    }
+
+    #[test]
+    fn on_deploy_success() {
+        let mut ctx = new_context("bob");
+        testing_env!(ctx.clone());
+
+        ctx.predecessor_account_id = ctx.current_account_id.clone();
+        testing_env_with_promise_result_success(ctx.clone());
+
+        Contract.on_deploy("bob".to_string(), (10 * YOCTO).into());
+
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
+        assert_eq!(logs, vec!["[INFO] [STAKE_POOL_DEPLOY_SUCCESS] ",]);
+    }
+
+    #[test]
+    fn on_deploy_failure() {
+        let mut ctx = new_context("bob");
+        testing_env!(ctx.clone());
+
+        ctx.predecessor_account_id = ctx.current_account_id.clone();
+        testing_env_with_promise_result_failure(ctx.clone());
+
+        Contract.on_deploy("bob".to_string(), (10 * YOCTO).into());
+
+        let logs = test_utils::get_logs();
+        println!("{:#?}", logs);
+        assert_eq!(logs, vec!["[ERR] [STAKE_POOL_DEPLOY_FAILURE] ",]);
+
+        let receipts = deserialize_receipts();
+        assert_eq!(receipts.len(), 1);
+        let receipt = &receipts[0];
+        assert_eq!(receipt.receiver_id, "bob");
+        assert_eq!(receipt.actions.len(), 1);
+        match &receipt.actions[0] {
+            Action::Transfer(action) => {
+                assert_eq!(action.deposit, 10 * YOCTO);
+            }
+            _ => panic!("expected transfer"),
         }
     }
 }
