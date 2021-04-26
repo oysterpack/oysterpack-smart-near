@@ -37,7 +37,8 @@ impl Contract {
         Self
     }
 
-    /// Used to deploy an instance of the STAKE pool contract
+    /// Used to deploy an instance of the STAKE pool contract as child contract using the following
+    /// naming convention: `{stake_symbol}.{env::current_account_id}`
     ///
     /// ## Args
     /// - stake_symbol - will be used to create the child account ID, which will also be used as the STAKE FT symbol
