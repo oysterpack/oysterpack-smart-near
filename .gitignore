@@ -11,3 +11,4 @@ Cargo.lock
 /near/target/
 /near/oysterpack-smart-stake/neardev/
 /temp/
+**/neardev
