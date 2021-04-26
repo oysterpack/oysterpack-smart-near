@@ -14,12 +14,18 @@ pub struct Contract;
 
 #[near_bindgen]
 impl Contract {
+    #[payable]
     pub fn deploy(
+        stake_pool_id: String,
         stake_public_key: PublicKey,
         owner: Option<ValidAccountId>,
         staking_fee: Option<BasisPoints>,
         earnings_fee: Option<BasisPoints>,
     ) -> Promise {
+        let stake_contract_wasm_bytes = include_bytes!(
+            "../../target/wasm32-unknown-unknown/release/oysterpack_smart_stake.wasm"
+        );
+
         todo!()
     }
 }
@@ -27,7 +33,14 @@ impl Contract {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn load_stake_contract_wasm_file() {
+        let stake_contract_wasm_bytes = include_bytes!(
+            "../../target/wasm32-unknown-unknown/release/oysterpack_smart_stake.wasm"
+        )
+        .to_vec();
+        println!(
+            "stake_contract_wasm_bytes.len() = {}",
+            stake_contract_wasm_bytes.len()
+        );
     }
 }
