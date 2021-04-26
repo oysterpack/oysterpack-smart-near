@@ -1,0 +1,16 @@
+[package]
+name = "oysterpack-smart-stake-factory"
+version = "0.1.0"
+authors = ["oysterpack.inc <2zP6OaymGZhJTHFvQMzp6Ze>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+oysterpack-smart-near = {path = "../oysterpack-smart-near"}
+
+near-sdk = "3"
+
+[dev-dependencies]
+oysterpack-smart-near-test = {path = "../oysterpack-smart-near-test"}

@@ -1,0 +1,44 @@
+env_files = ["./neardev/dev-account.env"]
+
+extend = "../Makefile.toml"
+
+[env]
+PACKAGE = "oysterpack_smart_stake_factory"
+
+[tasks.build-wasm]
+private = true
+command = "cargo"
+    args = ["build", "--target", "wasm32-unknown-unknown", "--release"]
+
+[tasks.build-release]
+description = "Optimizes the wasm file for small size"
+category = "Build"
+command = "wasm-opt"
+args = ["../target/wasm32-unknown-unknown/release/${PACKAGE}.wasm", "-Oz", "-o", "../target/wasm32-unknown-unknown/release/${PACKAGE}.wasm"]
+dependencies = ["build-wasm"]
+
+[tasks.twiggy]
+description = "https://rustwasm.github.io/twiggy/index.html"
+command = "twiggy"
+args = ["top", "-n", "10","../target/wasm32-unknown-unknown/release/${PACKAGE}.wasm" ]
+
+[tasks.wasm-ls]
+script_runner = "@duckscript"
+script = '''
+ls -la ../target/wasm32-unknown-unknown/release/${PACKAGE}.wasm
+'''
+
+[tasks.near-dev-deploy]
+command = "near"
+args = ["dev-deploy", "../target/wasm32-unknown-unknown/release/${PACKAGE}.wasm"]
+dependencies = ["build-release"]
+
+[tasks.near-state]
+command = "near"
+args = ["state", "${CONTRACT_NAME}"]
+
+[tasks.near-deploy-init]
+script_runner = "@duckscript"
+script = '''
+export NEAR_ENV=${NEAR_ENV}
+'''
