@@ -4,7 +4,6 @@ mod components;
 mod contract_metrics;
 mod contract_operator;
 mod contract_ownership;
-mod contract_sale;
 mod fungible_token;
 mod staking_pool;
 mod storage_management;
@@ -14,22 +13,21 @@ use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
     env,
     json_types::ValidAccountId,
-    near_bindgen, PanicOnDefault,
+    near_bindgen, serde_json, PanicOnDefault,
 };
 use oysterpack_smart_account_management::{
     components::account_management::AccountManagementComponentConfig, AccountRepository,
     StorageUsageBounds,
 };
 use oysterpack_smart_contract::{
-    components::contract_operator::ContractOperatorComponent, ContractOperator,
-};
-use oysterpack_smart_contract::{
     components::contract_ownership::ContractOwnershipComponent, ContractOwnership,
 };
+use oysterpack_smart_contract::{ContractNearBalances, CONTRACT_LOCKED_STORAGE_BALANCE};
 use oysterpack_smart_fungible_token::components::fungible_token::{
     FungibleTokenComponent, FungibleTokenConfig,
 };
 use oysterpack_smart_fungible_token::*;
+use oysterpack_smart_near::component::LOG_EVENT_DEPLOYMENT;
 use oysterpack_smart_near::domain::BasisPoints;
 use oysterpack_smart_near::{
     component::{Deploy, ManagesAccountData},
@@ -63,22 +61,32 @@ impl Contract {
     ) -> Self {
         let owner = owner.unwrap_or_else(|| env::predecessor_account_id().try_into().unwrap());
         ContractOwnershipComponent::deploy(owner.clone());
+        LOG_EVENT_DEPLOYMENT.log("ContractOwnershipComponent");
 
         AccountManager::deploy(AccountManagementComponentConfig {
             storage_usage_bounds: None,
             admin_account: owner.clone(),
             component_account_storage_mins: Some(vec![StakeFungibleToken::account_storage_min]),
         });
+        LOG_EVENT_DEPLOYMENT.log("AccountManagementComponent");
 
         // transfer any contract balance to the owner - minus the contract operational balance
         {
-            let mut contract_operator = ContractOperatorComponent::new(Self::account_manager());
-            contract_operator.ops_operator_lock_storage_balance(10000.into());
+            // lock balance for contract operational storage balance
+            ContractNearBalances::set_balance(
+                CONTRACT_LOCKED_STORAGE_BALANCE,
+                (env::storage_byte_cost() * 10000).into(),
+            );
+
+            LOG_EVENT_DEPLOYMENT.log("locked balance for 10K contract storage");
+
             let account_manager = Self::account_manager();
             let mut owner_account = account_manager.registered_account_near_data(owner.as_ref());
-            owner_account
-                .incr_near_balance(ContractOwnershipComponent.ops_owner_balance().available);
+            let owner_balance = ContractOwnershipComponent.ops_owner_balance().available;
+            owner_account.incr_near_balance(owner_balance);
             owner_account.save();
+
+            LOG_EVENT_DEPLOYMENT.log(format!("owner balance = {}", owner_balance));
         }
 
         let stake_symbol = stake_symbol.unwrap_or_else(|| {
@@ -89,24 +97,30 @@ impl Contract {
             }
         });
 
+        let stake_metadata = Metadata {
+            spec: Spec(FT_METADATA_SPEC.to_string()),
+            name: Name::from("STAKE"),
+            symbol: Symbol(stake_symbol.to_uppercase()),
+            decimals: 24,
+            icon: None,
+            reference: None,
+            reference_hash: None,
+        };
         StakeFungibleToken::deploy(FungibleTokenConfig {
-            metadata: Metadata {
-                spec: Spec(FT_METADATA_SPEC.to_string()),
-                name: Name::from("STAKE"),
-                symbol: Symbol(stake_symbol.to_uppercase()),
-                decimals: 24,
-                icon: None,
-                reference: None,
-                reference_hash: None,
-            },
+            metadata: stake_metadata.clone(),
             token_supply: 0,
         });
+        LOG_EVENT_DEPLOYMENT.log(format!(
+            "FungibleTokenComponent {}",
+            serde_json::to_string_pretty(&stake_metadata).unwrap()
+        ));
 
         StakingPoolComponent::deploy(StakingPoolComponentConfig {
             stake_public_key,
             staking_fee: staking_fee.or(Some(0.into())),
             earnings_fee: earnings_fee.or(Some(100.into())),
         });
+        LOG_EVENT_DEPLOYMENT.log("StakingPoolComponent");
 
         Self
     }

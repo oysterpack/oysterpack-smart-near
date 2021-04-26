@@ -317,4 +317,35 @@ mod tests {
             _ => panic!("expected transfer"),
         }
     }
+
+    #[test]
+    fn serialize_deserialize_deploy_args() {
+        let stake_public_key =
+            serde_json::from_str("\"ed25519:GTi3gtSio5ZYYKTT8WVovqJEob6KqdmkTi8KqGSfwqdm\"")
+                .unwrap();
+        let args = DeployArgs {
+            stake_symbol: "PEARL".to_string(),
+            stake_public_key,
+            owner: None,
+            staking_fee: None,
+            earnings_fee: None,
+        };
+
+        let json = serde_json::to_string(&args).unwrap();
+        println!("{}", json);
+
+        let json = r#"{"stake_symbol":"PEARL","stake_public_key":"ed25519:GTi3gtSio5ZYYKTT8WVovqJEob6KqdmkTi8KqGSfwqdm"}"#;
+        let args2: DeployArgs = serde_json::from_str(&json).unwrap();
+        assert_eq!(args2, args);
+    }
+
+    #[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
+    #[serde(crate = "near_sdk::serde")]
+    struct DeployArgs {
+        stake_symbol: String,
+        stake_public_key: PublicKey,
+        owner: Option<ValidAccountId>,
+        staking_fee: Option<BasisPoints>,
+        earnings_fee: Option<BasisPoints>,
+    }
 }

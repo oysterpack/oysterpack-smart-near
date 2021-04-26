@@ -131,6 +131,12 @@ near call $CONTRACT_NAME ops_stake_treasury_distribution --accountId oysterpack.
 near call $CONTRACT_NAME ops_stake_treasury_transfer_to_owner --accountId oysterpack.testnet --args '{"amount":"1000000000000000000000000"}'
 ```
 
+### STAKE Pool Factory
+```shell
+near call $CONTRACT_NAME deploy --accountId oysterpack.testnet --amount 10 --gas 300000000000000 --args '{"stake_symbol":"PEARL","stake_public_key":"ed25519:GTi3gtSio5ZYYKTT8WVovqJEob6KqdmkTi8KqGSfwqdm"}'
+
+```
+
 # 1000000000000000000000000     - 1 NEAR
 # 
 # 1000000000000                 - 1 TGas

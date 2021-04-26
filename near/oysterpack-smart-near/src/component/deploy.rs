@@ -1,3 +1,5 @@
+use crate::{Level, LogEvent};
+
 /// Provides standard interface pattern for contracts to use at deployment time to run component
 /// related deployment code.
 ///
@@ -9,3 +11,5 @@ pub trait Deploy {
     /// - main use case is to initialize any service state
     fn deploy(config: Self::Config);
 }
+
+pub const LOG_EVENT_DEPLOYMENT: LogEvent = LogEvent(Level::INFO, "DEPLOYMENT");
