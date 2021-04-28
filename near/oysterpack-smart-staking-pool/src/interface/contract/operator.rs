@@ -38,5 +38,21 @@ mod tests {
             "{}",
             serde_json::to_string_pretty(&StakingPoolOperatorCommand::StartStaking).unwrap()
         );
+        println!(
+            "{}",
+            serde_json::to_string(&StakingPoolOperatorCommand::UpdateFees(Fees {
+                staking_fee: 1.into(),
+                earnings_fee: 50.into()
+            }))
+            .unwrap()
+        );
+        println!(
+            "{}",
+            serde_json::to_string(&StakingPoolOperatorCommand::UpdatePublicKey(
+                serde_json::from_str(r#""ed25519:GTi3gtSio5ZYYKTT8WVovqJEob6KqdmkTi8KqGSfwqdm""#)
+                    .unwrap()
+            ))
+            .unwrap()
+        );
     }
 }

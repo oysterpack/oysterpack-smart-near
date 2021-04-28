@@ -120,6 +120,8 @@ near call $CONTRACT_NAME ops_stake_transfer --accountId oysterpack.testnet --arg
 near call $CONTRACT_NAME ops_stake_operator_command --args '{"command":"StartStaking"}' --accountId oysterpack.testnet
 
 near call $CONTRACT_NAME ops_stake_operator_command --args '{"command":"StopStaking"}' --accountId oysterpack.testnet
+
+near call $CONTRACT_NAME ops_stake_operator_command --args '{"command":{"UpdateFees":{"staking_fee":1,"earnings_fee":50}}}' --accountId $oysterpack.testnet
 ```
 
 ## Staking Pool Treasury
@@ -137,7 +139,8 @@ near call $CONTRACT_NAME deploy --accountId oysterpack.testnet --amount 6 --gas 
 '{"stake_symbol":"PEARL","stake_public_key":"ed25519:GTi3gtSio5ZYYKTT8WVovqJEob6KqdmkTi8KqGSfwqdm","earnings_fee":50,"staking_fee":1}'
 ```
 
-# 1000000000000000000000000     - 1 NEAR
-# 
-# 1000000000000                 - 1 TGas
+#   1000000000000000000000000     - 1 NEAR
+# 0.0003930000000000000000000
+
+# 1000000000000                   - 1 TGas
 # 
