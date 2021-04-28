@@ -33,6 +33,11 @@ command = "near"
 args = ["dev-deploy", "../target/wasm32-unknown-unknown/release/${PACKAGE}.wasm"]
 dependencies = ["build-release"]
 
+[tasks.near-testnet-deploy]
+command = "near"
+args = ["deploy", "--accountId", "stake-v1.oysterpack.testnet", "--wasmFile", "../target/wasm32-unknown-unknown/release/${PACKAGE}.wasm"]
+dependencies = ["build-release"]
+
 [tasks.near-state]
 command = "near"
 args = ["state", "${CONTRACT_NAME}"]
