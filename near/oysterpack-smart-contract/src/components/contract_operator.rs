@@ -1,3 +1,5 @@
+//! [`ContractOperatorComponent`]
+
 use crate::contract::contract_operator::CONTRACT_LOCKED_STORAGE_BALANCE;
 use crate::interface::contract::contract_operator::ContractOperator;
 use crate::ContractNearBalances;

@@ -99,6 +99,7 @@ near view $CONTRACT_NAME ops_stake_pool_balances
 near view $CONTRACT_NAME ops_stake_fee
 near view $CONTRACT_NAME ops_stake_public_key
 near view $CONTRACT_NAME ops_stake_token_value
+near call $CONTRACT_NAME ops_stake_token_value_with_earnings --account_id oysterpack.testnet
 
 near view $CONTRACT_NAME ops_stake_balance --args '{"account_id":"alfio-zappala-oysterpack.testnet"}'
 
@@ -109,6 +110,7 @@ near call $CONTRACT_NAME ops_stake --accountId oysterpack.testnet --amount 1
 near call $CONTRACT_NAME ops_unstake --accountId alfio-zappala-oysterpack.testnet --args '{"amount":"1000000000000000000000000"}'
 
 near call $CONTRACT_NAME ops_restake --accountId alfio-zappala-oysterpack.testnet
+near call $CONTRACT_NAME ops_restake --accountId alfio-zappala-oysterpack.testnet -args '{"amount":"100000000000000000000000"}'
 
 near call $CONTRACT_NAME ops_stake_withdraw --accountId alfio-zappala-oysterpack.testnet 
 
