@@ -2,11 +2,7 @@ use crate::data::numbers::U256;
 use crate::domain::YoctoNear;
 use near_sdk::{
     borsh::{self, BorshDeserialize, BorshSerialize},
-    serde::{
-        de::{self, Visitor},
-        Deserialize, Deserializer, Serialize, Serializer,
-    },
-    serde_json,
+    serde::{Deserialize, Serialize},
 };
 use std::ops::{Add, AddAssign, Mul};
 use std::{
@@ -22,6 +18,8 @@ use std::{
 #[derive(
     BorshSerialize,
     BorshDeserialize,
+    Serialize,
+    Deserialize,
     Debug,
     Clone,
     Copy,
@@ -32,6 +30,7 @@ use std::{
     Default,
     Hash,
 )]
+#[serde(crate = "near_sdk::serde")]
 pub struct BasisPoints(pub u16);
 
 impl BasisPoints {
@@ -75,51 +74,6 @@ impl DerefMut for BasisPoints {
 impl Display for BasisPoints {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
-    }
-}
-
-impl Serialize for BasisPoints {
-    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
-    where
-        S: Serializer,
-    {
-        let value = self.0.to_string();
-        serializer.serialize_str(&value)
-    }
-}
-
-impl<'de> Deserialize<'de> for BasisPoints {
-    fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_str(BasisPointVisitor)
-    }
-}
-
-struct BasisPointVisitor;
-
-impl<'de> Visitor<'de> for BasisPointVisitor {
-    type Value = BasisPoints;
-
-    fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
-        formatter.write_str("u16 serialized as string")
-    }
-
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        let value: u16 = serde_json::from_str(v)
-            .map_err(|_| de::Error::custom("JSON parsing failed for BasisPoint"))?;
-        Ok(BasisPoints(value))
-    }
-
-    fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        self.visit_str(&v)
     }
 }
 
