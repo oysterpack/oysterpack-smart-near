@@ -13,6 +13,15 @@ pub trait ContractOperator {
     /// ## Panics
     /// - requires operator permission
     fn ops_operator_lock_storage_balance(&mut self, storage_usage: StorageUsage);
+
+    /// Allows the owner to grants admin permission himself
+    ///
+    /// The owner should always be able to have admin access. If the admin permission was revoked
+    /// from the owner, then this enables the owner to grant admin to himself.
+    ///
+    /// ## Panics
+    /// If not invoked by the owner account
+    fn ops_owner_grant_admin(&mut self);
 }
 
 /// used by ['ContractOwnership::ops_owner_lock_balance`]
