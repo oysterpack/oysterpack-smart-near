@@ -38,6 +38,14 @@ command = "near"
 args = ["deploy", "--accountId", "stake-v1.oysterpack.testnet", "--wasmFile", "../target/wasm32-unknown-unknown/release/${PACKAGE}.wasm"]
 dependencies = ["build-release"]
 
+[tasks.near-guildnet-deploy]
+command = "near"
+args = [
+    "deploy", "--accountId", "stake-v1.oysterpack.guildnet", "--wasmFile", "../target/wasm32-unknown-unknown/release/${PACKAGE}.wasm",
+    "--nodeUrl", "https://rpc.openshards.io/", "--walletUrl", "https://wallet.openshards.io/", "--networkId", "guildnet",
+]
+dependencies = ["build-release"]
+
 [tasks.near-state]
 command = "near"
 args = ["state", "${CONTRACT_NAME}"]

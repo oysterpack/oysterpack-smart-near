@@ -29,3 +29,9 @@ cd near/oysterpack-smart-stake
 echo $CONTRACT_NAME
 near call $CONTRACT_NAME deploy --accountId oysterpack.testnet --args '{"stake_public_key":"ed25519:AC1pVDXsE8sZiLAqLTDa3sD8DH74U5yUDaYKWeBwwyJj"}'
 ```
+
+## Setting up the validator node
+- https://www.digitalocean.com/community/tutorials/how-to-configure-ssh-key-based-authentication-on-a-linux-server
+
+### Digital Ocean - GuildNet
+- droplet: oysterpack-validator-guildnet-1
