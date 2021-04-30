@@ -96,9 +96,10 @@ near view $CONTRACT_NAME ft_metadata
 ```shell
 near view $CONTRACT_NAME ops_stake_status
 near view $CONTRACT_NAME ops_stake_pool_balances
-near view $CONTRACT_NAME ops_stake_fee
+near view $CONTRACT_NAME ops_stake_fees
 near view $CONTRACT_NAME ops_stake_public_key
 near view $CONTRACT_NAME ops_stake_token_value
+near view $CONTRACT_NAME ops_stake_token_value --args '{"amount":"5000000000000000000000000"}'
 near call $CONTRACT_NAME ops_stake_token_value_with_earnings --account_id oysterpack.testnet
 
 near view $CONTRACT_NAME ops_stake_balance --args '{"account_id":"alfio-zappala-oysterpack.testnet"}'
@@ -113,6 +114,7 @@ near call $CONTRACT_NAME ops_restake --accountId alfio-zappala-oysterpack.testne
 near call $CONTRACT_NAME ops_restake --accountId alfio-zappala-oysterpack.testnet -args '{"amount":"100000000000000000000000"}'
 
 near call $CONTRACT_NAME ops_stake_withdraw --accountId alfio-zappala-oysterpack.testnet 
+near call $CONTRACT_NAME ops_stake_withdraw --accountId alfio-zappala-oysterpack.testnet -args '{"amount":"100000000000000000000000"}'
 
 near call $CONTRACT_NAME ops_stake_transfer --accountId oysterpack.testnet --args '{"receiver_id":"alfio-zappala-oysterpack.testnet","amount":"1000000000000000000000000"}' --amount 0.000000000000000000000001
 ```
@@ -139,6 +141,10 @@ near call $CONTRACT_NAME ops_stake_treasury_transfer_to_owner --accountId oyster
 ```shell
 near call $CONTRACT_NAME deploy --accountId oysterpack.testnet --amount 6 --gas 300000000000000 --args \
 '{"stake_symbol":"PEARL","stake_public_key":"ed25519:GTi3gtSio5ZYYKTT8WVovqJEob6KqdmkTi8KqGSfwqdm","earnings_fee":50,"staking_fee":1}'
+
+# guildnet
+near-guildnet call stake-v1.oysterpack.guildnet deploy --accountId oysterpack.guildnet --amount 6 --gas 300000000000000 --args \
+'{"stake_symbol":"PEARL","stake_public_key":"ed25519:67qRSN1Cnkx6y7e21bJq3f7vEg89PSjxRBN57mY2dReg","earnings_fee":50,"staking_fee":1}'
 ```
 
 #   1000000000000000000000000     - 1 NEAR
@@ -146,3 +152,7 @@ near call $CONTRACT_NAME deploy --accountId oysterpack.testnet --amount 6 --gas 
 
 # 1000000000000                   - 1 TGas
 # 
+
+Apr 29 19:13:18 validator neard[1122]: Apr 29 19:13:18.487  INFO stats: #18216849 Downloading headers 29.98% (6160534)  18/18/40 peers ⬇ 385.8kiB/s ⬆ 0.4kiB/s 0.00 bps 0 gas/s CPU: 41%, Mem: 545.1 MiB
+Apr 29 19:13:28 validator neard[1122]: Apr 29 19:13:28.491  INFO stats: #18216849 Downloading headers 30.00% (6159016)  18/18/40 peers ⬇ 364.8kiB/s ⬆ 0.4kiB/s 0.00 bps 0 gas/s CPU: 22%, Mem: 545.1 MiB
+Apr 29 19:13:38 validator neard[1122]: Apr 29 19:13:38.495  INFO stats: #18216849 Downloading headers 30.02% (6156982)  18/18/40 peers ⬇ 366.3kiB/s ⬆ 0.4kiB/s 0.00 bps 0 gas/s CPU: 42%, Mem: 545.1 MiB
