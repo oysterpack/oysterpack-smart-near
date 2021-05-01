@@ -35,3 +35,7 @@ near call $CONTRACT_NAME deploy --accountId oysterpack.testnet --args '{"stake_p
 
 ### Digital Ocean - GuildNet
 - droplet: oysterpack-validator-guildnet-1
+```shell
+iptables -t nat -A PREROUTING -p tcp --dport 24567 -j DNAT --to-destination 10.195.213.223:24567
+lxc config device add validator port24567 proxy listen=tcp:0.0.0.0:25567 connect=tcp:127.0.0.1:24567
+```
