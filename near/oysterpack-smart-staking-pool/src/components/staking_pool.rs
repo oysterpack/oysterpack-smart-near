@@ -1317,8 +1317,8 @@ mod tests_staking_pool {
     const OWNER: &str = "owner";
     const ACCOUNT: &str = "bob";
 
-    pub fn deploy_stake_contract(owner: Option<ValidAccountId>, stake_public_key: PublicKey) {
-        let owner = owner.unwrap_or_else(|| env::predecessor_account_id().try_into().unwrap());
+    pub fn deploy_stake_contract(stake_public_key: PublicKey) {
+        let owner = to_valid_account_id(&env::predecessor_account_id());
         ContractOwnershipComponent::deploy(owner.clone());
 
         AccountManager::deploy(AccountManagementComponentConfig {
@@ -1355,6 +1355,8 @@ mod tests_staking_pool {
             staking_fee: None,
             earnings_fee: None,
         });
+
+        println!("STAKE contract has been deployed");
     }
 
     fn account_manager() -> AccountManager {
@@ -1424,7 +1426,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
                 let ft_stake = ft_stake();
@@ -1605,7 +1607,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let contract_managed_total_balance = State::contract_managed_total_balance();
 
                 let mut account_manager = account_manager();
@@ -1719,7 +1721,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let contract_managed_total_balance = State::contract_managed_total_balance();
 
                 let mut account_manager = account_manager();
@@ -1838,7 +1840,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut staking_pool = staking_pool();
 
@@ -1858,7 +1860,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut staking_pool = staking_pool();
                 let mut account_manager = account_manager();
 
@@ -1883,7 +1885,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
 
@@ -1972,7 +1974,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
 
@@ -2046,7 +2048,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
 
@@ -2361,7 +2363,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let contract_managed_total_balance = State::contract_managed_total_balance();
 
                 let mut staking_pool = staking_pool();
@@ -2455,7 +2457,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -2551,7 +2553,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -2648,7 +2650,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut staking_pool = staking_pool();
 
                 ctx.predecessor_account_id = ACCOUNT.to_string();
@@ -2664,7 +2666,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut staking_pool = staking_pool();
                 let mut account_manager = account_manager();
 
@@ -2687,7 +2689,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut staking_pool = staking_pool();
                 let mut account_manager = account_manager();
 
@@ -2715,7 +2717,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -2783,7 +2785,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -2869,7 +2871,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -2949,7 +2951,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -2989,7 +2991,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -3070,7 +3072,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -3154,7 +3156,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -3244,7 +3246,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -3322,7 +3324,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut staking_pool = staking_pool();
                 assert!(!staking_pool.ops_stake_status().is_online());
@@ -3341,7 +3343,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut staking_pool = staking_pool();
                 assert!(!staking_pool.ops_stake_status().is_online());
@@ -3359,7 +3361,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -3409,7 +3411,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -3449,7 +3451,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -3501,7 +3503,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -3559,7 +3561,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -3616,7 +3618,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -3704,7 +3706,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -3789,7 +3791,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -3828,7 +3830,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -3909,7 +3911,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut staking_pool = staking_pool();
 
@@ -3928,7 +3930,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut staking_pool = staking_pool();
 
@@ -3946,7 +3948,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -4041,7 +4043,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -4143,7 +4145,7 @@ last_contract_managed_total_balance             {}
             ctx.predecessor_account_id = OWNER.to_string();
             testing_env!(ctx.clone());
 
-            deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+            deploy_stake_contract(staking_public_key());
 
             let mut account_manager = account_manager();
             let mut staking_pool = staking_pool();
@@ -4218,7 +4220,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let contract_managed_total_balance = State::contract_managed_total_balance();
 
                 let mut account_manager = account_manager();
@@ -4358,7 +4360,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let contract_managed_total_balance = State::contract_managed_total_balance();
 
                 let mut account_manager = account_manager();
@@ -4477,7 +4479,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
                 let ft_stake = ft_stake();
@@ -4668,7 +4670,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut staking_pool = staking_pool();
                 // start staking
@@ -4693,7 +4695,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut staking_pool = staking_pool();
                 let mut account_manager = account_manager();
 
@@ -4724,7 +4726,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
 
@@ -4820,7 +4822,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
 
@@ -4900,7 +4902,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
 
@@ -5172,7 +5174,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let contract_managed_total_balance = State::contract_managed_total_balance();
 
                 let mut staking_pool = staking_pool();
@@ -5313,7 +5315,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -5464,7 +5466,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -5612,7 +5614,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut staking_pool = staking_pool();
 
                 // start staking
@@ -5634,7 +5636,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut staking_pool = staking_pool();
                 let mut account_manager = account_manager();
 
@@ -5663,7 +5665,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut staking_pool = staking_pool();
                 let mut account_manager = account_manager();
 
@@ -5697,7 +5699,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -5786,7 +5788,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -5891,7 +5893,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -5969,7 +5971,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -6052,7 +6054,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -6131,7 +6133,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -6214,7 +6216,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut staking_pool = staking_pool();
                 // start staking
@@ -6237,7 +6239,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut staking_pool = staking_pool();
                 // start staking
@@ -6259,7 +6261,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -6310,7 +6312,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -6354,7 +6356,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -6404,7 +6406,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -6460,7 +6462,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -6515,7 +6517,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -6603,7 +6605,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -6736,7 +6738,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -6868,7 +6870,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut staking_pool = staking_pool();
                 // start staking
@@ -6892,7 +6894,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut staking_pool = staking_pool();
                 // start staking
@@ -6915,7 +6917,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -7012,7 +7014,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut account_manager = account_manager();
                 let mut staking_pool = staking_pool();
@@ -7131,7 +7133,7 @@ last_contract_managed_total_balance             {}
                     ctx.predecessor_account_id = OWNER.to_string();
                     testing_env!(ctx.clone());
 
-                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    deploy_stake_contract(staking_public_key());
 
                     let mut account_manager = account_manager();
                     let mut staking_pool = staking_pool();
@@ -7196,7 +7198,7 @@ last_contract_managed_total_balance             {}
                     ctx.predecessor_account_id = OWNER.to_string();
                     testing_env!(ctx.clone());
 
-                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    deploy_stake_contract(staking_public_key());
 
                     let mut account_manager = account_manager();
                     let mut staking_pool = staking_pool();
@@ -7305,7 +7307,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut staking_pool = staking_pool();
 
                 // start staking
@@ -7330,7 +7332,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut staking_pool = staking_pool();
 
                 // start staking
@@ -7363,7 +7365,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut staking_pool = staking_pool();
 
                 // start staking
@@ -7431,7 +7433,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut staking_pool = staking_pool();
 
                 // Act
@@ -7453,7 +7455,7 @@ last_contract_managed_total_balance             {}
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut staking_pool = staking_pool();
 
                 // start staking
@@ -7493,7 +7495,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut staking_pool = staking_pool();
                 let mut account_manager = account_manager();
 
@@ -7515,7 +7517,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut staking_pool = staking_pool();
 
                 ctx.predecessor_account_id = ACCOUNT.to_string();
@@ -7530,7 +7532,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut staking_pool = staking_pool();
                 assert!(!staking_pool.ops_stake_status().is_online());
@@ -7561,7 +7563,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let contract_managed_total_balance = State::contract_managed_total_balance();
 
                 let mut account_manager = account_manager();
@@ -7662,7 +7664,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut staking_pool = staking_pool();
                 assert!(!staking_pool.ops_stake_status().is_online());
@@ -7711,7 +7713,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut staking_pool = staking_pool();
                 let mut account_manager = account_manager();
 
@@ -7733,7 +7735,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut staking_pool = staking_pool();
 
                 ctx.predecessor_account_id = ACCOUNT.to_string();
@@ -7748,7 +7750,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut staking_pool = staking_pool();
                 assert!(!staking_pool.ops_stake_status().is_online());
@@ -7778,7 +7780,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut staking_pool = staking_pool();
                 assert!(!staking_pool.ops_stake_status().is_online());
@@ -7853,7 +7855,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut staking_pool = staking_pool();
                 assert!(!staking_pool.ops_stake_status().is_online());
@@ -7895,7 +7897,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut staking_pool = staking_pool();
                 assert!(!staking_pool.ops_stake_status().is_online());
@@ -8001,7 +8003,7 @@ last_contract_managed_total_balance             {}
                 let ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut staking_pool = staking_pool();
 
@@ -8030,7 +8032,7 @@ last_contract_managed_total_balance             {}
                 let ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 let mut staking_pool = staking_pool();
                 staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::StartStaking);
@@ -8050,7 +8052,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
@@ -8077,7 +8079,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
@@ -8099,7 +8101,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
 
                 ctx.predecessor_account_id = OWNER.to_string();
                 testing_env!(ctx.clone());
@@ -8133,7 +8135,7 @@ last_contract_managed_total_balance             {}
                     let mut ctx = new_context(OWNER);
                     testing_env!(ctx.clone());
 
-                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    deploy_stake_contract(staking_public_key());
 
                     let mut staking_pool = staking_pool();
 
@@ -8307,7 +8309,7 @@ last_contract_managed_total_balance             {}
                     let mut ctx = new_context(OWNER);
                     testing_env!(ctx.clone());
 
-                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    deploy_stake_contract(staking_public_key());
 
                     let mut staking_pool = staking_pool();
 
@@ -8330,7 +8332,7 @@ last_contract_managed_total_balance             {}
                     let mut ctx = new_context(OWNER);
                     testing_env!(ctx.clone());
 
-                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    deploy_stake_contract(staking_public_key());
 
                     let mut staking_pool = staking_pool();
 
@@ -8412,7 +8414,7 @@ last_contract_managed_total_balance             {}
                     let mut ctx = new_context(OWNER);
                     testing_env!(ctx.clone());
 
-                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    deploy_stake_contract(staking_public_key());
                     let mut staking_pool = staking_pool();
 
                     // start staking
@@ -8441,7 +8443,7 @@ last_contract_managed_total_balance             {}
                     let mut ctx = new_context(OWNER);
                     testing_env!(ctx.clone());
 
-                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    deploy_stake_contract(staking_public_key());
                     let mut staking_pool = staking_pool();
 
                     // start staking
@@ -8509,7 +8511,7 @@ last_contract_managed_total_balance             {}
                     let mut ctx = new_context(OWNER);
                     testing_env!(ctx.clone());
 
-                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    deploy_stake_contract(staking_public_key());
                     let mut staking_pool = staking_pool();
 
                     // start staking
@@ -8555,7 +8557,7 @@ last_contract_managed_total_balance             {}
                     let mut ctx = new_context(OWNER);
                     testing_env!(ctx.clone());
 
-                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    deploy_stake_contract(staking_public_key());
                     let mut staking_pool = staking_pool();
 
                     ctx.predecessor_account_id = ACCOUNT.to_string();
@@ -8569,7 +8571,7 @@ last_contract_managed_total_balance             {}
                     let mut ctx = new_context(OWNER);
                     testing_env!(ctx.clone());
 
-                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    deploy_stake_contract(staking_public_key());
                     let mut staking_pool = staking_pool();
                     let mut account_manager = account_manager();
 
@@ -8588,7 +8590,7 @@ last_contract_managed_total_balance             {}
                     let mut ctx = new_context(OWNER);
                     testing_env!(ctx.clone());
 
-                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    deploy_stake_contract(staking_public_key());
                     let mut staking_pool = staking_pool();
                     let mut account_manager = account_manager();
 
@@ -8612,7 +8614,7 @@ last_contract_managed_total_balance             {}
                     let mut ctx = new_context(OWNER);
                     testing_env!(ctx.clone());
 
-                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    deploy_stake_contract(staking_public_key());
                     let mut staking_pool = staking_pool();
 
                     ctx.predecessor_account_id = OWNER.to_string();
@@ -8625,7 +8627,7 @@ last_contract_managed_total_balance             {}
                     let mut ctx = new_context(OWNER);
                     testing_env!(ctx.clone());
 
-                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    deploy_stake_contract(staking_public_key());
                     let mut staking_pool = staking_pool();
                     let mut account_manager = account_manager();
 
@@ -8678,7 +8680,7 @@ last_contract_managed_total_balance             {}
                     let mut ctx = new_context(OWNER);
                     testing_env!(ctx.clone());
 
-                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    deploy_stake_contract(staking_public_key());
                     let mut staking_pool = staking_pool();
                     let mut account_manager = account_manager();
 
@@ -8734,7 +8736,7 @@ last_contract_managed_total_balance             {}
                     let mut ctx = new_context(OWNER);
                     testing_env!(ctx.clone());
 
-                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    deploy_stake_contract(staking_public_key());
                     let mut staking_pool = staking_pool();
                     let mut account_manager = account_manager();
 
@@ -8781,7 +8783,7 @@ last_contract_managed_total_balance             {}
                     let mut ctx = new_context(OWNER);
                     testing_env!(ctx.clone());
 
-                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    deploy_stake_contract(staking_public_key());
                     let mut staking_pool = staking_pool();
                     let mut account_manager = account_manager();
 
@@ -8832,7 +8834,7 @@ last_contract_managed_total_balance             {}
                     let mut ctx = new_context(OWNER);
                     testing_env!(ctx.clone());
 
-                    deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                    deploy_stake_contract(staking_public_key());
                     let mut staking_pool = staking_pool();
                     let mut account_manager = account_manager();
 
@@ -8873,7 +8875,7 @@ last_contract_managed_total_balance             {}
                 let mut ctx = new_context(OWNER);
                 testing_env!(ctx.clone());
 
-                deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+                deploy_stake_contract(staking_public_key());
                 let mut staking_pool = staking_pool();
                 let mut account_manager = account_manager();
 
@@ -8906,7 +8908,7 @@ last_contract_managed_total_balance             {}
             let mut ctx = new_context(OWNER);
             testing_env!(ctx.clone());
 
-            deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+            deploy_stake_contract(staking_public_key());
 
             let mut staking_pool = staking_pool();
             let mut account_manager = account_manager();
@@ -8990,7 +8992,7 @@ last_contract_managed_total_balance             {}
             let mut ctx = new_context(OWNER);
             testing_env!(ctx.clone());
 
-            deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+            deploy_stake_contract(staking_public_key());
 
             let mut staking_pool = staking_pool();
             let mut account_manager = account_manager();
@@ -9126,7 +9128,7 @@ last_contract_managed_total_balance             {}
             let mut ctx = new_context(OWNER);
             testing_env!(ctx.clone());
 
-            deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+            deploy_stake_contract(staking_public_key());
 
             let mut staking_pool = staking_pool();
             let mut account_manager = account_manager();
@@ -9217,7 +9219,7 @@ last_contract_managed_total_balance             {}
             let mut ctx = new_context(OWNER);
             testing_env!(ctx.clone());
 
-            deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+            deploy_stake_contract(staking_public_key());
 
             let mut staking_pool = staking_pool();
             let mut account_manager = account_manager();
@@ -9293,7 +9295,7 @@ last_contract_managed_total_balance             {}
             let ctx = new_context(OWNER);
             testing_env!(ctx.clone());
 
-            deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+            deploy_stake_contract(staking_public_key());
 
             let mut staking_pool = staking_pool();
             staking_pool.ft_on_transfer(
@@ -9313,7 +9315,7 @@ last_contract_managed_total_balance             {}
             let mut ctx = new_context(OWNER);
             testing_env!(ctx.clone());
 
-            deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+            deploy_stake_contract(staking_public_key());
             let mut staking_pool = staking_pool();
 
             staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::UpdateFees(Fees {
@@ -9338,7 +9340,7 @@ last_contract_managed_total_balance             {}
             let mut ctx = new_context(OWNER);
             testing_env!(ctx.clone());
 
-            deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+            deploy_stake_contract(staking_public_key());
             let mut staking_pool = staking_pool();
             let mut account_manager = account_manager();
 
@@ -9401,7 +9403,7 @@ last_contract_managed_total_balance             {}
             let ctx = new_context(OWNER);
             testing_env!(ctx.clone());
 
-            deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+            deploy_stake_contract(staking_public_key());
             let mut staking_pool = staking_pool();
 
             staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::UpdateFees(Fees {
@@ -9418,13 +9420,40 @@ last_contract_managed_total_balance             {}
             let ctx = new_context(OWNER);
             testing_env!(ctx.clone());
 
-            deploy_stake_contract(Some(to_valid_account_id(OWNER)), staking_public_key());
+            deploy_stake_contract(staking_public_key());
             let mut staking_pool = staking_pool();
 
             staking_pool.ops_stake_operator_command(StakingPoolOperatorCommand::UpdateFees(Fees {
                 staking_fee: 0.into(),
                 earnings_fee: 0.into(),
             }));
+        }
+    }
+
+    #[cfg(test)]
+    mod test_near_staking_pool_interface {
+        use super::*;
+
+        #[cfg(test)]
+        mod tests_get_account_staked_balance {
+            use super::*;
+
+            #[test]
+            fn not_registered() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(staking_public_key());
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                testing_env!(ctx.clone());
+                let staking_pool = staking_pool();
+                assert_eq!(
+                    staking_pool.get_account_staked_balance(to_valid_account_id(ACCOUNT)),
+                    YoctoNear::ZERO,
+                );
+            }
         }
     }
 }
