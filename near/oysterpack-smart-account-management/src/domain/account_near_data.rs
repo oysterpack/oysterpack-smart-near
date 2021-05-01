@@ -167,7 +167,7 @@ impl AccountNearData {
     ///
     /// ## Panics
     /// if overflow occurs
-    pub fn dec_near_balance(&mut self, amount: YoctoNear) {
+    pub fn decr_near_balance(&mut self, amount: YoctoNear) {
         if *amount == 0 {
             return;
         }
@@ -337,7 +337,7 @@ mod tests {
         assert_eq!(account.near_balance(), YOCTO.into());
 
         // Act - dec near balance
-        account.dec_near_balance(YOCTO.into());
+        account.decr_near_balance(YOCTO.into());
         account.save();
 
         // Assert

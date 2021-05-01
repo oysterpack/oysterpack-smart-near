@@ -334,7 +334,7 @@ where
                 if amount > YoctoNear::ZERO {
                     ERR_INSUFFICIENT_STORAGE_BALANCE.assert(|| account_available_balance >= amount);
                     send_refund(amount + 1);
-                    account.dec_near_balance(amount);
+                    account.decr_near_balance(amount);
                     account.save();
                 }
             }
@@ -342,7 +342,7 @@ where
                 // withdraw the total available balance
                 if account_available_balance > YoctoNear::ZERO {
                     send_refund(account_available_balance + 1);
-                    account.dec_near_balance(account_available_balance);
+                    account.decr_near_balance(account_available_balance);
                     account.save();
                 }
             }

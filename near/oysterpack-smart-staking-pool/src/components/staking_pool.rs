@@ -294,7 +294,7 @@ impl StakingPool for StakingPoolComponent {
             let account_storage_available_balance = account
                 .storage_balance(self.account_manager.storage_balance_bounds().min)
                 .available;
-            account.dec_near_balance(account_storage_available_balance);
+            account.decr_near_balance(account_storage_available_balance);
 
             let near = account_storage_available_balance + env::attached_deposit();
             ERR_NEAR_DEPOSIT_REQUIRED.assert_with_message(
@@ -628,7 +628,7 @@ impl NearStakingPool for StakingPoolComponent {
                     });
 
                     let storage_balance = amount - data.unstaked_balances.total();
-                    near_account.dec_near_balance(storage_balance);
+                    near_account.decr_near_balance(storage_balance);
                     near_account.save();
 
                     data.unstaked_balances.credit_unstaked(storage_balance);
@@ -644,7 +644,7 @@ impl NearStakingPool for StakingPoolComponent {
                         >= amount
                 });
 
-                near_account.dec_near_balance(amount);
+                near_account.decr_near_balance(amount);
                 near_account.save();
 
                 self.credit_account_unstaked_balance(&env::predecessor_account_id(), amount);
