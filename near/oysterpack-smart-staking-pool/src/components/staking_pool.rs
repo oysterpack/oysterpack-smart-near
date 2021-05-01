@@ -1,9 +1,9 @@
 use crate::{
-    Fees, OfflineReason, StakeAccountBalances, StakeAccountData, StakeActionCallbacks,
-    StakedBalance, StakingPool, StakingPoolBalances, StakingPoolOperator,
-    StakingPoolOperatorCommand, Status, Treasury, ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE,
-    ERR_STAKE_ACTION_FAILED, LOG_EVENT_EARNINGS, LOG_EVENT_LIQUIDITY,
-    LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE,
+    Fees, NearStakingPool, NearStakingPoolAccount, OfflineReason, StakeAccountBalances,
+    StakeAccountData, StakeActionCallbacks, StakedBalance, StakingPool, StakingPoolBalances,
+    StakingPoolOperator, StakingPoolOperatorCommand, Status, Treasury,
+    ERR_STAKED_BALANCE_TOO_LOW_TO_UNSTAKE, ERR_STAKE_ACTION_FAILED, LOG_EVENT_EARNINGS,
+    LOG_EVENT_LIQUIDITY, LOG_EVENT_NOT_ENOUGH_TO_STAKE, LOG_EVENT_STAKE, LOG_EVENT_STATUS_OFFLINE,
     LOG_EVENT_STATUS_ONLINE, LOG_EVENT_TREASURY_DEPOSIT, LOG_EVENT_TREASURY_DIVIDEND,
     LOG_EVENT_UNSTAKE, MAX_FEE, PERMISSION_TREASURER,
 };
@@ -526,6 +526,140 @@ impl StakingPool for StakingPoolComponent {
 
     fn ops_stake_public_key(&self) -> PublicKey {
         Self::state().stake_public_key
+    }
+}
+
+impl NearStakingPool for StakingPoolComponent {
+    fn get_account_staked_balance(&self, account_id: ValidAccountId) -> YoctoNear {
+        self.ops_stake_balance(account_id)
+            .map_or(YoctoNear::ZERO, |balance| {
+                balance
+                    .staked
+                    .map_or(YoctoNear::ZERO, |balance| balance.near_value)
+            })
+    }
+
+    fn get_account_unstaked_balance(&self, account_id: ValidAccountId) -> YoctoNear {
+        self.ops_stake_balance(account_id)
+            .map_or(YoctoNear::ZERO, |balance| {
+                let unstaked = balance
+                    .unstaked
+                    .map_or(YoctoNear::ZERO, |balance| balance.total);
+                unstaked + balance.storage_balance.available
+            })
+    }
+
+    fn is_account_unstaked_balance_available(&self, account_id: ValidAccountId) -> bool {
+        self.ops_stake_balance(account_id).map_or(true, |balance| {
+            balance
+                .unstaked
+                .map_or(true, |balance| balance.total == balance.available)
+        })
+    }
+
+    fn get_account_total_balance(&self, account_id: ValidAccountId) -> YoctoNear {
+        self.ops_stake_balance(account_id)
+            .map_or(YoctoNear::ZERO, |balance| {
+                let staked = balance
+                    .staked
+                    .map_or(YoctoNear::ZERO, |balance| balance.near_value);
+                let unstaked = balance
+                    .unstaked
+                    .map_or(YoctoNear::ZERO, |balance| balance.total);
+                staked + unstaked + balance.storage_balance.available
+            })
+    }
+
+    fn get_account(&self, account_id: ValidAccountId) -> NearStakingPoolAccount {
+        self.ops_stake_balance(account_id.clone()).map_or(
+            NearStakingPoolAccount {
+                account_id: account_id.as_ref().to_string(),
+                unstaked_balance: YoctoNear::ZERO,
+                staked_balance: YoctoNear::ZERO,
+                can_withdraw: true,
+            },
+            |balance| NearStakingPoolAccount {
+                account_id: account_id.as_ref().to_string(),
+                unstaked_balance: balance
+                    .unstaked
+                    .as_ref()
+                    .map_or(YoctoNear::ZERO, |balance| balance.total)
+                    + balance.storage_balance.available,
+                staked_balance: balance
+                    .staked
+                    .map_or(YoctoNear::ZERO, |balance| balance.near_value),
+                can_withdraw: balance
+                    .unstaked
+                    .map_or(true, |balance| balance.total == balance.available),
+            },
+        )
+    }
+
+    fn deposit(&mut self) {
+        self.account_manager.storage_deposit(None, None);
+    }
+
+    fn deposit_and_stake(&mut self) {
+        self.ops_stake();
+    }
+
+    fn withdraw(&mut self, amount: YoctoNear) {
+        self.ops_stake_withdraw(Some(amount));
+    }
+
+    fn withdraw_all(&mut self) {
+        self.ops_stake_withdraw(None);
+    }
+
+    fn stake(&mut self, amount: YoctoNear) {
+        ERR_INVALID.assert(|| amount > YoctoNear::ZERO, || "amount must be > 0");
+        let (mut near_account, account_data) = self
+            .account_manager
+            .registered_account(&env::predecessor_account_id());
+        match account_data {
+            Some(mut data) => {
+                if data.unstaked_balances.total() < amount {
+                    ERR_INSUFFICIENT_FUNDS.assert(|| {
+                        data.unstaked_balances.total()
+                            + near_account
+                                .storage_balance(self.account_manager.storage_balance_bounds().min)
+                                .available
+                            >= amount
+                    });
+
+                    let storage_balance = amount - data.unstaked_balances.total();
+                    near_account.dec_near_balance(storage_balance);
+                    near_account.save();
+
+                    data.unstaked_balances.credit_unstaked(storage_balance);
+                    data.save();
+                    State::incr_total_unstaked_balance(storage_balance);
+                }
+            }
+            None => {
+                ERR_INSUFFICIENT_FUNDS.assert(|| {
+                    near_account
+                        .storage_balance(self.account_manager.storage_balance_bounds().min)
+                        .available
+                        >= amount
+                });
+
+                near_account.dec_near_balance(amount);
+                near_account.save();
+
+                self.credit_account_unstaked_balance(&env::predecessor_account_id(), amount);
+                State::incr_total_unstaked_balance(amount);
+            }
+        }
+        self.ops_restake(Some(amount));
+    }
+
+    fn unstake(&mut self, amount: YoctoNear) {
+        self.ops_unstake(Some(amount));
+    }
+
+    fn unstake_all(&mut self) {
+        self.ops_unstake(None);
     }
 }
 

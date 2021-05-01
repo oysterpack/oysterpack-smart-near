@@ -3,8 +3,9 @@ use near_sdk::near_bindgen;
 use oysterpack_smart_near::domain::YoctoNear;
 use oysterpack_smart_near::near_sdk::{AccountId, Promise, PromiseOrValue};
 use oysterpack_smart_staking_pool::{
-    Fees, StakeAccountBalances, StakeActionCallbacks, StakingPool, StakingPoolBalances,
-    StakingPoolOperator, StakingPoolOperatorCommand, Status, Treasury,
+    Fees, NearStakingPool, NearStakingPoolAccount, StakeAccountBalances, StakeActionCallbacks,
+    StakingPool, StakingPoolBalances, StakingPoolOperator, StakingPoolOperatorCommand, Status,
+    Treasury,
 };
 
 #[near_bindgen]
@@ -73,6 +74,59 @@ impl StakingPool for Contract {
 
     fn ops_stake_public_key(&self) -> PublicKey {
         Self::staking_pool().ops_stake_public_key()
+    }
+}
+
+#[near_bindgen]
+impl NearStakingPool for Contract {
+    fn get_account_staked_balance(&self, account_id: ValidAccountId) -> YoctoNear {
+        Self::staking_pool().get_account_staked_balance(account_id)
+    }
+
+    fn get_account_unstaked_balance(&self, account_id: ValidAccountId) -> YoctoNear {
+        Self::staking_pool().get_account_unstaked_balance(account_id)
+    }
+
+    fn is_account_unstaked_balance_available(&self, account_id: ValidAccountId) -> bool {
+        Self::staking_pool().is_account_unstaked_balance_available(account_id)
+    }
+
+    fn get_account_total_balance(&self, account_id: ValidAccountId) -> YoctoNear {
+        Self::staking_pool().get_account_total_balance(account_id)
+    }
+
+    fn get_account(&self, account_id: ValidAccountId) -> NearStakingPoolAccount {
+        Self::staking_pool().get_account(account_id)
+    }
+
+    #[payable]
+    fn deposit(&mut self) {
+        Self::staking_pool().deposit();
+    }
+
+    #[payable]
+    fn deposit_and_stake(&mut self) {
+        Self::staking_pool().deposit_and_stake();
+    }
+
+    fn withdraw(&mut self, amount: YoctoNear) {
+        Self::staking_pool().withdraw(amount);
+    }
+
+    fn withdraw_all(&mut self) {
+        Self::staking_pool().withdraw_all();
+    }
+
+    fn stake(&mut self, amount: YoctoNear) {
+        Self::staking_pool().stake(amount);
+    }
+
+    fn unstake(&mut self, amount: YoctoNear) {
+        Self::staking_pool().unstake(amount);
+    }
+
+    fn unstake_all(&mut self) {
+        Self::staking_pool().unstake_all();
     }
 }
 
