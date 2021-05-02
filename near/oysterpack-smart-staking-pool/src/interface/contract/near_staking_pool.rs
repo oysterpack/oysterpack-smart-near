@@ -40,7 +40,7 @@ pub trait NearStakingPool {
 }
 
 /// Represents an account structure readable by humans.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 #[serde(crate = "oysterpack_smart_near::near_sdk::serde")]
 pub struct NearStakingPoolAccount {
     pub account_id: AccountId,
