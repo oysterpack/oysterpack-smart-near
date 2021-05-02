@@ -8,9 +8,12 @@ use oysterpack_smart_near::near_sdk::{
 /// NEAR Staking Pool interface adapter
 /// - https://github.com/near/core-contracts/tree/master/staking-pool
 pub trait NearStakingPool {
+    /// Returns the account's staked NEAR balance
+    /// - If the account is not registered then zero is returned.
     fn get_account_staked_balance(&self, account_id: ValidAccountId) -> YoctoNear;
 
-    /// returns total unstaked plus account storage available balannce
+    /// Returns total unstaked plus account storage available balance
+    /// - If the account is not registered then zero is returned.
     fn get_account_unstaked_balance(&self, account_id: ValidAccountId) -> YoctoNear;
 
     /// If account is not registered or has zero unstaked, then true is returned
