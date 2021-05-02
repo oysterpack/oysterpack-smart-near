@@ -10421,5 +10421,141 @@ last_contract_managed_total_balance             {}
                 assert_eq!(receipts.len(), 1);
             }
         }
+
+        #[cfg(test)]
+        mod tests_stake {
+            use super::*;
+
+            #[test]
+            #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED]")]
+            fn not_registered() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(staking_public_key());
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                testing_env!(ctx.clone());
+                let mut staking_pool: Box<dyn NearStakingPool> = Box::new(staking_pool());
+                staking_pool.stake(1000.into());
+            }
+
+            #[test]
+            #[should_panic(expected = "[ERR] [INSUFFICIENT_FUNDS]")]
+            fn with_zero_unstaked_zero_storage_available_balance() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(staking_public_key());
+
+                let mut account_manager = account_manager();
+
+                // register account
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, Some(true));
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                testing_env!(ctx.clone());
+                let mut staking_pool: Box<dyn NearStakingPool> = Box::new(staking_pool());
+                staking_pool.stake(1000.into());
+            }
+
+            #[test]
+            fn with_zero_unstaked_with_storage_available_balance() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(staking_public_key());
+
+                let mut account_manager = account_manager();
+
+                // register account
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, None);
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                testing_env!(ctx.clone());
+                let mut staking_pool: Box<dyn NearStakingPool> = Box::new(staking_pool());
+                staking_pool.stake(1000.into());
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(
+                    logs,
+                    vec![
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] Withdrawal(YoctoNear(1000))",
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(184)",
+                        "[INFO] [STAKE] near_amount=1000, stake_token_amount=1000",
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                        "[INFO] [FT_MINT] account: bob, amount: 1000",
+                        "[INFO] [FT_BURN] account: bob, amount: 8",
+                        "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                        "[INFO] [FT_MINT] account: owner, amount: 8",
+                        "[WARN] [STATUS_OFFLINE] ",
+                    ]
+                );
+            }
+
+            #[test]
+            fn with_nonzero_balances() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(staking_public_key());
+
+                let mut account_manager = account_manager();
+
+                // register account
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                account_manager.storage_deposit(None, None);
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                staking_pool().ops_stake();
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.attached_deposit = 0;
+                testing_env!(ctx.clone());
+                staking_pool().ops_unstake(Some(1000.into()));
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.account_balance = env::account_balance();
+                ctx.epoch_height = env::epoch_height() + 4;
+                testing_env!(ctx.clone());
+                let mut pool: Box<dyn NearStakingPool> = Box::new(staking_pool());
+                pool.stake(1000.into());
+
+                assert!(staking_pool()
+                    .ops_stake_balance(to_valid_account_id(ACCOUNT))
+                    .unwrap()
+                    .unstaked
+                    .is_none());
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+            }
+        }
     }
 }
