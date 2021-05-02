@@ -9621,11 +9621,7 @@ last_contract_managed_total_balance             {}
                 ctx.account_balance = env::account_balance();
                 ctx.attached_deposit = YOCTO;
                 testing_env!(ctx.clone());
-                let balance = if let PromiseOrValue::Value(balance) = staking_pool.ops_stake() {
-                    balance
-                } else {
-                    panic!("expected value");
-                };
+                staking_pool.ops_stake();
 
                 let logs = test_utils::get_logs();
                 println!("{:#?}", logs);
