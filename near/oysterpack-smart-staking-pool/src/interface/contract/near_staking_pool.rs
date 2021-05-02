@@ -23,8 +23,10 @@ pub trait NearStakingPool {
 
     fn get_account(&self, account_id: ValidAccountId) -> NearStakingPoolAccount;
 
+    /// delegates to `StorageManagement::storage_deposit(None, None)`
     fn deposit(&mut self);
 
+    /// delegates to `StakingPool::ops_stake()`
     fn deposit_and_stake(&mut self);
 
     fn withdraw(&mut self, amount: YoctoNear);

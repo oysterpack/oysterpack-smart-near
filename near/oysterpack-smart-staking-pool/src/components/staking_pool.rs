@@ -10078,5 +10078,98 @@ last_contract_managed_total_balance             {}
                 );
             }
         }
+
+        #[cfg(test)]
+        mod tests_deposit {
+            use super::*;
+
+            #[test]
+            fn not_registered() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(staking_public_key());
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                let mut staking_pool = staking_pool();
+                staking_pool.deposit();
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs, vec![
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(97)",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Registered(StorageBalance { total: YoctoNear(1000000000000000000000000), available: YoctoNear(996070000000000000000000) })",
+                ]);
+
+                let account_manager = account_manager();
+                assert!(account_manager
+                    .storage_balance_of(to_valid_account_id(ACCOUNT))
+                    .is_some());
+            }
+        }
+
+        #[cfg(test)]
+        mod tests_deposit_and_stake {
+            use super::*;
+
+            #[test]
+            #[should_panic(expected = "[ERR] [ACCOUNT_NOT_REGISTERED]")]
+            fn not_registered() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(staking_public_key());
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                let mut staking_pool = staking_pool();
+                staking_pool.deposit_and_stake();
+            }
+
+            #[test]
+            fn registered() {
+                // Arrange
+                let mut ctx = new_context(OWNER);
+                testing_env!(ctx.clone());
+
+                deploy_stake_contract(staking_public_key());
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                let mut staking_pool = staking_pool();
+                staking_pool.deposit();
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs, vec![
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(97)",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Registered(StorageBalance { total: YoctoNear(1000000000000000000000000), available: YoctoNear(996070000000000000000000) })",
+                ]);
+
+                ctx.predecessor_account_id = ACCOUNT.to_string();
+                ctx.attached_deposit = YOCTO;
+                testing_env!(ctx.clone());
+                staking_pool.deposit_and_stake();
+
+                let logs = test_utils::get_logs();
+                println!("{:#?}", logs);
+                assert_eq!(logs, vec![
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] Withdrawal(YoctoNear(996070000000000000000000))",
+                    "[INFO] [STAKE] near_amount=1996070000000000000000000, stake_token_amount=1996070000000000000000000",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                    "[INFO] [FT_MINT] account: bob, amount: 1996070000000000000000000",
+                    "[INFO] [FT_BURN] account: bob, amount: 15968560000000000000000",
+                    "[INFO] [ACCOUNT_STORAGE_CHANGED] StorageUsageChange(104)",
+                    "[INFO] [FT_MINT] account: owner, amount: 15968560000000000000000",
+                    "[WARN] [STATUS_OFFLINE] ",
+                ]);
+            }
+        }
     }
 }
