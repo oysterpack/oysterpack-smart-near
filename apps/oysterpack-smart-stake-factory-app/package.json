@@ -17,6 +17,7 @@
     ]
   },
   "devDependencies": {
+    "@testing-library/preact": "^2.0.1",
     "enzyme": "^3.10.0",
     "enzyme-adapter-preact-pure": "^2.0.0",
     "eslint": "^6.0.1",
@@ -27,6 +28,9 @@
     "sirv-cli": "1.0.3"
   },
   "dependencies": {
+    "@reduxjs/toolkit": "^1.5.1",
+    "bootstrap": "^5.0.0-beta3",
+    "near-api-js": "^0.40.0",
     "preact": "^10.3.2",
     "preact-render-to-string": "^5.1.4",
     "preact-router": "^3.2.1"
