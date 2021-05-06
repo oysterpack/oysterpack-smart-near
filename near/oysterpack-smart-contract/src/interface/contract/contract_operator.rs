@@ -8,7 +8,7 @@ pub trait ContractOperator {
     /// operate, i.e., pay for contract storage. This would prevent the contract owner from withdrawing
     /// all of his available balance, which might break the contract.
     ///
-    /// setting the balance to zero, effectively unlocks the storage balance
+    /// setting the storage usage to zero, effectively unlocks the storage balance
     ///
     /// ## Panics
     /// - requires operator permission

@@ -51,6 +51,21 @@ near call $CONTRACT_NAME ops_permissions_revoke_permissions --args '{"account_id
 near view $CONTRACT_NAME ops_permissions_contract_permissions
 ```
 
+## Contract Ownership
+```shell
+near view $CONTRACT_NAME ops_owner
+near view $CONTRACT_NAME ops_owner_balance
+
+# Returns the prospective owner that the transfer is waiting on for finalization.
+near view $CONTRACT_NAME ops_owner_prospective
+
+near call $CONTRACT_NAME ops_owner_transfer --args '{"new_owner":"oysterpack-2.testnet"}' --accountId oysterpack.testnet  --amount 0.000000000000000000000001
+near call $CONTRACT_NAME ops_owner_cancel_transfer --accountId oysterpack.testnet  --amount 0.000000000000000000000001
+near call $CONTRACT_NAME ops_owner_finalize_transfer --accountId oysterpack.testnet  --amount 0.000000000000000000000001
+
+near call $CONTRACT_NAME
+```
+
 ## Contract Metrics
 ```shell
 near view $CONTRACT_NAME ops_metrics
