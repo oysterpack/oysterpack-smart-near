@@ -1840,6 +1840,15 @@ mod tests_operator {
             let metadata = stake.ft_metadata();
             assert!(metadata.reference.is_none());
             assert!(metadata.reference_hash.is_none());
+
+            // Act
+            ctx.predecessor_account_id = account_id.to_string();
+            testing_env!(ctx.clone());
+            let command = OperatorCommand::SetTransferCallbackGas(TGas(15));
+            println!("{}", serde_json::to_string(&command).unwrap());
+            stake.ft_operator_command(command);
+            // Assert
+            assert_eq!(stake.ft_operator_transfer_callback_gas(), TGas(15).into());
         }
 
         run_operator_commands(ctx.clone(), &mut stake, ADMIN);
